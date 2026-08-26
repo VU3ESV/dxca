@@ -26,6 +26,7 @@ pub fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/api/status", get(status))
         .route("/api/spots", get(spots))
+        .route("/api/stream", get(stream))
         .route("/api/setup", post(setup))
         .route("/api/login", post(login))
         .route("/api/logout", post(logout))
@@ -36,6 +37,8 @@ pub fn build_router(state: AppState) -> Router {
             get(get_notify).put(put_notify),
         )
         .route("/api/clublog/refresh", post(refresh))
+        .route("/api/telegram/test", post(telegram_test))
+        .route("/api/lotw/refresh", post(lotw_refresh))
         .route("/api/users", get(list_users).post(create_user))
         .with_state(state)
         .fallback(crate::assets::serve)
@@ -67,23 +70,28 @@ fn require_admin(app: &AppState, headers: &HeaderMap) -> Result<User, Response> 
 
 // --- status + spots ------------------------------------------------------
 
-async fn status(State(app): State<AppState>) -> Json<serde_json::Value> {
+fn status_json(app: &AppState) -> serde_json::Value {
     let counters = app.pipeline.broadcaster.counters();
     let user_count = app.users.db.user_count().unwrap_or(0);
-    Json(serde_json::json!({
+    serde_json::json!({
         "name": "dxca",
         "version": env!("CARGO_PKG_VERSION"),
-        "milestone": "M4 users + alerts",
+        "milestone": "M5 web parity",
         "setup_required": user_count == 0,
         "users": user_count,
         "cty_loaded": app.users.resolver_loaded(),
         "cty_entities": app.users.entity_count(),
+        "lotw_users": app.users.lotw_count(),
         "telnet_clients": app.pipeline.telnet.client_count(),
         "spots_per_source": *app.pipeline.source_counts.lock().unwrap(),
         "cluster_nodes": app.nodes.statuses(),
         "udp_sent": counters.total_sent(),
         "udp_failed": counters.total_failed(),
-    }))
+    })
+}
+
+async fn status(State(app): State<AppState>) -> Json<serde_json::Value> {
+    Json(status_json(&app))
 }
 
 #[derive(Deserialize)]
@@ -96,9 +104,26 @@ fn default_limit() -> usize {
     200
 }
 
-/// Recent spots; when a session cookie is present each spot carries that
-/// user's classification (alert level, DXCC name, band) — plan §5's
-/// per-user highlighting, JSON edition.
+/// One spot as the UI sees it: the raw fields plus the extracted DX call,
+/// the LoTW marker, and — when a session is present — that user's
+/// classification (alert level, DXCC name, band): plan §5's per-user
+/// highlighting.
+fn annotate_spot(app: &AppState, user: Option<&User>, s: &dxca_core::Spot) -> serde_json::Value {
+    let mut v = serde_json::to_value(s).expect("spot serializes");
+    let dx_call = s.dx_callsign();
+    v["dx_call"] = serde_json::to_value(&dx_call).unwrap();
+    v["is_lotw"] = serde_json::Value::Bool(dx_call.is_some_and(|c| app.users.is_lotw_user(&c)));
+    if let Some(u) = user
+        && let Some(c) = app.users.classify(u.id, s)
+    {
+        v["alert"] = serde_json::to_value(c.level).unwrap();
+        v["dxcc_name"] = serde_json::to_value(&c.dxcc_name).unwrap();
+        v["band"] = serde_json::to_value(c.band).unwrap();
+        v["is_beacon"] = serde_json::Value::Bool(c.is_beacon);
+    }
+    v
+}
+
 async fn spots(
     State(app): State<AppState>,
     headers: HeaderMap,
@@ -108,20 +133,60 @@ async fn spots(
     let spots = app.pipeline.recent_spots(q.limit.min(2000));
     let annotated: Vec<serde_json::Value> = spots
         .iter()
-        .map(|s| {
-            let mut v = serde_json::to_value(s).expect("spot serializes");
-            if let Some(u) = &user
-                && let Some(c) = app.users.classify(u.id, s)
-            {
-                v["alert"] = serde_json::to_value(c.level).unwrap();
-                v["dxcc_name"] = serde_json::to_value(&c.dxcc_name).unwrap();
-                v["band"] = serde_json::to_value(c.band).unwrap();
-                v["is_beacon"] = serde_json::Value::Bool(c.is_beacon);
-            }
-            v
-        })
+        .map(|s| annotate_spot(&app, user.as_ref(), s))
         .collect();
     Json(serde_json::json!({ "spots": annotated }))
+}
+
+// --- live stream ---------------------------------------------------------
+
+/// WebSocket: every processed spot as an annotated frame for THIS session's
+/// user, plus a status frame every 5 s.
+async fn stream(
+    State(app): State<AppState>,
+    headers: HeaderMap,
+    ws: axum::extract::ws::WebSocketUpgrade,
+) -> Response {
+    let user = auth::user_from_headers(&app.users.db, &headers);
+    ws.on_upgrade(move |socket| stream_socket(socket, app, user))
+}
+
+async fn stream_socket(
+    mut socket: axum::extract::ws::WebSocket,
+    app: AppState,
+    user: Option<User>,
+) {
+    use axum::extract::ws::Message as WsMessage;
+    let mut spot_rx = app.pipeline.spot_events.subscribe();
+    let mut status_tick = tokio::time::interval(std::time::Duration::from_secs(5));
+    loop {
+        tokio::select! {
+            spot = spot_rx.recv() => match spot {
+                Ok(spot) => {
+                    let frame = serde_json::json!({
+                        "type": "spot",
+                        "spot": annotate_spot(&app, user.as_ref(), &spot),
+                    });
+                    if socket.send(WsMessage::Text(frame.to_string().into())).await.is_err() {
+                        return;
+                    }
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => return,
+            },
+            _ = status_tick.tick() => {
+                let frame = serde_json::json!({ "type": "status", "status": status_json(&app) });
+                if socket.send(WsMessage::Text(frame.to_string().into())).await.is_err() {
+                    return;
+                }
+            }
+            msg = socket.recv() => match msg {
+                None | Some(Err(_)) => return,
+                Some(Ok(WsMessage::Close(_))) => return,
+                Some(Ok(_)) => continue, // client input ignored
+            },
+        }
+    }
 }
 
 // --- auth ----------------------------------------------------------------
@@ -312,6 +377,36 @@ fn with_user_config<T: serde::Serialize>(
             Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e),
         },
         Err(resp) => resp,
+    }
+}
+
+/// Send a test message through the caller's Telegram config (M5 button).
+async fn telegram_test(State(app): State<AppState>, headers: HeaderMap) -> Response {
+    let user = match require_user(&app, &headers) {
+        Ok(u) => u,
+        Err(resp) => return resp,
+    };
+    let service = app.users.clone();
+    match tokio::task::spawn_blocking(move || service.telegram_test(user.id)).await {
+        Ok(Ok(())) => Json(serde_json::json!({"ok": true})).into_response(),
+        Ok(Err(e)) => err(StatusCode::BAD_GATEWAY, e),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, format!("join: {e}")),
+    }
+}
+
+/// Refresh the global LoTW users list (admin; the list is server-wide).
+async fn lotw_refresh(State(app): State<AppState>, headers: HeaderMap) -> Response {
+    if let Err(resp) = require_admin(&app, &headers) {
+        return resp;
+    }
+    let service = app.users.clone();
+    let result =
+        tokio::task::spawn_blocking(move || service.refresh_lotw(dxca_connect::lotw::DEFAULT_URL))
+            .await;
+    match result {
+        Ok(Ok(count)) => Json(serde_json::json!({"lotw_users": count})).into_response(),
+        Ok(Err(e)) => err(StatusCode::BAD_GATEWAY, e),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, format!("join: {e}")),
     }
 }
 

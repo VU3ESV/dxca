@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-27 · **Status:** M4 complete — dxca IS the live shack aggregator (burn-in; users+alerts live, awaiting Manoj's account setup)
+**Created:** 2026-08-26 · **Last updated:** 2026-08-27 · **Status:** M5 core complete — dashboard UI live on the burn-in (config web-editing is the M5 remainder)
 **Repo:** https://github.com/vu2cpl/dxca (private)
 
 ---
@@ -105,6 +105,41 @@ Operational state:
 - Remaining burn-in gap vs 1.x: no spots-table UI / LoTW markers (M5).
   Aggregation, cluster ingest, RUMlog feeds, and (once the account is
   set up) ClubLog classification + Telegram alerts are at parity.
+
+## M5 progress
+
+**2026-08-27 — M5 core complete: the real dashboard, live over a
+WebSocket, verified in the browser against a disposable test instance.**
+
+- Server: `/api/stream` WebSocket (per-session spot frames through the
+  shared `annotate_spot`, status frames every 5 s), `lotw.rs` port
+  (download + 1.x parse/lookup rules; global list in UserService, admin
+  `/api/lotw/refresh`, `is_lotw` on every annotated spot),
+  `/api/telegram/test`. axum grew the `ws` feature; a registry
+  inconsistency forced `futures-util` pinned to 0.3.31 in the lockfile.
+- Web UI (Svelte 5, GitHub-dark): session bootstrap → first-run **setup**
+  card / **login** card / tabbed main shell. Pages: **Spots** (status
+  pills incl. three-state node badges with last-spot age; filters:
+  sources, bands, new-only, CQ-only, 60 s hide-duplicates like 1.x
+  `displayedSpots`; sortable columns; per-user alert row tints; green
+  LoTW dot), **My ClubLog** (credentials + alert levels + refresh with
+  counts), **My Alerts** (Telegram + test button), **Users** (admin
+  list/create), **System** (server/source/node detail, LoTW refresh).
+- Verified live in the embedded browser: setup card on the burn-in;
+  on a throwaway instance (scratch data dir, port 7581, since removed) —
+  login, six injected spots rendered with LoTW dot on K1JT, and a
+  seventh spot appearing at the top **via the WebSocket with no reload**.
+- Burn-in restarted on the M5 binary; `data/lotw-users.txt` bootstrapped
+  from the 1.x cache (234,467 users). Setup still pending for Manoj —
+  the web setup card now replaces the curl commands.
+- **M5 remainder** (deliberate scope cut, matching plan §10's "admin
+  config editing hot-applies"): sources/nodes/destinations are still
+  edited in `config/dxca.toml` + restart; the System page says so. Also
+  future polish: spots-table columns for ΔT/low-confidence, per-user
+  display-filter persistence.
+- Design note: a user with **no matrix** gets no classification at all
+  (no alert column, no beacon labels) — deliberate divergence from 1.x,
+  which classified everything NEW DXCC against an empty matrix.
 
 ## M4 progress
 
@@ -276,15 +311,16 @@ proven against the Swift app's own artifacts.**
 
 ## Open items → next session
 
-1. **Manoj's account setup on the burn-in** (see the Burn-in section) —
-   until then classification/alerts run for zero users.
-2. **M5 — web parity** (plan §10 + §8): the real dashboard — login page +
-   first-run setup page, live spots table (WebSocket over `spot_events`),
-   filter bar, status pills (sources / nodes / destinations), My ClubLog
-   + My alerts pages, Users admin. Plus the LoTW users marker
-   (`lotw.rs` download + per-spot flag) deferred from M4. Exit: the Mac
-   app's daily-driver workflow is fully replaceable in the browser.
-3. M6 per docs/PLAN.md §10.
+1. **Manoj's account setup on the burn-in** — open http://localhost:7580,
+   the setup card creates the admin; then My ClubLog (credentials +
+   Refresh) and My Alerts (Telegram). Until then classification/alerts
+   run for zero users.
+2. **M5 remainder**: web editing of sources/nodes/destinations with
+   hot-apply (see M5 progress).
+3. **M6 — burn-in + release** (plan §10): the burn-in effectively started
+   2026-08-27; M6 wraps it with the Pi cutover (decoders repointed at the
+   Pi's IP), systemd + install docs, dual-run diff vs 1.8.4 if desired,
+   and the v2.0.0 tag.
 
 ## Conventions (see ~/.claude/CLAUDE.md)
 

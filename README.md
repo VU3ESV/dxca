@@ -19,20 +19,22 @@ from [Meridian](https://github.com/thomasbasil/meridian).
 
 ## Status
 
-**M4 complete — running the shack in burn-in with users + alerts**
-(2026-08-27): dxca is the live shack aggregator. Decoder UDP sources and
-five DX-cluster telnet nodes (Meridian-lifted client with the 1.x
+**M5 core complete — the dashboard is live** (2026-08-27): dxca is the
+live shack aggregator with a real web GUI. Decoder UDP sources and five
+DX-cluster telnet nodes (Meridian-lifted client with the 1.x
 honest-status graft) feed one pipeline into the telnet server, the RUMlog
-passthrough, and the spot ring; SQLite-backed accounts (argon2 + session
-cookies, first-run admin setup) each carry their own ClubLog matrix, and
-every spot classifies per user — different accounts see different
-New-DXCC/Band/Mode/Slot highlights on the same stream, with per-user
-Telegram alerts and per-callsign cooldown. Proven end-to-end in tests
-against fake ClubLog/Telegram servers, and by the earlier live
-validations (RUMlog click-to-fill, honest-yellow flaky node, exact matrix
-parity with the 1.x app's own artifacts). Next: M5, the real dashboard
-UI. The full design and milestone plan: [docs/PLAN.md](docs/PLAN.md).
-The 1.x macOS app remains the standing fallback until M6 signs off.
+passthrough, and a WebSocket-streamed spots dashboard — status pills,
+live sortable table, source/band/new-only/duplicate filters, per-user
+alert row tints, LoTW markers. SQLite-backed accounts (argon2 + session
+cookies, first-run setup card) each carry their own ClubLog matrix;
+every spot classifies per user with Telegram alerts and per-callsign
+cooldown. Proven end-to-end in tests against fake ClubLog/Telegram
+servers and by the live validations along the way (RUMlog click-to-fill,
+honest-yellow flaky node, exact matrix parity with the 1.x app's own
+artifacts). Remaining: web editing of the global config (M5 remainder),
+then M6 — Pi cutover, systemd, v2.0.0. The full design and milestone
+plan: [docs/PLAN.md](docs/PLAN.md). The 1.x macOS app remains the
+standing fallback until M6 signs off.
 
 Secrets note (plan §5): per-user ClubLog app passwords and Telegram
 tokens live in `data/dxca.db` in plain text, file mode 0600, service user

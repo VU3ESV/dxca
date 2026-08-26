@@ -6,7 +6,10 @@ export default defineConfig({
   server: {
     // Dev server proxies API calls to a locally running `cargo run -p dxca-server`.
     proxy: {
-      '/api': 'http://127.0.0.1:7580',
+      '/api': {
+        target: 'http://127.0.0.1:7580',
+        ws: true, // /api/stream
+      },
     },
   },
   build: {

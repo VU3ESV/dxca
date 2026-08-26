@@ -5,12 +5,13 @@
 
 use crate::db::{Db, NotifyUserConfig};
 use dxca_connect::clublog::{self, Endpoints};
+use dxca_connect::lotw;
 use dxca_connect::telegram::{Telegram, escape_html};
 use dxca_core::classify::{AlertClassifier, AlertConfig, AlertLevel, Classification};
 use dxca_core::dxcc::DxccResolver;
 use dxca_core::matrix::LogMatrix;
 use dxca_core::{Spot, cty};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -23,6 +24,9 @@ pub struct UserService {
     telegram: Telegram,
     endpoints: Endpoints,
     cty_path: PathBuf,
+    /// Known LoTW uploaders (global, M5 display marker).
+    lotw_users: RwLock<Arc<HashSet<String>>>,
+    lotw_path: PathBuf,
 }
 
 fn now_unix() -> i64 {
@@ -53,6 +57,10 @@ impl UserService {
             .into_iter()
             .map(|(id, m, _, _)| (id, Arc::new(m)))
             .collect();
+        let lotw_path = PathBuf::from(data_dir).join("lotw-users.txt");
+        let lotw_users = std::fs::read_to_string(&lotw_path)
+            .map(|text| lotw::parse_users(&text))
+            .unwrap_or_default();
         UserService {
             db,
             resolver: RwLock::new(Arc::new(resolver)),
@@ -61,7 +69,45 @@ impl UserService {
             telegram,
             endpoints,
             cty_path,
+            lotw_users: RwLock::new(Arc::new(lotw_users)),
+            lotw_path,
         }
+    }
+
+    pub fn is_lotw_user(&self, callsign: &str) -> bool {
+        lotw::is_user(&self.lotw_users.read().unwrap(), callsign)
+    }
+
+    pub fn lotw_count(&self) -> usize {
+        self.lotw_users.read().unwrap().len()
+    }
+
+    /// Download and reload the LoTW users list (blocking). Returns the
+    /// user count.
+    pub fn refresh_lotw(&self, url: &str) -> Result<usize, String> {
+        let text = lotw::download(url)?;
+        let users = lotw::parse_users(&text);
+        if users.is_empty() {
+            return Err("LoTW list parsed to zero users — not saving".into());
+        }
+        if let Some(dir) = self.lotw_path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        std::fs::write(&self.lotw_path, &text).map_err(|e| format!("save LoTW list: {e}"))?;
+        let count = users.len();
+        *self.lotw_users.write().unwrap() = Arc::new(users);
+        Ok(count)
+    }
+
+    /// Send a test message through the user's configured Telegram
+    /// (blocking) — the M5 "Test" button.
+    pub fn telegram_test(&self, user_id: i64) -> Result<(), String> {
+        let cfg = self.db.notify_config(user_id)?;
+        self.telegram.send(
+            &cfg.telegram_bot_token,
+            &cfg.telegram_chat_id,
+            "<b>DXCA test</b>\nTelegram alerts are wired up.",
+        )
     }
 
     pub fn resolver_loaded(&self) -> bool {
