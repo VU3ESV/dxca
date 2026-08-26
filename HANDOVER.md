@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-26 · **Status:** M0 done
+**Created:** 2026-08-26 · **Last updated:** 2026-08-26 · **Status:** M1 in progress (WSJT-X codec done)
 **Repo:** https://github.com/vu2cpl/dxca (private)
 
 ---
@@ -65,13 +65,41 @@ The 1.x macOS app stays the production DXCA until M6 signs off.
 - Justfile recipe comments must be a single line — `just --list` shows only
   the last comment line above a recipe.
 
+## M1 progress (2026-08-26)
+
+**Done — WSJT-X codec + live-captured vectors.**
+
+- `dxca-core/src/wsjtx.rs`: full parser/builder port of the Swift
+  `WSJTXMessageParser`/`WSJTXMessageBuilder`, permissive-parse semantics
+  preserved exactly (required fields only for Status: clientId+dialFreq;
+  Decode: all but is_new/lowConfidence/offAir; null/invalid-UTF-8 strings
+  → ""; unknown type fails the parse). Builder synthesizes Status+Decode
+  pairs (deCall `DXCAGGR`, schema 2); `encode_spot` takes `time_ms` from
+  the caller — core has no clock.
+- `tests/vectors/`: real datagrams captured off the live shack pipeline
+  (tcpdump on lo0, 2026-08-26, ~12 min, all three decoders on air):
+  8 samples per (decoder, type) for MSHV/JTDX/WSJT-X Heartbeat/Status/
+  Decode (+ a type-6 Close from JTDX and WSJT-X), `summary.json` with full
+  counts, gzipped source pcap under `raw/`. All schema 2.
+- `tests/vectors_roundtrip.rs`: every vector parses; Decodes re-encode
+  **byte-identically** (all three decoders); Statuses re-encode as a byte
+  prefix modulo null-vs-empty strings. **Emitter quirk worth remembering:
+  WSJT-X emits null QStrings (`FFFFFFFF`) for unset fields (dxCall,
+  dxGrid…); MSHV and JTDX emit empty ones. The parser collapses both to
+  ""** (Swift parity) — the test's `prefix_matches_modulo_null_strings`
+  documents this.
+- Capture also proved the 1.x passthrough invariant on live traffic:
+  1094/1094 datagrams on :2237 byte-identical to a source datagram
+  (M2's spec baseline). Extractor: `scripts/extract_vectors.py`.
+
 ## Open items → next session
 
-1. **M1 — core logic** (plan §10): port the WSJT-X binary codec with
-   captured WSJT-X *and* JTDX datagrams as test vectors (capture on the Mac
-   with the 1.x app's sources live); port CTY/ADIF/matrix/classifier with
-   golden tests against the Swift implementation's output. Swift sources:
+1. **M1 remainder** (plan §10): port CTY parser, ADIF parser, LogMatrix,
+   AlertClassifier (+ band/mode resolvers) with golden tests against the
+   Swift implementation's output. Swift sources:
    `~/projects/DXClusterAggregator/DXClusterAggregator/{Protocol,Utils,Models}/`.
+   No QSO was logged during the capture, so no real ADIF-over-UDP sample
+   yet — the 1.x app's ClubLog/ADIF fixtures cover the parser instead.
 2. M2+ per docs/PLAN.md §10.
 
 ## Conventions (see ~/.claude/CLAUDE.md)

@@ -1,0 +1,39 @@
+{
+  "source_pcap": "/private/tmp/claude-501/-Users-manoj-projects-DXClusterAggregator--claude-worktrees-tender-germain-7d00fc/f47bafd1-e62f-4bd4-8f43-c9acfe3a3547/scratchpad/wsjtx-shack-capture.pcap",
+  "per_decoder": {
+    "jtdx": {
+      "type00-Heartbeat": 40,
+      "type01-Status": 81,
+      "type02-Decode": 190,
+      "type06-Close": 1
+    },
+    "mshv": {
+      "type00-Heartbeat": 42,
+      "type01-Status": 111,
+      "type02-Decode": 176
+    },
+    "wsjtx": {
+      "type00-Heartbeat": 40,
+      "type01-Status": 241,
+      "type02-Decode": 171,
+      "type06-Close": 1
+    }
+  },
+  "schemas": {
+    "jtdx": [
+      2
+    ],
+    "mshv": [
+      2
+    ],
+    "wsjtx": [
+      2
+    ]
+  },
+  "non_wsjtx_datagrams": {},
+  "passthrough": {
+    "datagrams": 1094,
+    "byte_identical_to_a_source": 1094
+  },
+  "samples_per_type": 8
+}

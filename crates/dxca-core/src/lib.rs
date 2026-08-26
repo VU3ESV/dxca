@@ -6,10 +6,11 @@
 //! dependency on axum, SQLite, or the auth layer — that separation is what
 //! keeps the later Meridian-integration door open.
 //!
-//! M0 ships only the spot model; the rest lands in M1 (ported from the
-//! Swift implementation in DXClusterAggregator-macOS, golden-tested against
-//! its output).
+//! Ported piecewise from the Swift implementation in
+//! DXClusterAggregator-macOS, tested against datagrams captured from the
+//! live shack decoders (`tests/vectors/`).
 
 mod spot;
+pub mod wsjtx;
 
 pub use spot::{Spot, SpotSource};
