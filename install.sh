@@ -97,7 +97,10 @@ case "$PLATFORM" in
       cargo build --release -p dxca-server
       BIN="$REPO/target/release/dxca"
     fi
-    say "Installing to /opt/dxca…"
+    # The service runs as whoever invokes this script — no hardcoded user.
+    SERVICE_USER="$(id -un)"
+    SERVICE_GROUP="$(id -gn)"
+    say "Installing to /opt/dxca (service user: $SERVICE_USER)…"
     sudo mkdir -p /opt/dxca/config /opt/dxca/data
     sudo install -m 755 "$BIN" /opt/dxca/dxca
     # Config/data are seeded only if absent — never clobber a live install.
@@ -109,8 +112,9 @@ case "$PLATFORM" in
         sudo install -m 600 "$REPO/data/$f" "/opt/dxca/data/$f"
       fi
     done
-    sudo chown -R vu2cpl:vu2cpl /opt/dxca
-    sudo install -m 644 "$REPO/deploy/dxca.service" /etc/systemd/system/dxca.service
+    sudo chown -R "$SERVICE_USER:$SERVICE_GROUP" /opt/dxca
+    sed "s|__USER__|$SERVICE_USER|g" "$REPO/deploy/dxca.service" \
+      | sudo tee /etc/systemd/system/dxca.service >/dev/null
     sudo systemctl daemon-reload
     sudo systemctl enable --now dxca
     say "Installed systemd service 'dxca' (status: systemctl status dxca)."

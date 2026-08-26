@@ -412,6 +412,15 @@ Nothing operational — **v2.0.0 is fully live**: ClubLog and Telegram are
 configured and working on the Pi (confirmed by Manoj 2026-08-27), so
 per-user highlighting and alerts run in production.
 
+2026-08-27 (late): the deploy tooling was **generalized for third-party
+installs** — dxca.service is a template (`__USER__` → the invoking user),
+install.sh chowns to the invoker, and a fresh install self-bootstraps
+(setup card, cty/LoTW download on demand). Validated by re-running the
+installer on the production Pi (identical result, service undisturbed).
+Remaining before any public release: x86-64-Linux (+ optional Windows)
+release artifacts, a Windows build test, then the repo-public flip +
+vu2cpl.com card with the VU3ESV credit line.
+
 Post-2.0 backlog (pick up whenever): per-user telnet feeds (Meridian
 server lift), MQTT status/LWT on `shack/dxca/status` (broker is
 localhost on the Pi!), durable spot history + search, possible Meridian

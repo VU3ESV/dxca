@@ -2,7 +2,9 @@
 # Cross-compile on the Mac and ship dxca to a Pi as a systemd service —
 # the "one binary + one TOML" deploy from docs/PLAN.md §9.
 #
-#   deploy/pi-deploy.sh [user@host]      (default vu2cpl@noderedpi4.local)
+#   deploy/pi-deploy.sh [user@host]      (default vu2cpl@noderedpi4.local —
+#                                         the shack Pi; pass your own for
+#                                         any other target)
 #
 # Ships: the aarch64 binary, deploy/dxca.service, install.sh, and — only
 # when the Pi doesn't have them yet — config/dxca.toml and data/ seeds

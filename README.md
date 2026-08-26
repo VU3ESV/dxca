@@ -79,7 +79,10 @@ Raspberry Pi, confirms, never fails silently):
 - **macOS**: builds the release binary and installs a launchd agent
   (`com.vu2cpl.dxca`, survives reboots, log in `~/Library/Logs/dxca.log`).
 - **Pi/Linux**: installs binary + config + data seeds to `/opt/dxca` and
-  a systemd service (`systemctl status dxca`), running as `vu2cpl`.
+  a systemd service (`systemctl status dxca`), running as the invoking
+  user. A fresh install self-bootstraps: the first-run web card creates
+  the admin account, and cty.xml / the LoTW list download on demand once
+  a ClubLog API key is entered — no seed files required.
 
 To cross-compile on the Mac and ship to a Pi in one step
 (needs cargo-zigbuild + the `aarch64-unknown-linux-gnu` target):
