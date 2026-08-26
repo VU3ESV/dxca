@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-27 · **Status:** v2.0.0 (M6) — Mac on launchd, Pi service installed and standing by; decoder cutover is Manoj's checklist below
+**Created:** 2026-08-26 · **Last updated:** 2026-08-27 · **Status:** v2.0.0 IN PRODUCTION on noderedpi4 — cutover complete, all milestones closed
 **Repo:** https://github.com/vu2cpl/dxca (private)
 
 ---
@@ -129,7 +129,19 @@ Operational state:
   (192.168.10.226:2237 — note the Mac is on the .10 subnet, the Pi on
   .1; routed both ways, verified).
 
-## The decoder cutover (Manoj's checklist — the last M6 box)
+## Cutover — COMPLETE (2026-08-27)
+
+Manoj executed the checklist the same evening: decoders repointed at
+192.168.1.169 (all three counting on the Pi), the five nodes enabled via
+the System tab (four proven Live immediately, VE7CC honest-yellow as
+usual), RUMlog connected to the Pi's telnet server, passthrough to the
+Mac's RUMlog clean (0 failures). The Mac launchd agent is stopped; its
+plist remains in ~/Library/LaunchAgents (rollback = `./install.sh macos`
+or just `launchctl bootstrap`). **Production DXCA = the Pi.** The Mac
+databases are now historical; the Pi's /opt/dxca/data/dxca.db is
+canonical.
+
+## The decoder cutover (original checklist, kept for rollback reference)
 
 When ready to make the Pi the production aggregator:
 
@@ -396,16 +408,14 @@ proven against the Swift app's own artifacts.**
 
 ## Open items → next session
 
-1. **The decoder cutover** (checklist above) — Manoj's hands, ~5 minutes.
-   After it: flip the 1.x repo HANDOVER/README to maintenance mode and
-   refresh `docs/UDP-PIPELINE.md` there for the Pi-centred wiring.
-2. **Manoj: ClubLog + Telegram** (if not already done) — My ClubLog
-   (credentials + Refresh) lights the highlighting; My Alerts wires
-   Telegram. Do it on whichever instance is production (the DBs diverged
-   at Pi-deploy time; after cutover the Pi's is canonical).
-3. Post-2.0 backlog (plan): per-user telnet feeds (Meridian server lift),
-   MQTT status/LWT on `shack/dxca/status`, durable spot history, possible
-   Meridian integration (plan §6).
+1. **Manoj: ClubLog + Telegram on the Pi** (if not already done there) —
+   My ClubLog (credentials + Refresh) lights the per-user highlighting;
+   My Alerts wires Telegram. The Pi's DB is canonical now.
+2. Post-2.0 backlog (plan): per-user telnet feeds (Meridian server lift),
+   MQTT status/LWT on `shack/dxca/status` (broker is localhost on the
+   Pi!), durable spot history + search, possible Meridian integration
+   (plan §6), web editing for bind-level scalars, additional decoder
+   ports if the shack grows.
 
 ## Conventions (see ~/.claude/CLAUDE.md)
 

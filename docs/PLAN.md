@@ -1,9 +1,10 @@
 # DXCA 2.0 — Rust + web GUI port plan
 
-**Status:** M0 (scaffold) complete 2026-08-26 — see `HANDOVER.md` for what
-landed and which §11 decisions are resolved. M1 (core logic) is next.
-Drafted 2026-08-26 in the 1.x repo (`docs/DXCA2-RUST-PLAN.md` there); this
-copy in the `dxca` repo is canonical from M0 onward.
+**Status:** COMPLETE — all milestones M0–M6 closed 2026-08-26/27;
+**v2.0.0 shipped and in production on noderedpi4** since the 2026-08-27
+cutover. `HANDOVER.md` carries the per-milestone record and the post-2.0
+backlog. Drafted 2026-08-26 in the 1.x repo (`docs/DXCA2-RUST-PLAN.md`
+there); this copy is canonical.
 **Target:** this repo — a headless Rust server with a Svelte web GUI,
 running 24/7 on a Raspberry Pi (and equally on macOS/Windows/Linux),
 replacing the SwiftUI app the same way SkimServer Mac became Meridian.
