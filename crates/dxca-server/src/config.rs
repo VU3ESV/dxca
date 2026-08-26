@@ -7,7 +7,7 @@
 //! sources MSHV 2333 / JTDX 2334 / WSJTX 2335, passthrough → RUMlog 2237.
 
 use dxca_connect::broadcast::{DestinationConfig, Format};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::net::Ipv4Addr;
 use std::path::Path;
@@ -18,7 +18,7 @@ fn default_true() -> bool {
     true
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct UdpSource {
     pub name: String,
@@ -27,7 +27,7 @@ pub struct UdpSource {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ClusterNode {
     pub name: String,
@@ -41,7 +41,7 @@ pub struct ClusterNode {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BroadcastDestination {
     pub name: String,
@@ -60,20 +60,15 @@ pub struct BroadcastDestination {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+/// NOTE: scalar fields are declared before the array-of-tables fields —
+/// TOML serialization (Config::save) requires that ordering.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
     /// Web GUI + API bind address.
     pub web_bind: String,
     /// Telnet cluster server port.
     pub telnet_port: u16,
-    /// WSJT-X/JTDX source listeners.
-    pub udp_sources: Vec<UdpSource>,
-    /// DX-cluster telnet nodes to ingest (M3). Default: none — node
-    /// choice and credentials are operator-specific.
-    pub cluster_nodes: Vec<ClusterNode>,
-    /// UDP broadcast destinations.
-    pub broadcast_destinations: Vec<BroadcastDestination>,
     /// Rebroadcast dedupe window (CALL-BAND-MODE), 1.x default 60 s.
     pub dedupe_window_secs: u64,
     /// In-memory spot ring size served to the web UI.
@@ -82,9 +77,18 @@ pub struct Config {
     /// and the cached cty.xml.
     pub data_dir: String,
     /// Test/debug override: point ClubLog downloads at this base URL.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub clublog_base_override: Option<String>,
     /// Test/debug override: point Telegram sends at this base URL.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub telegram_base_override: Option<String>,
+    /// WSJT-X/JTDX source listeners.
+    pub udp_sources: Vec<UdpSource>,
+    /// DX-cluster telnet nodes to ingest (M3). Default: none — node
+    /// choice and credentials are operator-specific.
+    pub cluster_nodes: Vec<ClusterNode>,
+    /// UDP broadcast destinations.
+    pub broadcast_destinations: Vec<BroadcastDestination>,
 }
 
 impl Default for Config {
@@ -141,6 +145,21 @@ impl Config {
         toml::from_str(&text).map_err(|e| format!("parse {}: {e}", path.display()))
     }
 
+    /// Persist to `path` (the M5 web-editing flow). The file is fully
+    /// rewritten — hand-written comments live in dxca.example.toml, not
+    /// the live config.
+    pub fn save(&self, path: &Path) -> Result<(), String> {
+        let body = toml::to_string_pretty(self).map_err(|e| format!("serialize config: {e}"))?;
+        let text = format!(
+            "# DXCA configuration — rewritten by the web UI (System page) on\n\
+             # every save. Keep annotated notes in config/dxca.example.toml.\n\n{body}"
+        );
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
+        }
+        std::fs::write(path, text).map_err(|e| format!("write {}: {e}", path.display()))
+    }
+
     /// Enabled destinations in the broadcaster's terms.
     pub fn broadcast_destinations(&self) -> Vec<DestinationConfig> {
         self.broadcast_destinations
@@ -176,6 +195,27 @@ mod tests {
     fn unknown_key_is_an_error() {
         let err = toml::from_str::<Config>("telnet_prot = 7575").unwrap_err();
         assert!(err.to_string().contains("telnet_prot"));
+    }
+
+    #[test]
+    fn save_load_roundtrip() {
+        let mut cfg = Config::default();
+        cfg.cluster_nodes.push(ClusterNode {
+            name: "VE7CC".into(),
+            host: "ve7cc.net".into(),
+            port: 23,
+            login_call: "VU2CPL-2".into(),
+            password: String::new(),
+            enabled: true,
+        });
+        let path = std::env::temp_dir().join(format!("dxca-cfg-{}.toml", std::process::id()));
+        cfg.save(&path).unwrap();
+        let loaded = Config::load(&path).unwrap();
+        assert_eq!(loaded.cluster_nodes.len(), 1);
+        assert_eq!(loaded.cluster_nodes[0].host, "ve7cc.net");
+        assert_eq!(loaded.udp_sources.len(), 3);
+        assert_eq!(loaded.telnet_port, 7575);
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]

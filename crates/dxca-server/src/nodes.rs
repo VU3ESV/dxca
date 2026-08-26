@@ -28,7 +28,9 @@ pub struct NodeStatus {
 
 pub struct NodeManager {
     statuses: Arc<Mutex<HashMap<String, NodeStatus>>>,
-    clients: Vec<ClusterClient>,
+    /// name → (config fingerprint, running client). Interior mutability so
+    /// the M5 hot-apply works through the shared Arc.
+    clients: Mutex<HashMap<String, (String, ClusterClient)>>,
 }
 
 impl Default for NodeManager {
@@ -37,11 +39,18 @@ impl Default for NodeManager {
     }
 }
 
+fn fingerprint(cfg: &ClientConfig) -> String {
+    format!(
+        "{}:{}:{}:{}",
+        cfg.host, cfg.port, cfg.login_call, cfg.password
+    )
+}
+
 impl NodeManager {
     pub fn new() -> Self {
         NodeManager {
             statuses: Arc::new(Mutex::new(HashMap::new())),
-            clients: Vec::new(),
+            clients: Mutex::new(HashMap::new()),
         }
     }
 
@@ -49,11 +58,64 @@ impl NodeManager {
         self.statuses.lock().unwrap().clone()
     }
 
+    /// Hot-apply a node list: diff by name + config fingerprint. Removed or
+    /// changed nodes stop (off the async runtime — a supervisor join can
+    /// block up to its connect timeout); new/changed ones start.
+    pub fn apply(&self, nodes: &[crate::config::ClusterNode], tx: &mpsc::Sender<PipelineInput>) {
+        let wanted: HashMap<String, ClientConfig> = nodes
+            .iter()
+            .filter(|n| n.enabled)
+            .map(|n| {
+                let mut cfg = ClientConfig::new(&n.host, n.port, &n.login_call);
+                cfg.password = n.password.clone();
+                (n.name.clone(), cfg)
+            })
+            .collect();
+
+        let mut to_start: Vec<(String, ClientConfig)> = Vec::new();
+        let mut retired: Vec<ClusterClient> = Vec::new();
+        {
+            let mut clients = self.clients.lock().unwrap();
+            let names: Vec<String> = clients.keys().cloned().collect();
+            for name in names {
+                let keep = wanted
+                    .get(&name)
+                    .is_some_and(|cfg| clients[&name].0 == fingerprint(cfg));
+                if !keep && let Some((_, client)) = clients.remove(&name) {
+                    retired.push(client);
+                    self.statuses.lock().unwrap().remove(&name);
+                }
+            }
+            for (name, cfg) in &wanted {
+                if !clients.contains_key(name) {
+                    to_start.push((name.clone(), cfg.clone()));
+                }
+            }
+        }
+        if !retired.is_empty() {
+            // Stopping joins the supervisor thread (up to its connect
+            // timeout) — never on the async runtime.
+            tokio::task::spawn_blocking(move || drop(retired));
+        }
+        for (name, cfg) in to_start {
+            self.start_node(name, cfg, tx.clone());
+        }
+    }
+
     /// Start one node client and its event-consumer thread. Spots flow into
     /// the pipeline channel; status updates land in the shared map.
-    pub fn start_node(&mut self, name: String, cfg: ClientConfig, tx: mpsc::Sender<PipelineInput>) {
+    pub fn start_node(&self, name: String, cfg: ClientConfig, tx: mpsc::Sender<PipelineInput>) {
+        let fp = fingerprint(&cfg);
         let (client, events) = ClusterClient::start(cfg);
-        self.clients.push(client);
+        if let Some((_, old)) = self
+            .clients
+            .lock()
+            .unwrap()
+            .insert(name.clone(), (fp, client))
+        {
+            // Replaced in place — retire the old client off-thread.
+            tokio::task::spawn_blocking(move || drop(old));
+        }
         self.statuses.lock().unwrap().insert(
             name.clone(),
             NodeStatus {

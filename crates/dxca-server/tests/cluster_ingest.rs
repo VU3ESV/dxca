@@ -72,7 +72,7 @@ async fn cluster_spot_flows_to_ring_and_telnet() {
         .await
         .unwrap();
 
-    let mut manager = NodeManager::new();
+    let manager = NodeManager::new();
     manager.start_node("VE7CC".into(), test_client_cfg(node_port), input_tx);
 
     // Status: proven Live with one spot counted.
@@ -136,7 +136,7 @@ async fn flaky_node_stays_unproven_and_recycles_with_escalating_backoff() {
         ..Config::default()
     };
     let (_state, input_tx) = pipeline::start(&cfg).await.expect("pipeline");
-    let mut manager = NodeManager::new();
+    let manager = NodeManager::new();
     manager.start_node("FLAKY".into(), test_client_cfg(node_port), input_tx);
 
     // The watchdog (auth_timeout 1 s) must recycle the unproven session and

@@ -31,10 +31,12 @@ every spot classifies per user with Telegram alerts and per-callsign
 cooldown. Proven end-to-end in tests against fake ClubLog/Telegram
 servers and by the live validations along the way (RUMlog click-to-fill,
 honest-yellow flaky node, exact matrix parity with the 1.x app's own
-artifacts). Remaining: web editing of the global config (M5 remainder),
-then M6 — Pi cutover, systemd, v2.0.0. The full design and milestone
-plan: [docs/PLAN.md](docs/PLAN.md). The 1.x macOS app remains the
-standing fallback until M6 signs off.
+artifacts). **M5 is complete**: sources, cluster nodes, and broadcast
+destinations are edited in the System tab and hot-apply — listeners
+rebind, nodes redial, destinations re-point, and `config/dxca.toml` is
+rewritten so restarts agree. Remaining: M6 — Pi cutover, systemd,
+v2.0.0. The full design and milestone plan: [docs/PLAN.md](docs/PLAN.md).
+The 1.x macOS app remains the standing fallback until M6 signs off.
 
 Secrets note (plan §5): per-user ClubLog app passwords and Telegram
 tokens live in `data/dxca.db` in plain text, file mode 0600, service user

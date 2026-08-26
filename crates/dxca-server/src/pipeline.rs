@@ -5,14 +5,14 @@
 //! return with the web UI in M5) — `passes_filters` here is the
 //! rebroadcast-dedupe verdict alone.
 
-use crate::config::Config;
-use dxca_connect::broadcast::{SpotPayload, UdpBroadcaster};
+use crate::config::{Config, UdpSource};
+use dxca_connect::broadcast::{DestinationConfig, SpotPayload, UdpBroadcaster};
 use dxca_connect::telnet::ClusterServer;
-use dxca_connect::wsjtx_udp::{self, SourceDatagram};
+use dxca_connect::wsjtx_udp::SourceDatagram;
 use dxca_core::wsjtx::{self, Message};
 use dxca_core::{Spot, format, time_from_decode_ms};
 use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use tokio::sync::mpsc;
 
 /// One unit of pipeline work: a raw UDP datagram from a decoder source, or
@@ -22,16 +22,20 @@ pub enum PipelineInput {
     Cluster(Spot),
 }
 
-/// Shared state the web API reads.
+/// Shared state the web API reads. Broadcaster and source listeners are
+/// swappable for the M5 config hot-apply.
 pub struct PipelineState {
     pub spots: Mutex<VecDeque<Spot>>,
-    pub broadcaster: Arc<UdpBroadcaster>,
+    broadcaster: RwLock<Arc<UdpBroadcaster>>,
     pub telnet: ClusterServer,
     /// Spots received per source name (proven-live counters).
     pub source_counts: Mutex<HashMap<String, u64>>,
     /// Every processed spot, for subscribers (alert fan-out — M4; the
     /// dashboard WebSocket — M5). Lagging subscribers skip, never stall.
     pub spot_events: tokio::sync::broadcast::Sender<Spot>,
+    /// Running listener tasks per (source name, port) — aborting the
+    /// handles drops the socket and frees the port.
+    sources: Mutex<HashMap<(String, u16), tokio::task::JoinHandle<()>>>,
 }
 
 impl PipelineState {
@@ -39,6 +43,93 @@ impl PipelineState {
         let spots = self.spots.lock().unwrap();
         spots.iter().rev().take(limit).cloned().collect()
     }
+
+    pub fn broadcaster(&self) -> Arc<UdpBroadcaster> {
+        self.broadcaster.read().unwrap().clone()
+    }
+
+    /// Hot-apply new broadcast destinations: a fresh broadcaster replaces
+    /// the old one (counters reset — 1.x `configure` behaviour).
+    pub fn apply_destinations(&self, dests: Vec<DestinationConfig>) -> std::io::Result<()> {
+        let next = Arc::new(UdpBroadcaster::new(dests)?);
+        *self.broadcaster.write().unwrap() = next;
+        Ok(())
+    }
+
+    /// Hot-apply the source list: diff by (name, port) — removed/changed
+    /// listeners are aborted (socket drops, port freed), new ones bind
+    /// first so a port clash surfaces here instead of dying silently in a
+    /// task.
+    pub async fn apply_sources(
+        &self,
+        sources: &[UdpSource],
+        tx: &mpsc::Sender<PipelineInput>,
+    ) -> std::io::Result<()> {
+        let wanted: Vec<(String, u16)> = sources
+            .iter()
+            .filter(|s| s.enabled)
+            .map(|s| (s.name.clone(), s.port))
+            .collect();
+
+        // Bind additions before touching anything — all-or-nothing.
+        let mut added = Vec::new();
+        {
+            let current = self.sources.lock().unwrap();
+            for key in &wanted {
+                if !current.contains_key(key) {
+                    added.push(key.clone());
+                }
+            }
+        }
+        let mut new_tasks = Vec::new();
+        for (name, port) in added {
+            let socket = tokio::net::UdpSocket::bind(("0.0.0.0", port)).await?;
+            new_tasks.push((
+                (name.clone(), port),
+                spawn_source_task(name, socket, tx.clone()),
+            ));
+        }
+
+        let mut current = self.sources.lock().unwrap();
+        current.retain(|key, handle| {
+            if wanted.contains(key) {
+                true
+            } else {
+                handle.abort();
+                false
+            }
+        });
+        for (key, handle) in new_tasks {
+            current.insert(key, handle);
+        }
+        Ok(())
+    }
+}
+
+fn spawn_source_task(
+    name: String,
+    socket: tokio::net::UdpSocket,
+    tx: mpsc::Sender<PipelineInput>,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut buf = vec![0u8; 65_536];
+        loop {
+            let Ok((n, _peer)) = socket.recv_from(&mut buf).await else {
+                eprintln!("dxca: UDP source {name} receive failed");
+                return;
+            };
+            if n == 0 {
+                continue;
+            }
+            let datagram = SourceDatagram {
+                source_name: name.clone(),
+                data: buf[..n].to_vec(),
+            };
+            if tx.send(PipelineInput::Datagram(datagram)).await.is_err() {
+                return;
+            }
+        }
+    })
 }
 
 fn now_unix() -> i64 {
@@ -60,31 +151,15 @@ pub async fn start(
     let (spot_events, _) = tokio::sync::broadcast::channel(1024);
     let state = Arc::new(PipelineState {
         spots: Mutex::new(VecDeque::new()),
-        broadcaster: broadcaster.clone(),
+        broadcaster: RwLock::new(broadcaster),
         telnet,
         source_counts: Mutex::new(HashMap::new()),
         spot_events,
+        sources: Mutex::new(HashMap::new()),
     });
 
     let (tx, rx) = mpsc::channel::<PipelineInput>(1024);
-    for source in cfg.udp_sources.iter().filter(|s| s.enabled) {
-        let (name, port) = (source.name.clone(), source.port);
-        let (dg_tx, mut dg_rx) = mpsc::channel::<SourceDatagram>(256);
-        let tx = tx.clone();
-        tokio::spawn(async move {
-            if let Err(e) = wsjtx_udp::run_listener(name.clone(), port, dg_tx).await {
-                eprintln!("dxca: UDP source {name} on port {port} failed: {e}");
-            }
-        });
-        let tx2 = tx.clone();
-        tokio::spawn(async move {
-            while let Some(dg) = dg_rx.recv().await {
-                if tx2.send(PipelineInput::Datagram(dg)).await.is_err() {
-                    return;
-                }
-            }
-        });
-    }
+    state.apply_sources(&cfg.udp_sources, &tx).await?;
 
     let pipeline_state = state.clone();
     let dedupe_window = cfg.dedupe_window_secs as i64;
@@ -120,7 +195,7 @@ async fn run_pipeline(
         // Passthrough first — raw, before parsing, exactly like 1.x's
         // onRawDatagram wiring.
         state
-            .broadcaster
+            .broadcaster()
             .send_raw(&datagram.data, &datagram.source_name);
 
         let Some(parsed) = wsjtx::parse(&datagram.data) else {
@@ -198,7 +273,7 @@ fn process_spot(
         state.telnet.broadcast_line(&line);
     }
     let dx_call = spot.dx_callsign();
-    state.broadcaster.broadcast_spot(
+    state.broadcaster().broadcast_spot(
         &SpotPayload {
             cluster_line: &line,
             source_name: &spot.source_name,

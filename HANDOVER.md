@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-27 · **Status:** M5 core complete — dashboard UI live on the burn-in (config web-editing is the M5 remainder)
+**Created:** 2026-08-26 · **Last updated:** 2026-08-27 · **Status:** M5 COMPLETE — full web parity incl. config editing with hot-apply; burn-in live, Manoj's account created
 **Repo:** https://github.com/vu2cpl/dxca (private)
 
 ---
@@ -107,6 +107,45 @@ Operational state:
   set up) ClubLog classification + Telegram alerts are at parity.
 
 ## M5 progress
+
+**2026-08-27 (later) — M5 remainder done: web config editing with
+hot-apply.**
+
+- `PipelineState` gains swappable internals: `broadcaster()` accessor over
+  a RwLock (apply_destinations swaps a fresh UdpBroadcaster — counters
+  reset, 1.x `configure` behaviour) and a source-listener registry keyed
+  (name, port) with **bind-first** apply: additions bind before anything
+  is torn down, so a port clash rejects the whole edit; removals abort
+  their tasks (socket drops, port freed).
+- `NodeManager::apply` — diff by name + config fingerprint; removed or
+  changed clients retire on a blocking task (a supervisor join can block
+  up to its connect timeout, never on the async runtime); `start_node` is
+  `&self` now (interior mutability).
+- `Config` is `Serialize` (scalars declared before array-of-tables —
+  TOML emitter requirement), `Config::save` rewrites `config/dxca.toml`
+  with a "managed by the web UI" header; hand comments live in the
+  example file.
+- `GET/PUT /api/config/global` (admin): the three arrays hot-apply +
+  persist; unique-name validation; `web_bind`/`telnet_port`/dedupe/ring/
+  `data_dir` are returned read-only (file-edit + restart, shown in the
+  UI).
+- System page: full editors for sources / nodes / destinations with
+  add/remove rows, format dropdown, sources-CSV allowlist, unfiltered
+  flag, and one **Apply & save** button.
+- `tests/config_editing.rs` proves the loop end to end over the real API:
+  baseline passthrough → admin edits (source A→B, destination re-pointed,
+  node added) → new port live, old port re-bindable, passthrough
+  byte-identical at the new destination, old destination silent, node
+  dialing, TOML reloaded with the new arrays; duplicate names 400;
+  unauthenticated 401.
+- Browser-verified on a disposable instance (System page renders all
+  editors). Note for future sessions: the embedded browser pane's
+  click/type occasionally goes stale right after navigation — re-run
+  read_page and retry, or drive fetch() via javascript_tool; Manoj's own
+  setup through the real UI worked first time.
+- Burn-in restarted on this build. **Manoj created his account** (users:
+  1) — ClubLog credentials/refresh + Telegram are his next clicks, and
+  node/source editing is now in the System tab.
 
 **2026-08-27 — M5 core complete: the real dashboard, live over a
 WebSocket, verified in the browser against a disposable test instance.**
@@ -311,16 +350,15 @@ proven against the Swift app's own artifacts.**
 
 ## Open items → next session
 
-1. **Manoj's account setup on the burn-in** — open http://localhost:7580,
-   the setup card creates the admin; then My ClubLog (credentials +
-   Refresh) and My Alerts (Telegram). Until then classification/alerts
-   run for zero users.
-2. **M5 remainder**: web editing of sources/nodes/destinations with
-   hot-apply (see M5 progress).
-3. **M6 — burn-in + release** (plan §10): the burn-in effectively started
+1. **Manoj: ClubLog + Telegram on the burn-in** — account exists; My
+   ClubLog (credentials + Refresh log now) lights up the per-user
+   highlighting, My Alerts wires Telegram.
+2. **M6 — burn-in + release** (plan §10): the burn-in effectively started
    2026-08-27; M6 wraps it with the Pi cutover (decoders repointed at the
-   Pi's IP), systemd + install docs, dual-run diff vs 1.8.4 if desired,
-   and the v2.0.0 tag.
+   Pi's IP), systemd + install.sh (macOS/Pi branching per shack rules),
+   docs + user-facing polish, dual-run diff vs 1.8.4 if desired, and the
+   v2.0.0 tag. Note the config file is now web-managed — the Pi deploy
+   ships `config/dxca.toml` + `data/` alongside the binary.
 
 ## Conventions (see ~/.claude/CLAUDE.md)
 

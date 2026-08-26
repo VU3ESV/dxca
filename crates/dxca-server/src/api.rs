@@ -3,9 +3,10 @@
 //! account. The embedded web UI is served by the fallback.
 
 use crate::auth;
+use crate::config::{BroadcastDestination, ClusterNode, Config, UdpSource};
 use crate::db::{ClubLogUserConfig, NotifyUserConfig, User};
 use crate::nodes::NodeManager;
-use crate::pipeline::PipelineState;
+use crate::pipeline::{PipelineInput, PipelineState};
 use crate::users::UserService;
 use axum::extract::{Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
@@ -13,13 +14,20 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
-use std::sync::Arc;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+use tokio::sync::mpsc;
 
 #[derive(Clone)]
 pub struct AppState {
     pub pipeline: Arc<PipelineState>,
     pub nodes: Arc<NodeManager>,
     pub users: Arc<UserService>,
+    /// The live global config (M5 web editing) + where it persists.
+    pub config: Arc<Mutex<Config>>,
+    pub config_path: PathBuf,
+    /// Pipeline input — hot-applied sources/nodes feed into it.
+    pub input_tx: mpsc::Sender<PipelineInput>,
 }
 
 pub fn build_router(state: AppState) -> Router {
@@ -37,6 +45,7 @@ pub fn build_router(state: AppState) -> Router {
             get(get_notify).put(put_notify),
         )
         .route("/api/clublog/refresh", post(refresh))
+        .route("/api/config/global", get(get_global).put(put_global))
         .route("/api/telegram/test", post(telegram_test))
         .route("/api/lotw/refresh", post(lotw_refresh))
         .route("/api/users", get(list_users).post(create_user))
@@ -71,7 +80,7 @@ fn require_admin(app: &AppState, headers: &HeaderMap) -> Result<User, Response> 
 // --- status + spots ------------------------------------------------------
 
 fn status_json(app: &AppState) -> serde_json::Value {
-    let counters = app.pipeline.broadcaster.counters();
+    let counters = app.pipeline.broadcaster().counters();
     let user_count = app.users.db.user_count().unwrap_or(0);
     serde_json::json!({
         "name": "dxca",
@@ -377,6 +386,123 @@ fn with_user_config<T: serde::Serialize>(
             Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e),
         },
         Err(resp) => resp,
+    }
+}
+
+// --- global config (M5 web editing, admin) -------------------------------
+
+/// The editable arrays plus the file-only scalars (shown read-only).
+async fn get_global(State(app): State<AppState>, headers: HeaderMap) -> Response {
+    if let Err(resp) = require_admin(&app, &headers) {
+        return resp;
+    }
+    let cfg = app.config.lock().unwrap().clone();
+    Json(serde_json::json!({
+        "udp_sources": cfg.udp_sources,
+        "cluster_nodes": cfg.cluster_nodes,
+        "broadcast_destinations": cfg.broadcast_destinations,
+        "read_only": {
+            "web_bind": cfg.web_bind,
+            "telnet_port": cfg.telnet_port,
+            "dedupe_window_secs": cfg.dedupe_window_secs,
+            "spot_ring_capacity": cfg.spot_ring_capacity,
+            "data_dir": cfg.data_dir,
+        },
+    }))
+    .into_response()
+}
+
+#[derive(Deserialize)]
+struct GlobalConfigReq {
+    udp_sources: Vec<UdpSource>,
+    cluster_nodes: Vec<ClusterNode>,
+    broadcast_destinations: Vec<BroadcastDestination>,
+}
+
+/// Hot-apply + persist the three arrays. Bind failures (port clash)
+/// reject the whole request before anything is torn down; persistence
+/// failure is reported but the running state is already applied.
+async fn put_global(
+    State(app): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<GlobalConfigReq>,
+) -> Response {
+    if let Err(resp) = require_admin(&app, &headers) {
+        return resp;
+    }
+
+    // Names must be unique — they key counters, status maps, and the
+    // spotter field on cluster lines.
+    for (label, names) in [
+        (
+            "source",
+            req.udp_sources
+                .iter()
+                .map(|s| s.name.clone())
+                .collect::<Vec<_>>(),
+        ),
+        (
+            "node",
+            req.cluster_nodes.iter().map(|n| n.name.clone()).collect(),
+        ),
+        (
+            "destination",
+            req.broadcast_destinations
+                .iter()
+                .map(|d| d.name.clone())
+                .collect(),
+        ),
+    ] {
+        let mut seen = std::collections::HashSet::new();
+        for name in &names {
+            if name.trim().is_empty() {
+                return err(
+                    StatusCode::BAD_REQUEST,
+                    format!("a {label} has an empty name"),
+                );
+            }
+            if !seen.insert(name.to_uppercase()) {
+                return err(
+                    StatusCode::BAD_REQUEST,
+                    format!("duplicate {label} name: {name}"),
+                );
+            }
+        }
+    }
+
+    // Apply: sources first (binds can fail → reject), then destinations
+    // and nodes (infallible diffs).
+    if let Err(e) = app
+        .pipeline
+        .apply_sources(&req.udp_sources, &app.input_tx)
+        .await
+    {
+        return err(StatusCode::BAD_REQUEST, format!("source listener: {e}"));
+    }
+    let new_cfg = {
+        let mut cfg = app.config.lock().unwrap();
+        cfg.udp_sources = req.udp_sources;
+        cfg.cluster_nodes = req.cluster_nodes;
+        cfg.broadcast_destinations = req.broadcast_destinations;
+        cfg.clone()
+    };
+    if let Err(e) = app
+        .pipeline
+        .apply_destinations(new_cfg.broadcast_destinations())
+    {
+        return err(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("destinations: {e}"),
+        );
+    }
+    app.nodes.apply(&new_cfg.cluster_nodes, &app.input_tx);
+
+    match new_cfg.save(&app.config_path) {
+        Ok(()) => Json(serde_json::json!({"ok": true})).into_response(),
+        Err(e) => err(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("applied, but saving the config file failed: {e}"),
+        ),
     }
 }
 

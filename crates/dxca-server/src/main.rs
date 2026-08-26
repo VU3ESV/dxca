@@ -7,7 +7,6 @@
 //! shell until M5 (docs/PLAN.md).
 
 use dxca_connect::clublog::Endpoints;
-use dxca_connect::dxcluster::ClientConfig;
 use dxca_connect::telegram::Telegram;
 use dxca_server::api::{self, AppState};
 use dxca_server::db::Db;
@@ -36,12 +35,8 @@ async fn main() {
     };
 
     // DX-cluster node clients (M3): honest-status supervised connections.
-    let mut manager = NodeManager::new();
-    for node in cfg.cluster_nodes.iter().filter(|n| n.enabled) {
-        let mut client_cfg = ClientConfig::new(&node.host, node.port, &node.login_call);
-        client_cfg.password = node.password.clone();
-        manager.start_node(node.name.clone(), client_cfg, input_tx.clone());
-    }
+    let manager = NodeManager::new();
+    manager.apply(&cfg.cluster_nodes, &input_tx);
 
     // Users + alerts (M4).
     let db = match Db::open(&Path::new(&cfg.data_dir).join("dxca.db")) {
@@ -78,6 +73,9 @@ async fn main() {
         pipeline: pipeline_state,
         nodes: Arc::new(manager),
         users,
+        config: Arc::new(std::sync::Mutex::new(cfg.clone())),
+        config_path: Path::new(config::DEFAULT_PATH).to_path_buf(),
+        input_tx: input_tx.clone(),
     };
     let app = api::build_router(app_state.clone());
 

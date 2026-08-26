@@ -222,6 +222,9 @@ async fn two_users_same_stream_different_highlights_and_pings() {
         pipeline: pipeline_state,
         nodes: Arc::new(NodeManager::new()),
         users,
+        config: Arc::new(Mutex::new(cfg.clone())),
+        config_path: data_dir.join("dxca.toml"),
+        input_tx: input_tx.clone(),
     });
     let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
     let api_port = listener.local_addr().unwrap().port();
