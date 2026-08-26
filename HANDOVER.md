@@ -34,11 +34,11 @@ The 1.x macOS app stays the production DXCA until M6 signs off.
   plain `cargo build` never needs Node (Meridian rule).
 - Local gate green: `cargo test --workspace` (4 pass incl. doc-test run),
   `cargo fmt --check`, `clippy --all-targets -D warnings`, web build.
-- Pi cross-compile proven: `just dist` → 1.5 MB ELF
-  `target/aarch64-unknown-linux-gnu/release/dxca` (aarch64, glibc ≥ 2.36 =
-  Bookworm) via cargo-zigbuild. **Not yet executed on a real Pi** — no
-  passwordless ssh to the shack Pis from the build session. One-time check
-  remaining: `scp` the binary to a Pi, run it, `curl :7580/api/status`.
+- Pi cross-compile proven **and executed on real hardware**: `just dist` →
+  1.5 MB ELF `target/aarch64-unknown-linux-gnu/release/dxca` (aarch64,
+  glibc ≥ 2.36) via cargo-zigbuild. Ran on noderedpi4 (Debian 13 Trixie,
+  glibc 2.41) 2026-08-26: `/api/status` JSON + embedded UI served, clean
+  SIGTERM shutdown. Shack ssh is `vu2cpl@<host>`, key-auth only.
 
 ## Plan §11 decisions resolved at M0
 
@@ -67,14 +67,12 @@ The 1.x macOS app stays the production DXCA until M6 signs off.
 
 ## Open items → next session
 
-1. **Run the cross-compiled binary on a real Pi once** (M0's last box —
-   needs Manoj at the keyboard for ssh).
-2. **M1 — core logic** (plan §10): port the WSJT-X binary codec with
+1. **M1 — core logic** (plan §10): port the WSJT-X binary codec with
    captured WSJT-X *and* JTDX datagrams as test vectors (capture on the Mac
    with the 1.x app's sources live); port CTY/ADIF/matrix/classifier with
    golden tests against the Swift implementation's output. Swift sources:
    `~/projects/DXClusterAggregator/DXClusterAggregator/{Protocol,Utils,Models}/`.
-3. M2+ per docs/PLAN.md §10.
+2. M2+ per docs/PLAN.md §10.
 
 ## Conventions (see ~/.claude/CLAUDE.md)
 
