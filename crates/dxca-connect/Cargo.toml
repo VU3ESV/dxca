@@ -9,3 +9,6 @@ repository.workspace = true
 [dependencies]
 dxca-core = { workspace = true }
 tokio = { workspace = true }
+ureq = { workspace = true }
+flate2 = { workspace = true }
+serde_json = { workspace = true }

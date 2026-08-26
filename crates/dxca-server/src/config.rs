@@ -78,6 +78,13 @@ pub struct Config {
     pub dedupe_window_secs: u64,
     /// In-memory spot ring size served to the web UI.
     pub spot_ring_capacity: usize,
+    /// Directory for runtime state: dxca.db (users, sessions, matrices)
+    /// and the cached cty.xml.
+    pub data_dir: String,
+    /// Test/debug override: point ClubLog downloads at this base URL.
+    pub clublog_base_override: Option<String>,
+    /// Test/debug override: point Telegram sends at this base URL.
+    pub telegram_base_override: Option<String>,
 }
 
 impl Default for Config {
@@ -114,6 +121,9 @@ impl Default for Config {
             }],
             dedupe_window_secs: 60,
             spot_ring_capacity: 5000,
+            data_dir: "data".into(),
+            clublog_base_override: None,
+            telegram_base_override: None,
         }
     }
 }

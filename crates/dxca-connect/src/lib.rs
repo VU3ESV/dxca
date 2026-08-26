@@ -9,14 +9,16 @@
 //! (password auth, proven-live tracking, fixed backoff schedule reset only
 //! on proof, auth/silence watchdog, Telnet IAC stripping).
 //!
-//! Still to come:
-//! - M4: `clublog`, `lotw`, `telegram` HTTP clients (ureq + rustls).
+//! M4 added `clublog` (log + cty.xml download) and `telegram` (bot-API
+//! notifier); the LoTW-users download waits for the M5 display marker.
 //!
 //! Lift rules (plan §6): lifted meridian code stays diff-minimal with
 //! `// DXCA:` divergence markers. This crate never imports axum, SQLite,
 //! or auth.
 
 pub mod broadcast;
+pub mod clublog;
 pub mod dxcluster;
+pub mod telegram;
 pub mod telnet;
 pub mod wsjtx_udp;

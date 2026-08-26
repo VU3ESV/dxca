@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-27 · **Status:** M3 complete — dxca IS the live shack aggregator (burn-in, now with cluster ingest)
+**Created:** 2026-08-26 · **Last updated:** 2026-08-27 · **Status:** M4 complete — dxca IS the live shack aggregator (burn-in; users+alerts live, awaiting Manoj's account setup)
 **Repo:** https://github.com/vu2cpl/dxca (private)
 
 ---
@@ -96,9 +96,60 @@ Operational state:
   lifted client logged into meridian's own server), VE7CC sitting
   honest-yellow "Connected, unproven" — the exact 2026-08-24 failure mode
   the honest-status machinery exists for.
-- Remaining burn-in gap vs 1.x: no ClubLog highlighting/Telegram (M4), no
-  spots-table UI (M5). Spot aggregation, cluster ingest, and the RUMlog
-  feed paths are at parity.
+- **M4 update (2026-08-27):** the burn-in binary has users+alerts.
+  `data/cty.xml` bootstrapped from the 1.x app cache (402 entities
+  loaded). **Waiting on Manoj**: create the admin account
+  (`POST /api/setup`), then PUT his ClubLog credentials + Telegram
+  settings and `POST /api/clublog/refresh` — credentials are his to
+  enter, deliberately not migrated from the 1.x UserDefaults by Claude.
+- Remaining burn-in gap vs 1.x: no spots-table UI / LoTW markers (M5).
+  Aggregation, cluster ingest, RUMlog feeds, and (once the account is
+  set up) ClubLog classification + Telegram alerts are at parity.
+
+## M4 progress
+
+**2026-08-27 — M4 complete: SQLite users, session auth, per-user ClubLog
+matrices over the shared stream, Telegram fan-out. Exit criterion proven
+in an end-to-end test through the real flows.**
+
+- Deps added (plan §1): rusqlite (bundled), argon2, rand, sha2,
+  ureq(+json)/rustls, flate2.
+- `dxca-core`: `LogMatrix::build_from_adif` — the exact 1.x
+  `ClubLogClient` build loop as a production fn; the local_parity test
+  now golden-tests THIS fn against the Swift app's matrix.json.
+- `dxca-connect`: `clublog.rs` (cty.php + getadif.php, gzip-by-magic,
+  endpoint bases overridable for tests), `telegram.rs` (sendMessage,
+  HTML, base overridable). LoTW users list deferred to M5 (display
+  marker).
+- `dxca-server`:
+  - `db.rs` — SQLite (0600): users / sessions / per-user configs
+    (clublog + notify JSON) / matrix cache. Secrets at rest plaintext by
+    design (plan §5), documented trade-off.
+  - `auth.rs` — argon2 PHC hashes; 256-bit tokens, SHA-256-hashed in the
+    sessions table, HttpOnly SameSite=Lax cookie, 30-day TTL.
+  - `users.rs` — UserService: global resolver (data/cty.xml),
+    per-user matrices in memory backed by DB, the 1.x refresh flow,
+    per-user classification, Telegram fan-out with the 1.x per-callsign
+    cooldown (clamped 5–60 min) and the exact 1.x message format.
+  - `api.rs` — full route set (plan §7): /api/setup (first-run admin
+    only), login/logout/me, per-user clublog+notify config, refresh,
+    admin user management, and /api/spots with per-session
+    classification annotations. Composition moved out of main.rs so
+    tests drive the real router.
+  - Pipeline broadcasts processed spots (`spot_events`); a fan-out task
+    classifies per user per spot.
+  - Config: `data_dir` (default `data/`), `clublog_base_override` /
+    `telegram_base_override` test knobs.
+- **Exit test** (`tests/users_alerts.rs`): fake ClubLog (gzipped cty +
+  per-user ADIF) and fake Telegram behind real HTTP; two accounts set up
+  through the API; both refresh through the real flow; one spot on the
+  shared stream → A sees `worked`, B sees `newDXCC`; exactly one
+  Telegram ping, to B's bot token; the cooldown suppresses the repeat;
+  anonymous /api/spots carries no classification; second /api/setup is
+  refused; admin-created accounts don't hijack the admin's session.
+- 1.x divergence (deliberate): `maybeNotify` also gated on the display
+  filters; server-side notifications gate on levels + cooldown only
+  until M5 settles per-user display filters.
 
 ## M3 progress
 
@@ -225,13 +276,15 @@ proven against the Swift app's own artifacts.**
 
 ## Open items → next session
 
-1. **M4 — users + alerts** (plan §10 + §5): SQLite (users, sessions,
-   per-user config + matrix cache), argon2 auth with first-run admin
-   setup, per-user ClubLog download + matrix build (the parity-proven
-   core chain), per-user classification over the shared stream, Telegram
-   fan-out with per-user cooldown. Exit: two accounts with different
-   logs see different highlights on the same spot stream.
-2. M5+ per docs/PLAN.md §10.
+1. **Manoj's account setup on the burn-in** (see the Burn-in section) —
+   until then classification/alerts run for zero users.
+2. **M5 — web parity** (plan §10 + §8): the real dashboard — login page +
+   first-run setup page, live spots table (WebSocket over `spot_events`),
+   filter bar, status pills (sources / nodes / destinations), My ClubLog
+   + My alerts pages, Users admin. Plus the LoTW users marker
+   (`lotw.rs` download + per-spot flag) deferred from M4. Exit: the Mac
+   app's daily-driver workflow is fully replaceable in the browser.
+3. M6 per docs/PLAN.md §10.
 
 ## Conventions (see ~/.claude/CLAUDE.md)
 

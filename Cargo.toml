@@ -25,3 +25,15 @@ axum = "0.8"
 # "one binary + one TOML" (plan §9). dxca-server's build.rs guarantees the
 # dir exists, so plain `cargo build` never requires Node.
 include_dir = "0.7"
+# M4: per-user state. `bundled` vendors the SQLite amalgamation (compiled
+# by cc, Meridian pattern) — no system libsqlite3 on any target.
+rusqlite = { version = "0.32", features = ["bundled"] }
+# Password hashing (PHC-string API) + session-token entropy + token hashing.
+argon2 = { version = "0.5", features = ["std"] }
+rand = "0.8"
+sha2 = "0.10"
+# Blocking HTTPS client for ClubLog/Telegram (rustls — meridian's http1.rs
+# is plain-HTTP only, and these endpoints are TLS).
+ureq = { version = "2", features = ["json"] }
+# ClubLog responses are gzipped.
+flate2 = "1"

@@ -32,6 +32,39 @@ pub struct LogMatrix {
 }
 
 impl LogMatrix {
+    /// Build a matrix from ADIF text — the exact `ClubLogClient` loop from
+    /// 1.x (band filter empty): explicit DXCC field wins over resolution,
+    /// unknown/deleted/invalid entities are skipped, modes collapse to
+    /// award buckets. Returns the matrix and the total record count (the
+    /// 1.x `qsoCount`).
+    pub fn build_from_adif(
+        content: &str,
+        resolver: &crate::dxcc::DxccResolver,
+    ) -> (LogMatrix, usize) {
+        let records = crate::adif::parse(content);
+        let count = records.len();
+        let mut matrix = LogMatrix::default();
+        for r in &records {
+            let (Some(call), Some(band), Some(mode)) = (r.call(), r.band(), r.mode()) else {
+                continue;
+            };
+            let Some(d) = r.dxcc().or_else(|| resolver.resolve(&call)) else {
+                continue;
+            };
+            if d <= 0 || resolver.entity(d).is_none() {
+                continue;
+            }
+            matrix.record(
+                d,
+                &band,
+                crate::modes::canonical(&mode),
+                &call,
+                r.is_confirmed(),
+            );
+        }
+        (matrix, count)
+    }
+
     pub fn record(&mut self, dxcc: i32, band: &str, mode: &str, call: &str, confirmed: bool) {
         let s = self.by_dxcc.entry(dxcc).or_default();
         let slot = format!("{band}-{mode}");

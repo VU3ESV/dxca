@@ -52,3 +52,7 @@ format = "passthrough"
 #host = "ve7cc.net"
 #port = 23
 #login_call = "VU2CPL-2"
+
+# Directory for runtime state: dxca.db (users, sessions, per-user
+# matrices) and the cached cty.xml. Relative to the working directory.
+#data_dir = "data"

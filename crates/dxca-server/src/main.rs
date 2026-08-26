@@ -1,56 +1,21 @@
 //! DXCA server — composition root.
 //!
-//! M3: config → UDP source listeners + DX-cluster node clients → spot
-//! pipeline (dedupe, ring) → telnet cluster server + UDP broadcast (incl.
-//! passthrough), plus the embedded web UI, `/api/status`, and
-//! `/api/spots`. Auth and per-user state arrive in M4 (docs/PLAN.md).
+//! M4: config → UDP source listeners + DX-cluster node clients → spot
+//! pipeline → telnet server + UDP broadcast; SQLite-backed users with
+//! session auth; per-user ClubLog matrices classified over the shared
+//! stream; Telegram alert fan-out. The embedded web UI is still the stub
+//! shell until M5 (docs/PLAN.md).
 
-use axum::extract::{Query, State};
-use axum::{Json, Router, routing::get};
+use dxca_connect::clublog::Endpoints;
 use dxca_connect::dxcluster::ClientConfig;
+use dxca_connect::telegram::Telegram;
+use dxca_server::api::{self, AppState};
+use dxca_server::db::Db;
 use dxca_server::nodes::NodeManager;
-use dxca_server::pipeline::PipelineState;
-use dxca_server::{assets, config, pipeline};
-use serde::Deserialize;
+use dxca_server::users::UserService;
+use dxca_server::{config, pipeline};
 use std::path::Path;
 use std::sync::Arc;
-
-#[derive(Clone)]
-struct AppState {
-    pipeline: Arc<PipelineState>,
-    nodes: Arc<NodeManager>,
-}
-
-async fn status(State(app): State<AppState>) -> Json<serde_json::Value> {
-    let counters = app.pipeline.broadcaster.counters();
-    Json(serde_json::json!({
-        "name": "dxca",
-        "version": env!("CARGO_PKG_VERSION"),
-        "milestone": "M3 cluster ingest",
-        "telnet_clients": app.pipeline.telnet.client_count(),
-        "spots_per_source": *app.pipeline.source_counts.lock().unwrap(),
-        "cluster_nodes": app.nodes.statuses(),
-        "udp_sent": counters.total_sent(),
-        "udp_failed": counters.total_failed(),
-    }))
-}
-
-#[derive(Deserialize)]
-struct SpotsQuery {
-    #[serde(default = "default_limit")]
-    limit: usize,
-}
-
-fn default_limit() -> usize {
-    200
-}
-
-async fn spots(
-    State(app): State<AppState>,
-    Query(q): Query<SpotsQuery>,
-) -> Json<serde_json::Value> {
-    Json(serde_json::json!({ "spots": app.pipeline.recent_spots(q.limit.min(2000)) }))
-}
 
 #[tokio::main]
 async fn main() {
@@ -77,16 +42,44 @@ async fn main() {
         client_cfg.password = node.password.clone();
         manager.start_node(node.name.clone(), client_cfg, input_tx.clone());
     }
+
+    // Users + alerts (M4).
+    let db = match Db::open(&Path::new(&cfg.data_dir).join("dxca.db")) {
+        Ok(db) => Arc::new(db),
+        Err(e) => {
+            eprintln!("dxca: {e}");
+            std::process::exit(1);
+        }
+    };
+    let telegram = match &cfg.telegram_base_override {
+        Some(base) => Telegram::with_base(base),
+        None => Telegram::default(),
+    };
+    let endpoints = match &cfg.clublog_base_override {
+        Some(base) => Endpoints::single_base(base),
+        None => Endpoints::default(),
+    };
+    let users = Arc::new(UserService::new(db, &cfg.data_dir, telegram, endpoints));
+
+    // Alert fan-out: every processed spot classifies per user.
+    let mut spot_rx = pipeline_state.spot_events.subscribe();
+    let fan_out_users = users.clone();
+    tokio::spawn(async move {
+        loop {
+            match spot_rx.recv().await {
+                Ok(spot) => fan_out_users.fan_out(&spot),
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => return,
+            }
+        }
+    });
+
     let app_state = AppState {
         pipeline: pipeline_state,
         nodes: Arc::new(manager),
+        users,
     };
-
-    let app = Router::new()
-        .route("/api/status", get(status))
-        .route("/api/spots", get(spots))
-        .with_state(app_state)
-        .fallback(assets::serve);
+    let app = api::build_router(app_state.clone());
 
     let listener = match tokio::net::TcpListener::bind(&cfg.web_bind).await {
         Ok(l) => l,
@@ -108,12 +101,18 @@ async fn main() {
         .map(|n| n.name.clone())
         .collect();
     println!(
-        "dxca {} — web http://{}/ · telnet {} · sources [{}] · nodes [{}]",
+        "dxca {} — web http://{}/ · telnet {} · sources [{}] · nodes [{}] · users {} · cty {}",
         env!("CARGO_PKG_VERSION"),
         cfg.web_bind,
         cfg.telnet_port,
         sources.join(", "),
-        node_names.join(", ")
+        node_names.join(", "),
+        app_state.users.db.user_count().unwrap_or(0),
+        if app_state.users.resolver_loaded() {
+            format!("{} entities", app_state.users.entity_count())
+        } else {
+            "not loaded".to_string()
+        }
     );
 
     axum::serve(listener, app)

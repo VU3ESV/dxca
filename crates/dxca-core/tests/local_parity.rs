@@ -8,7 +8,7 @@
 //! (personal log data — not committed to the repo). Run with:
 //!     cargo test -p dxca-core --test local_parity -- --ignored
 
-use dxca_core::{adif, cty, dxcc::DxccResolver, matrix::LogMatrix, modes};
+use dxca_core::{cty, dxcc::DxccResolver, matrix::LogMatrix};
 use std::path::PathBuf;
 
 fn cache_dir() -> PathBuf {
@@ -46,21 +46,10 @@ fn matrix_matches_swift_apps_own_build() {
     let mut resolver = DxccResolver::default();
     resolver.load(data.entities, &data.prefix_rules, now_unix);
 
-    // Rebuild the matrix exactly as ClubLogClient does (empty band filter).
-    let records = adif::parse(&content);
-    println!("log.adi: {} records", records.len());
-    let mut ours = LogMatrix::default();
-    for r in &records {
-        let (Some(call), Some(band), Some(mode)) = (r.call(), r.band(), r.mode()) else {
-            continue;
-        };
-        let dxcc = r.dxcc().or_else(|| resolver.resolve(&call));
-        let Some(d) = dxcc else { continue };
-        if d <= 0 || resolver.entity(d).is_none() {
-            continue;
-        }
-        ours.record(d, &band, modes::canonical(&mode), &call, r.is_confirmed());
-    }
+    // Rebuild the matrix through the production builder (the exact
+    // ClubLogClient loop, empty band filter).
+    let (ours, qso_count) = LogMatrix::build_from_adif(&content, &resolver);
+    println!("log.adi: {qso_count} records");
 
     // Compare entity sets first for a readable failure.
     let mut ours_ids: Vec<_> = ours.by_dxcc.keys().copied().collect();

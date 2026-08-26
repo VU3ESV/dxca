@@ -29,6 +29,9 @@ pub struct PipelineState {
     pub telnet: ClusterServer,
     /// Spots received per source name (proven-live counters).
     pub source_counts: Mutex<HashMap<String, u64>>,
+    /// Every processed spot, for subscribers (alert fan-out — M4; the
+    /// dashboard WebSocket — M5). Lagging subscribers skip, never stall.
+    pub spot_events: tokio::sync::broadcast::Sender<Spot>,
 }
 
 impl PipelineState {
@@ -54,11 +57,13 @@ pub async fn start(
     let telnet = ClusterServer::start(cfg.telnet_port).await?;
     let broadcaster = Arc::new(UdpBroadcaster::new(cfg.broadcast_destinations())?);
 
+    let (spot_events, _) = tokio::sync::broadcast::channel(1024);
     let state = Arc::new(PipelineState {
         spots: Mutex::new(VecDeque::new()),
         broadcaster: broadcaster.clone(),
         telnet,
         source_counts: Mutex::new(HashMap::new()),
+        spot_events,
     });
 
     let (tx, rx) = mpsc::channel::<PipelineInput>(1024);
@@ -206,6 +211,7 @@ fn process_spot(
         passes,
     );
 
+    let _ = state.spot_events.send(spot.clone()); // no subscribers is fine
     let mut ring = state.spots.lock().unwrap();
     ring.push_back(spot);
     while ring.len() > ring_capacity {
