@@ -1,0 +1,7 @@
+# pnpm settings for this UI. `allowBuilds` is pnpm's allow-list of packages
+# permitted to run install scripts (pnpm blocks them by default). esbuild (a
+# vite dependency) needs its postinstall to fetch its platform binary;
+# approving it here keeps `pnpm install` non-interactive and reproducible.
+# (Same pattern as meridian/web-ui/default.)
+allowBuilds:
+  esbuild: true

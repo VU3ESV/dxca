@@ -1,0 +1,10 @@
+[package]
+name = "dxca-connect"
+description = "I/O engines: DX-cluster telnet (lifted from meridian-core), WSJT-X UDP, broadcaster, ClubLog/LoTW/Telegram clients."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+dxca-core = { workspace = true }

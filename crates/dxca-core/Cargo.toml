@@ -1,0 +1,11 @@
+[package]
+name = "dxca-core"
+description = "Pure aggregation logic: spot model, WSJT-X codec, parsers, matrix, classifiers. No I/O."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }

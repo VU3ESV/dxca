@@ -1,0 +1,15 @@
+# DXCA global configuration — copy to config/dxca.toml and edit.
+# Every key is optional; absent keys use these defaults. Per-user settings
+# (ClubLog credentials, alerts, Telegram) are NOT configured here — they live
+# in the web GUI per account (SQLite, from M4).
+
+# Web GUI + API. 0.0.0.0 = every interface (LAN service assumption —
+# see docs/PLAN.md §5 on exposure).
+web_bind = "0.0.0.0:7580"
+
+# Telnet cluster server for loggers (Logger32, N1MM+, RUMlog, ...).
+# Same default as DXCA 1.x so existing logger configs need only an IP change.
+telnet_port = 7575
+
+# WSJT-X/JTDX UDP listen port — point decoders' UDP server setting here.
+udp_listen_port = 2237

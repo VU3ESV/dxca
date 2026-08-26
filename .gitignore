@@ -1,0 +1,20 @@
+# Rust
+/target/
+
+# Web UI
+web-ui/node_modules/
+web-ui/dist/
+
+# Runtime state — the example config is committed, the live one is not.
+config/dxca.toml
+*.db
+
+# Editor / IDE
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
+
+# Secrets / env
+.env

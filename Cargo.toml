@@ -1,0 +1,27 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "2.0.0-dev"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/vu2cpl/dxca"
+
+[workspace.dependencies]
+# Internal crates — always depend on these via workspace so paths stay in one place.
+dxca-core = { path = "crates/dxca-core" }
+dxca-connect = { path = "crates/dxca-connect" }
+
+# External dependencies, pinned once for the whole workspace (Meridian
+# discipline: few deps, added only when a milestone actually needs them).
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "sync", "time"] }
+axum = "0.8"
+# Embeds web-ui/dist into the server binary so the deliverable stays
+# "one binary + one TOML" (plan §9). dxca-server's build.rs guarantees the
+# dir exists, so plain `cargo build` never requires Node.
+include_dir = "0.7"
