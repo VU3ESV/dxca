@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-27 · **Status:** M1 complete
+**Created:** 2026-08-26 · **Last updated:** 2026-08-27 · **Status:** M2 code complete (live RUMlog validation pending)
 **Repo:** https://github.com/vu2cpl/dxca (private)
 
 ---
@@ -65,6 +65,45 @@ The 1.x macOS app stays the production DXCA until M6 signs off.
 - Justfile recipe comments must be a single line — `just --list` shows only
   the last comment line above a recipe.
 
+## M2 progress
+
+**2026-08-27 — M2 code complete: the spot path runs end to end.**
+
+- `dxca-core`: `spot.rs` reworked into the faithful `SpotMessage` port
+  (dx-callsign extraction with the full `looksLikeCallsign` heuristic,
+  CALL-BAND-MODE dedupe key, decode-time→today mapping — mode stays raw,
+  `"~"` and all, exactly like 1.x); `format.rs` ports `ClusterFormatter`
+  (single-token spotter, pad-or-truncate cells, `HHmmZ`).
+- `dxca-connect`: `wsjtx_udp.rs` (tokio source listeners), `broadcast.rs`
+  (cluster/wsjtx/passthrough destinations, **v1.8.3 counter semantics** —
+  passthrough skipped before bookkeeping; `unfiltered` flag honored),
+  `telnet.rs` (1.x-parity server: banner, CRLF fan-out, no login —
+  **deliberate deviation from the plan's "lift Meridian's server" line**:
+  the 1.x server has no login so parity doesn't need it; Meridian's
+  login-capable server comes with per-user telnet feeds in phase 2).
+- `dxca-server`: `pipeline.rs` mirrors `ContentView.handleDecode` —
+  passthrough-before-parse, per-source dial from Status, 60 s rebroadcast
+  dedupe (no-callsign spots bypass dedupe and broadcast as UNKNOWN, 1.x
+  parity), spot ring; config grew `[[udp_sources]]` /
+  `[[broadcast_destinations]]` with shack-wiring defaults; new
+  `/api/spots` + richer `/api/status`; lib target added so integration
+  tests can drive the pipeline.
+- **End-to-end test** (`dxca-server/tests/spot_path.rs`): real captured
+  JTDX Status+Decode vectors sent over real UDP sockets → passthrough
+  destination receives both byte-identical, telnet client receives the
+  banner and a `DX de JTDX:` line carrying the extracted callsign, ring
+  holds the spot with the Status-supplied dial. Passes.
+- Display filters (bands/sources/CQ-only/new-only) deliberately absent
+  from the broadcast gate until M5 decides whether per-user display
+  filters should keep gating the shared feed like 1.x does.
+
+**M2 exit box still open:** the live RUMlog click-to-fill validation —
+needs a maintenance window with Manoj: stop the 1.x app (frees ports
+2333/2334/2335), run `dxca` with default config on the Mac (or the Pi
+with decoders repointed at its IP), confirm RUMlog's Data Port 2237 feed
+and DX Cluster tab both populate and click-to-fill works, then hand the
+ports back.
+
 ## M1 progress
 
 **2026-08-27 — M1 complete: all core-logic ports done, full-chain parity
@@ -116,16 +155,16 @@ proven against the Swift app's own artifacts.**
 
 ## Open items → next session
 
-1. **M2 — spot path** (plan §10): WSJT-X UDP listener → dedupe →
-   in-memory ring → the telnet server lifted from
-   `meridian-core/src/dxcluster/` (server.rs + wire.rs); UDP broadcaster
-   incl. passthrough (spec baseline: the 1094/1094 byte-identical
-   passthrough capture, and v1.8.3's no-fail-counting rule). Port the
-   exact v1.8.x dedupe-window semantics into `Spot::dedupe_key` while
-   wiring the pipeline (the M0 skeleton keys on raw kHz, deliberately
-   tighter). Exit: RUMlog on the Mac clicks-to-fill from spots served by
-   the Pi.
-2. M3+ per docs/PLAN.md §10.
+1. **M2 exit validation** (needs Manoj at the shack): the live RUMlog
+   click-to-fill swap-over described under "M2 progress".
+2. **M3 — cluster ingest** (plan §10): lift the DX-cluster telnet
+   *client* from `meridian-core/src/dxcluster/client.rs` (+wire.rs),
+   graft the v1.8.x honest-status semantics (proven-live / yellow /
+   watchdog), wire cluster spots into the pipeline as synthetic decodes
+   the way `handleClusterSpot` does (SNR/mode scraped from the comment,
+   message `"CQ <call>"`). Exit: status behaviour matches DXCA 1.8.3
+   against a deliberately flaky node.
+3. M4+ per docs/PLAN.md §10.
 
 ## Conventions (see ~/.claude/CLAUDE.md)
 

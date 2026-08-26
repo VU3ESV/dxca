@@ -8,3 +8,4 @@ repository.workspace = true
 
 [dependencies]
 dxca-core = { workspace = true }
+tokio = { workspace = true }

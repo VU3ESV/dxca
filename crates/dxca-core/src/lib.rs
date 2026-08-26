@@ -16,9 +16,10 @@ pub mod beacons;
 pub mod classify;
 pub mod cty;
 pub mod dxcc;
+pub mod format;
 pub mod matrix;
 pub mod modes;
 mod spot;
 pub mod wsjtx;
 
-pub use spot::{Spot, SpotSource};
+pub use spot::{Spot, time_from_decode_ms};

@@ -1,13 +1,18 @@
-//! I/O engines (plan §1) — empty at M0, filled per milestone:
+//! I/O engines (plan §1). Landed in M2: the WSJT-X UDP source listener,
+//! the UDP broadcaster (cluster / wsjtx / passthrough formats, v1.8.3
+//! counter semantics), and the built-in telnet cluster server (1.x
+//! parity: banner + fan-out, no login — Meridian's login-capable server
+//! comes with per-user feeds, plan §5 phase 2).
 //!
-//! - M2: `wsjtx_udp` (UDP listener on 2237), `broadcast` (UDP destinations
-//!   incl. passthrough with v1.8.3 fail-counter semantics), plus the
-//!   DX-cluster telnet **server** lifted from
-//!   `meridian-core/src/dxcluster/` (server.rs + wire.rs).
-//! - M3: the lifted DX-cluster telnet **client** with the v1.8.x
-//!   honest-status graft.
+//! Still to come:
+//! - M3: the DX-cluster telnet **client** lifted from
+//!   `meridian-core/src/dxcluster/` with the v1.8.x honest-status graft.
 //! - M4: `clublog`, `lotw`, `telegram` HTTP clients (ureq + rustls).
 //!
-//! Lift rules (plan §6): the `dxcluster/` module stays diff-minimal against
-//! meridian-core; every intentional divergence carries a `// DXCA:` comment.
-//! This crate never imports axum, SQLite, or auth.
+//! Lift rules (plan §6): lifted meridian code stays diff-minimal with
+//! `// DXCA:` divergence markers. This crate never imports axum, SQLite,
+//! or auth.
+
+pub mod broadcast;
+pub mod telnet;
+pub mod wsjtx_udp;

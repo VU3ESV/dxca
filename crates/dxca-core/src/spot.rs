@@ -1,81 +1,206 @@
-//! The spot model shared by every pipeline stage.
-//!
-//! M0 skeleton: fields cover what both ingest paths (WSJT-X UDP decode,
-//! DX-cluster line) can supply. M1 ports the exact semantics from the Swift
-//! `SpotMessage` (dedupe window, callsign heuristics) with golden tests;
-//! nothing here is final until then. A documented `From` mapping to
-//! `meridian_proto::Spot` is planned to live in this file (plan §6) once
-//! integration becomes concrete.
+//! The aggregated spot — port of the Swift `SpotMessage` (minus the SwiftUI
+//! display fields). Carries one decode (or a cluster spot converted to a
+//! synthetic decode, 1.x-style) through dedupe, the telnet feed, UDP
+//! broadcast, and classification.
 
 use serde::{Deserialize, Serialize};
 
-/// Where a spot entered the aggregator.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SpotSource {
-    /// A WSJT-X/JTDX instance, identified by the operator-assigned source name.
-    Udp { name: String },
-    /// A DX-cluster node, identified by the configured node name.
-    Cluster { node: String },
-}
-
-/// One aggregated spot.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Spot {
-    /// Unix time (seconds) the spot was received by DXCA.
-    pub received_unix: u64,
-    pub source: SpotSource,
-    /// The station being spotted.
-    pub dx_call: String,
-    /// The spotting station (the decoder's own call for UDP sources).
-    pub de_call: String,
-    /// RF frequency in Hz (dial + audio offset for digital modes).
-    pub freq_hz: u64,
-    /// Normalized mode (FT8, FT4, CW, ...). Digital modes group as DATA for
-    /// award slots — that mapping lives in the classifier, not here.
+    /// Unix seconds: today's UTC date carrying the decode's time-of-day
+    /// (see [`time_from_decode_ms`]), or the receive time for cluster spots.
+    pub time_unix: i64,
+    pub snr_db: i32,
+    pub delta_time_s: f64,
+    pub delta_frequency_hz: u32,
+    /// Raw mode exactly as the decoder sent it — 1.x passes Decode.mode
+    /// through unmapped (WSJT-X uses mode characters like "~" for FT8),
+    /// and the DATA bucket in the classifier absorbs whatever it is.
     pub mode: String,
-    /// SNR in dB where the source supplies one (UDP decodes do, cluster
-    /// lines usually via comment only).
-    pub snr_db: Option<i32>,
-    /// Free-text tail: the decode message text or the cluster comment.
-    pub comment: String,
+    pub message: String,
+    pub low_confidence: bool,
+    pub off_air: bool,
+    pub dial_frequency_hz: u64,
+    pub source_name: String,
 }
 
 impl Spot {
-    /// Key used by the duplicate-suppression window. M1 must port the exact
-    /// v1.8.x semantics (60 s window, per dx_call + band + mode); until the
-    /// band resolver lands this keys on raw kHz, which is strictly tighter
-    /// (never merges spots v1.8.x would keep apart).
-    pub fn dedupe_key(&self) -> String {
-        format!("{}|{}|{}", self.dx_call, self.freq_hz / 1000, self.mode)
+    pub fn frequency_hz(&self) -> u64 {
+        self.dial_frequency_hz + u64::from(self.delta_frequency_hz)
     }
+
+    pub fn frequency_khz(&self) -> f64 {
+        self.frequency_hz() as f64 / 1_000.0
+    }
+
+    pub fn frequency_mhz(&self) -> f64 {
+        self.frequency_hz() as f64 / 1_000_000.0
+    }
+
+    pub fn is_cq(&self) -> bool {
+        self.message.to_uppercase().starts_with("CQ ")
+    }
+
+    /// "HHmm" in UTC, for the cluster line.
+    pub fn hhmm(&self) -> String {
+        let secs = self.time_unix.rem_euclid(86_400);
+        format!("{:02}{:02}", secs / 3600, (secs % 3600) / 60)
+    }
+
+    /// The spotted (DX) callsign extracted from the FT8/FT4 message text —
+    /// Swift `SpotMessage.dxCallsign` verbatim. Handles "CQ CALL GRID",
+    /// directed "CQ NA CALL GRID", two-station exchanges (prefer the
+    /// transmitting station in slot 1), and `<hashed>` calls.
+    pub fn dx_callsign(&self) -> Option<String> {
+        let parts: Vec<&str> = self.message.split(' ').filter(|p| !p.is_empty()).collect();
+        if parts.len() < 2 {
+            return None;
+        }
+
+        if parts[0].eq_ignore_ascii_case("CQ") {
+            if parts.len() >= 3 && !looks_like_callsign(parts[1]) {
+                return looks_like_callsign(parts[2]).then(|| strip_call_decoration(parts[2]));
+            }
+            return looks_like_callsign(parts[1]).then(|| strip_call_decoration(parts[1]));
+        }
+
+        if looks_like_callsign(parts[1]) {
+            return Some(strip_call_decoration(parts[1]));
+        }
+        if looks_like_callsign(parts[0]) {
+            return Some(strip_call_decoration(parts[0]));
+        }
+        None
+    }
+
+    /// Dedupe key: CALL-BAND-MODE (the 60-second-window key used both for
+    /// display collapse and rebroadcast dedupe in 1.x). None when no
+    /// callsign can be extracted — such spots always pass.
+    pub fn duplicate_key(&self) -> Option<String> {
+        let call = self.dx_callsign()?.to_uppercase();
+        let band = crate::bands::band_from_hz(self.frequency_hz()).unwrap_or("");
+        Some(format!("{call}-{band}-{}", self.mode.to_uppercase()))
+    }
+}
+
+/// Map a WSJT-X decode time (ms since midnight UTC) onto today's UTC date —
+/// the Swift `timeFromMilliseconds` without a hidden clock: `now_unix`
+/// supplies "today".
+pub fn time_from_decode_ms(now_unix: i64, decode_ms: u32) -> i64 {
+    let midnight = now_unix - now_unix.rem_euclid(86_400);
+    midnight + i64::from(decode_ms / 1000)
+}
+
+/// Strip the `<>` brackets WSJT-X puts around hashed/known callsigns.
+fn strip_call_decoration(s: &str) -> String {
+    s.trim_start_matches('<').trim_end_matches('>').to_string()
+}
+
+/// Reject FT8 tokens that aren't callsigns — RR73/73/TU…, signal reports
+/// (R+05, -12), 4-char Maidenhead grids (LL85), placeholders. Swift
+/// `looksLikeCallsign` verbatim.
+fn looks_like_callsign(s: &str) -> bool {
+    let upper = s.to_uppercase();
+    let core = upper.trim_start_matches('<').trim_end_matches('>');
+    if core.is_empty() || core == "..." {
+        return false;
+    }
+    let len = core.chars().count();
+    if !(3..=11).contains(&len) {
+        return false;
+    }
+
+    const BLACKLIST: [&str; 9] = ["RR73", "RRR", "73", "TU", "TNX", "QSL", "DE", "TEST", "CQ"];
+    if BLACKLIST.contains(&core) {
+        return false;
+    }
+
+    // Signal reports: R+05, R-12, +05, -12.
+    if core.starts_with("R+") || core.starts_with("R-") {
+        return false;
+    }
+    if (core.starts_with('+') || core.starts_with('-'))
+        && core.chars().skip(1).all(|c| c.is_numeric())
+    {
+        return false;
+    }
+
+    // 4-char Maidenhead grid: 2 letters + 2 digits.
+    if len == 4 {
+        let c: Vec<char> = core.chars().collect();
+        if c[0].is_alphabetic() && c[1].is_alphabetic() && c[2].is_numeric() && c[3].is_numeric() {
+            return false;
+        }
+    }
+
+    let has_digit = core.chars().any(|c| c.is_numeric());
+    let has_letter = core.chars().any(|c| c.is_alphabetic());
+    if !has_digit || !has_letter {
+        return false;
+    }
+
+    core.chars()
+        .all(|c| c.is_alphabetic() || c.is_numeric() || c == '/')
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn spot(freq_hz: u64) -> Spot {
+    fn spot(message: &str) -> Spot {
         Spot {
-            received_unix: 1_756_200_000,
-            source: SpotSource::Udp {
-                name: "JTDX".into(),
-            },
-            dx_call: "P5DX".into(),
-            de_call: "VU2CPL".into(),
-            freq_hz,
+            time_unix: 1_787_745_000,
+            snr_db: -12,
+            delta_time_s: 0.2,
+            delta_frequency_hz: 1487,
             mode: "FT8".into(),
-            snr_db: Some(-12),
-            comment: "CQ P5DX PM95".into(),
+            message: message.into(),
+            low_confidence: false,
+            off_air: false,
+            dial_frequency_hz: 14_074_000,
+            source_name: "JTDX".into(),
         }
     }
 
     #[test]
-    fn dedupe_key_ignores_sub_khz_drift() {
-        assert_eq!(spot(14_074_250).dedupe_key(), spot(14_074_900).dedupe_key());
+    fn dx_call_extraction_table() {
+        // (message, expected dx callsign)
+        let cases = [
+            ("CQ P5DX PM95", Some("P5DX")),
+            ("CQ NA K1JT FN20", Some("K1JT")), // directed CQ
+            ("CQ DX VU2CPL MK83", Some("VU2CPL")),
+            ("K1JT VU2CPL -15", Some("VU2CPL")), // exchange: prefer slot 1
+            ("VU2CPL K1JT RR73", Some("K1JT")),
+            ("K1JT RR73", Some("K1JT")), // slot 1 is decoration → fall back to slot 0
+            ("<K1JT> VU2CPL R-07", Some("VU2CPL")),
+            ("VU2CPL <K1JT> +03", Some("K1JT")), // hashed call unwraps
+            ("K1JT LL85", Some("K1JT")),         // slot 1 is a grid → fall back to slot 0
+            ("CQ TEST", None),
+            ("73", None),
+        ];
+        for (msg, want) in cases {
+            assert_eq!(spot(msg).dx_callsign().as_deref(), want, "message: {msg:?}");
+        }
     }
 
     #[test]
-    fn dedupe_key_separates_bands() {
-        assert_ne!(spot(14_074_250).dedupe_key(), spot(7_074_250).dedupe_key());
+    fn cq_and_keys() {
+        let s = spot("CQ P5DX PM95");
+        assert!(s.is_cq());
+        assert_eq!(s.duplicate_key().as_deref(), Some("P5DX-20M-FT8"));
+        assert_eq!(spot("73").duplicate_key(), None);
+        assert_eq!(s.frequency_hz(), 14_075_487);
+    }
+
+    #[test]
+    fn decode_time_maps_onto_today() {
+        // 2026-08-27 ~13:10 UTC; decode said 05:31:30 (19,890,000 ms).
+        let t = time_from_decode_ms(1_787_836_200, 19_890_000);
+        assert_eq!(t.rem_euclid(86_400), 5 * 3600 + 31 * 60 + 30);
+        let s = Spot {
+            time_unix: t,
+            ..spot("CQ P5DX PM95")
+        };
+        assert_eq!(s.hhmm(), "0531");
     }
 }
