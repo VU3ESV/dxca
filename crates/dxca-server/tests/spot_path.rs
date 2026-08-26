@@ -48,7 +48,7 @@ async fn vectors_flow_to_passthrough_and_telnet() {
         ..Config::default()
     };
 
-    let state = pipeline::start(&cfg).await.expect("pipeline start");
+    let (state, _input_tx) = pipeline::start(&cfg).await.expect("pipeline start");
 
     // Telnet client connects and sees the banner.
     let mut telnet = TcpStream::connect(("127.0.0.1", state.telnet.local_port()))

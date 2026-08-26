@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-27 · **Status:** M2 complete — dxca IS the live shack aggregator (burn-in)
+**Created:** 2026-08-26 · **Last updated:** 2026-08-27 · **Status:** M3 complete — dxca IS the live shack aggregator (burn-in, now with cluster ingest)
 **Repo:** https://github.com/vu2cpl/dxca (private)
 
 ---
@@ -86,11 +86,58 @@ Operational state:
   Revert = `pkill -f target/release/dxca`, then launch
   DXClusterAggregator.app.
 - Watch it via `http://localhost:7580/api/status` (per-source spot
-  counts, telnet clients, UDP sent/failed) and `/api/spots`. The web page
-  itself is still the M0 stub shell — the real dashboard is M5.
-- Burn-in gap vs 1.x: **no DX-cluster node ingest yet** (that's M3), no
-  ClubLog highlighting/Telegram (M4), no spots-table UI (M5). The spot
-  aggregation + RUMlog feed paths are at parity.
+  counts, per-node honest status, telnet clients, UDP sent/failed) and
+  `/api/spots`. The web page itself is still the M0 stub shell — the real
+  dashboard is M5.
+- **M3 update (2026-08-27):** the burn-in binary now ingests the five
+  1.x cluster nodes too (config read from the app's UserDefaults into the
+  local `config/dxca.toml` — gitignored). Within a minute of restart:
+  VU2OY/N2WQ-2/Meridian/UberSDR-CWskim proven **Live** (Meridian = dxca's
+  lifted client logged into meridian's own server), VE7CC sitting
+  honest-yellow "Connected, unproven" — the exact 2026-08-24 failure mode
+  the honest-status machinery exists for.
+- Remaining burn-in gap vs 1.x: no ClubLog highlighting/Telegram (M4), no
+  spots-table UI (M5). Spot aggregation, cluster ingest, and the RUMlog
+  feed paths are at parity.
+
+## M3 progress
+
+**2026-08-27 — M3 complete: cluster-node ingest with the honest-status
+graft, validated against fake nodes in tests and the five real shack
+nodes live.**
+
+- `dxca-connect/src/dxcluster/` — the **Meridian lift** (plan §6):
+  `client.rs` (sans-I/O ClientSession + supervisor thread) and the
+  client half of `wire.rs` (ParsedSpot, classify_line, dx_command),
+  diff-minimal with `// DXCA:` markers on every graft:
+  - password prompt support (1.x node auth);
+  - **honest status**: new `ClientEvent::Proven` fires only on real
+    evidence (node prompt, welcome-keyword line, spot/WWV/announce) —
+    never on the 30 s login-timeout fallback, which readies the session
+    but leaves the pill yellow;
+  - 1.x reconnect schedule (10/30/60/120/300 s, last repeats), attempt
+    resets **only on proven** — never on bare TCP;
+  - watchdog in the connection loop: unproven for `auth_timeout_s`
+    (120) → recycle; proven but rx-silent for `silence_timeout_s`
+    (15 min) → recycle; both take the normal backoff path;
+  - Telnet IAC stripping ported from the 1.x client (N2WQ AR-Cluster
+    banners).
+- `dxca-server`: `nodes.rs` (NodeManager — per-node status map, event
+  consumer thread, `handleClusterSpot`-parity synthetic decodes: message
+  `CQ <call>`, SNR/mode scraped from the comment with the 1.x mode-list
+  order); pipeline generalized to `PipelineInput::{Datagram,Cluster}`
+  with a shared `process_spot` tail; `[[cluster_nodes]]` config;
+  per-node status in `/api/status`.
+- Tests: 6 session unit tests (password flow, welcome ack,
+  timeout-not-proven, no-login feeds, IAC) + the M3 exit-criterion
+  integration tests: a fake node proving Live end-to-end into ring +
+  telnet, and a **deliberately flaky node** (accepts TCP, never acks)
+  staying unproven while the watchdog recycles it with escalating
+  attempts.
+- Known divergence (documented choice): meridian's spot-line parser
+  requires a valid `HHMMZ` time token; the 1.x parser tolerated its
+  absence. Lines without one classify as `Line` events and don't count
+  as spots/proof. Revisit if a real node exhibits it.
 
 ## M2 progress
 
@@ -178,14 +225,13 @@ proven against the Swift app's own artifacts.**
 
 ## Open items → next session
 
-1. **M3 — cluster ingest** (plan §10): lift the DX-cluster telnet
-   *client* from `meridian-core/src/dxcluster/client.rs` (+wire.rs),
-   graft the v1.8.x honest-status semantics (proven-live / yellow /
-   watchdog), wire cluster spots into the pipeline as synthetic decodes
-   the way `handleClusterSpot` does (SNR/mode scraped from the comment,
-   message `"CQ <call>"`). Exit: status behaviour matches DXCA 1.8.3
-   against a deliberately flaky node.
-2. M4+ per docs/PLAN.md §10.
+1. **M4 — users + alerts** (plan §10 + §5): SQLite (users, sessions,
+   per-user config + matrix cache), argon2 auth with first-run admin
+   setup, per-user ClubLog download + matrix build (the parity-proven
+   core chain), per-user classification over the shared stream, Telegram
+   fan-out with per-user cooldown. Exit: two accounts with different
+   logs see different highlights on the same spot stream.
+2. M5+ per docs/PLAN.md §10.
 
 ## Conventions (see ~/.claude/CLAUDE.md)
 

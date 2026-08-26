@@ -43,3 +43,12 @@ name = "RUMlog"
 ip = "127.0.0.1"
 port = 2237
 format = "passthrough"
+
+# DX-cluster telnet nodes to ingest (M3). Spots from nodes join the same
+# pipeline as decoder spots; per-node status (three-state honest badge) is
+# in /api/status. password is optional (rarely needed).
+#[[cluster_nodes]]
+#name = "VE7CC"
+#host = "ve7cc.net"
+#port = 23
+#login_call = "VU2CPL-2"

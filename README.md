@@ -19,19 +19,20 @@ from [Meridian](https://github.com/thomasbasil/meridian).
 
 ## Status
 
-**M2 complete — running the shack in burn-in** (2026-08-27): the spot path
-(WSJT-X UDP sources → dedupe → telnet cluster server + UDP broadcast
-including verbatim passthrough) was validated live — dxca replaced the 1.x
-app on the Mac's real ports, RUMlog reconnected and populated, and
-click-to-fill worked through the passthrough. dxca has been the live shack
-aggregator since. Earlier milestones: M1 ported the whole core-logic layer
-with exact parity against the 1.x app's own computed matrix (320 DXCC
-entities set-for-set) and golden-tested the WSJT-X codec against live
-captures; M0 set up the workspace, embedded web UI, local gate, and
-hardware-verified Pi cross-compile. Next: M3 cluster-node ingest, M4
-users + alerts, M5 the real dashboard UI. The full design and milestone
-plan: [docs/PLAN.md](docs/PLAN.md). The 1.x macOS app remains the standing
-fallback until M6 signs off.
+**M3 complete — running the shack in burn-in with cluster ingest**
+(2026-08-27): dxca is the live shack aggregator — decoder UDP sources and
+five DX-cluster telnet nodes feed one pipeline into the telnet server, the
+RUMlog passthrough, and the spot ring. The cluster client is lifted from
+Meridian with the 1.x honest-status graft (proven-live vs
+connected-unproven, watchdog, backoff that only resets on proof) —
+validated in tests against a deliberately flaky node and live against the
+real nodes (including one sitting honest-yellow exactly as it should).
+Earlier: M2 validated the spot path live (RUMlog click-to-fill through the
+passthrough); M1 ported the core-logic layer with exact matrix parity and
+golden-tested the WSJT-X codec against live captures; M0 scaffold + Pi
+binary verified on hardware. Next: M4 users + alerts, M5 the dashboard UI.
+The full design and milestone plan: [docs/PLAN.md](docs/PLAN.md). The 1.x
+macOS app remains the standing fallback until M6 signs off.
 
 ## Layout
 

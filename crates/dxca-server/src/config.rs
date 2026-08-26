@@ -29,6 +29,20 @@ pub struct UdpSource {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct ClusterNode {
+    pub name: String,
+    pub host: String,
+    pub port: u16,
+    /// Callsign sent at the login prompt.
+    pub login_call: String,
+    #[serde(default)]
+    pub password: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BroadcastDestination {
     pub name: String,
     pub ip: Ipv4Addr,
@@ -55,6 +69,9 @@ pub struct Config {
     pub telnet_port: u16,
     /// WSJT-X/JTDX source listeners.
     pub udp_sources: Vec<UdpSource>,
+    /// DX-cluster telnet nodes to ingest (M3). Default: none — node
+    /// choice and credentials are operator-specific.
+    pub cluster_nodes: Vec<ClusterNode>,
     /// UDP broadcast destinations.
     pub broadcast_destinations: Vec<BroadcastDestination>,
     /// Rebroadcast dedupe window (CALL-BAND-MODE), 1.x default 60 s.
@@ -85,6 +102,7 @@ impl Default for Config {
                     enabled: true,
                 },
             ],
+            cluster_nodes: Vec::new(),
             broadcast_destinations: vec![BroadcastDestination {
                 name: "RUMlog".into(),
                 ip: Ipv4Addr::LOCALHOST,
