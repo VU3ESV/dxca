@@ -35,11 +35,10 @@ honest-yellow flaky node, exact matrix parity with the 1.x app's own
 artifacts). Sources, cluster nodes, and broadcast destinations are
 edited in the System tab and hot-apply — listeners rebind, nodes redial,
 destinations re-point, and `config/dxca.toml` is rewritten so restarts
-agree. M6 packaged it: launchd agent on the Mac, systemd service on
-noderedpi4 (installed and standing by for the decoder cutover — see
-HANDOVER for the checklist). The full design and milestone plan:
-[docs/PLAN.md](docs/PLAN.md). The 1.x macOS app is the standing
-fallback.
+agree. Ships as a launchd agent (macOS) or systemd service (Pi);
+**in production on the shack's Raspberry Pi since 2026-08-27**. The full
+design and milestone plan: [docs/PLAN.md](docs/PLAN.md). The 1.x macOS
+app (final release v1.8.4) is the retained fallback.
 
 Secrets note (plan §5): per-user ClubLog app passwords and Telegram
 tokens live in `data/dxca.db` in plain text, file mode 0600, service user
