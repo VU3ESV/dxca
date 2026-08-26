@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- DXCA launchd agent (macOS). Installed by install.sh to
+     ~/Library/LaunchAgents/com.vu2cpl.dxca.plist with __REPO__ replaced by
+     the checkout path. Runs from the repo so config/ and data/ resolve. -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.vu2cpl.dxca</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__REPO__/target/release/dxca</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>__REPO__</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>__HOME__/Library/Logs/dxca.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/Library/Logs/dxca.log</string>
+</dict>
+</plist>

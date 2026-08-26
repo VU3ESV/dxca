@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-27 · **Status:** M5 COMPLETE — full web parity incl. config editing with hot-apply; burn-in live, Manoj's account created
+**Created:** 2026-08-26 · **Last updated:** 2026-08-27 · **Status:** v2.0.0 (M6) — Mac on launchd, Pi service installed and standing by; decoder cutover is Manoj's checklist below
 **Repo:** https://github.com/vu2cpl/dxca (private)
 
 ---
@@ -105,6 +105,52 @@ Operational state:
 - Remaining burn-in gap vs 1.x: no spots-table UI / LoTW markers (M5).
   Aggregation, cluster ingest, RUMlog feeds, and (once the account is
   set up) ClubLog classification + Telegram alerts are at parity.
+
+## M6 progress
+
+**2026-08-27 — v2.0.0 packaged and deployed to both hosts.**
+
+- Version bumped to 2.0.0 (workspace + web-ui).
+- `install.sh` (shack-rule compliant: auto-detect macOS/Pi + confirm +
+  manual override, never silent): macOS installs a **launchd agent**
+  `com.vu2cpl.dxca` (RunAtLoad + KeepAlive, log `~/Library/Logs/dxca.log`);
+  Pi installs `/opt/dxca` + a **systemd service** running as `vu2cpl`
+  (prebuilt binary preferred, config/data seeded only when absent —
+  never clobbers a live install). Templates in `deploy/`.
+- `deploy/pi-deploy.sh` — one-command cross-compile + rsync + remote
+  install (the plan §9 "one binary + one TOML" deploy).
+- **Mac**: the nohup burn-in was replaced by the launchd agent
+  (reboot-proof at last); account/db/state untouched.
+- **Pi (noderedpi4 = 192.168.1.169)**: dxca v2.0.0 active+enabled under
+  systemd in /opt/dxca. State migrated from the Mac (sqlite3 .backup of
+  dxca.db → same login works; cty.xml; lotw-users.txt). Its config ships
+  the five cluster nodes **disabled** (no dual cluster logins while the
+  Mac instance runs) and passthrough aimed at RUMlog on the Mac
+  (192.168.10.226:2237 — note the Mac is on the .10 subnet, the Pi on
+  .1; routed both ways, verified).
+
+## The decoder cutover (Manoj's checklist — the last M6 box)
+
+When ready to make the Pi the production aggregator:
+
+1. **Decoders** (all on the Mac): change the UDP server IP from
+   `127.0.0.1` to `192.168.1.169`, ports unchanged — MSHV Network Config
+   (2333), JTDX Reporting primary UDP (2334), WSJT-X Reporting UDP
+   (2335). The 2233 ADIF→RUMlog paths stay `127.0.0.1` — untouched.
+2. **Pi web UI** `http://192.168.1.169:7580` (same login): System tab →
+   tick the five nodes' **On** boxes → Apply & save.
+3. **Mac**: stop the local instance so it releases the cluster logins:
+   `launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.vu2cpl.dxca.plist`
+   (and delete the plist if permanent).
+4. **RUMlogNG**: DX Cluster tab → connect to `192.168.1.169:7575`
+   (Data Port 2237 needs no change — the Pi's passthrough already
+   targets the Mac).
+5. Verify on the Pi dashboard: sources counting, nodes Live,
+   click-to-fill in RUMlog.
+
+Rollback = reverse: decoders back to 127.0.0.1, re-bootstrap the Mac
+agent (`./install.sh macos`), disable the Pi's nodes (or
+`sudo systemctl stop dxca` on the Pi).
 
 ## M5 progress
 
@@ -350,15 +396,16 @@ proven against the Swift app's own artifacts.**
 
 ## Open items → next session
 
-1. **Manoj: ClubLog + Telegram on the burn-in** — account exists; My
-   ClubLog (credentials + Refresh log now) lights up the per-user
-   highlighting, My Alerts wires Telegram.
-2. **M6 — burn-in + release** (plan §10): the burn-in effectively started
-   2026-08-27; M6 wraps it with the Pi cutover (decoders repointed at the
-   Pi's IP), systemd + install.sh (macOS/Pi branching per shack rules),
-   docs + user-facing polish, dual-run diff vs 1.8.4 if desired, and the
-   v2.0.0 tag. Note the config file is now web-managed — the Pi deploy
-   ships `config/dxca.toml` + `data/` alongside the binary.
+1. **The decoder cutover** (checklist above) — Manoj's hands, ~5 minutes.
+   After it: flip the 1.x repo HANDOVER/README to maintenance mode and
+   refresh `docs/UDP-PIPELINE.md` there for the Pi-centred wiring.
+2. **Manoj: ClubLog + Telegram** (if not already done) — My ClubLog
+   (credentials + Refresh) lights the highlighting; My Alerts wires
+   Telegram. Do it on whichever instance is production (the DBs diverged
+   at Pi-deploy time; after cutover the Pi's is canonical).
+3. Post-2.0 backlog (plan): per-user telnet feeds (Meridian server lift),
+   MQTT status/LWT on `shack/dxca/status`, durable spot history, possible
+   Meridian integration (plan §6).
 
 ## Conventions (see ~/.claude/CLAUDE.md)
 

@@ -19,7 +19,7 @@ from [Meridian](https://github.com/thomasbasil/meridian).
 
 ## Status
 
-**M5 core complete — the dashboard is live** (2026-08-27): dxca is the
+**v2.0.0 — M6** (2026-08-27): dxca is the
 live shack aggregator with a real web GUI. Decoder UDP sources and five
 DX-cluster telnet nodes (Meridian-lifted client with the 1.x
 honest-status graft) feed one pipeline into the telnet server, the RUMlog
@@ -31,12 +31,14 @@ every spot classifies per user with Telegram alerts and per-callsign
 cooldown. Proven end-to-end in tests against fake ClubLog/Telegram
 servers and by the live validations along the way (RUMlog click-to-fill,
 honest-yellow flaky node, exact matrix parity with the 1.x app's own
-artifacts). **M5 is complete**: sources, cluster nodes, and broadcast
-destinations are edited in the System tab and hot-apply — listeners
-rebind, nodes redial, destinations re-point, and `config/dxca.toml` is
-rewritten so restarts agree. Remaining: M6 — Pi cutover, systemd,
-v2.0.0. The full design and milestone plan: [docs/PLAN.md](docs/PLAN.md).
-The 1.x macOS app remains the standing fallback until M6 signs off.
+artifacts). Sources, cluster nodes, and broadcast destinations are
+edited in the System tab and hot-apply — listeners rebind, nodes redial,
+destinations re-point, and `config/dxca.toml` is rewritten so restarts
+agree. M6 packaged it: launchd agent on the Mac, systemd service on
+noderedpi4 (installed and standing by for the decoder cutover — see
+HANDOVER for the checklist). The full design and milestone plan:
+[docs/PLAN.md](docs/PLAN.md). The 1.x macOS app is the standing
+fallback.
 
 Secrets note (plan §5): per-user ClubLog app passwords and Telegram
 tokens live in `data/dxca.db` in plain text, file mode 0600, service user
@@ -69,26 +71,35 @@ cargo run -p dxca-server         # http://localhost:7580
 A [Justfile](Justfile) wraps the common flows (`just gate`, `just run`,
 `just dist`) but is never required.
 
-### Pi build
+### Install as a service
 
-Cross-compile from any machine with
-[cargo-zigbuild](https://github.com/rust-cross/cargo-zigbuild)
-(`brew install cargo-zigbuild`) and the target
-(`rustup target add aarch64-unknown-linux-gnu`):
+`./install.sh` sets the current machine up (auto-detects macOS vs
+Raspberry Pi, confirms, never fails silently):
+
+- **macOS**: builds the release binary and installs a launchd agent
+  (`com.vu2cpl.dxca`, survives reboots, log in `~/Library/Logs/dxca.log`).
+- **Pi/Linux**: installs binary + config + data seeds to `/opt/dxca` and
+  a systemd service (`systemctl status dxca`), running as `vu2cpl`.
+
+To cross-compile on the Mac and ship to a Pi in one step
+(needs cargo-zigbuild + the `aarch64-unknown-linux-gnu` target):
 
 ```sh
-just dist    # → target/aarch64-unknown-linux-gnu/release/dxca
+deploy/pi-deploy.sh vu2cpl@noderedpi4.local
 ```
 
-The binary targets glibc ≥ 2.36 (Raspberry Pi OS Bookworm, 64-bit). Copy
-it over together with a `config/dxca.toml`; systemd packaging arrives in
-M6.
+The aarch64 binary targets glibc ≥ 2.36 (Raspberry Pi OS Bookworm+,
+64-bit). Existing config and data on the Pi are never clobbered —
+`install.sh` seeds them only when absent.
 
 ## Configuration
 
 Global (admin) settings live in `config/dxca.toml` — see the committed
-[example](config/dxca.example.toml). Defaults keep the 1.x ports: web GUI
-**7580**, telnet cluster server **7575**, WSJT-X UDP listen **2237**.
+[example](config/dxca.example.toml) — and, once the server runs, in the
+web UI's System tab (hot-applies and rewrites the file). Defaults keep
+the shack wiring: web GUI **7580**, telnet cluster server **7575**,
+decoder sources MSHV **2333** / JTDX **2334** / WSJTX **2335**,
+passthrough → RUMlog **2237**.
 Per-user settings (ClubLog credentials, alert preferences, Telegram) are
 managed in the web GUI per account, not in the file.
 

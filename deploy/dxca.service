@@ -1,0 +1,18 @@
+# DXCA systemd unit (Pi / Linux). Installed by install.sh or
+# deploy/pi-deploy.sh to /etc/systemd/system/dxca.service.
+# Runs from /opt/dxca so config/dxca.toml and data/ resolve relative to it.
+[Unit]
+Description=DXCA — FT8/FT4 + DX-cluster spot aggregator
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vu2cpl
+WorkingDirectory=/opt/dxca
+ExecStart=/opt/dxca/dxca
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
