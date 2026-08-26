@@ -16,10 +16,10 @@ before touching anything.** It was drafted in the 1.x repo
 (`docs/DXCA2-RUST-PLAN.md` there, same content at draft time); this copy is
 canonical from now on.
 
-Lineage: original concept by Vinod VU3ESV; DX-cluster telnet engines to be
+Lineage: original concept by Vinod VU3ESV; DX-cluster telnet client
 lifted from `~/projects/meridian` (`crates/meridian-core/src/dxcluster/`).
-Since 2026-08-27 dxca itself runs the shack (burn-in, see below); the 1.x
-macOS app is the standing fallback until M6 signs off.
+**Production runs on noderedpi4 (192.168.1.169) since the 2026-08-27
+cutover**; the 1.x macOS app is the retained fallback (maintenance mode).
 
 ## M0 groundwork
 
@@ -66,7 +66,7 @@ macOS app is the standing fallback until M6 signs off.
 - Justfile recipe comments must be a single line — `just --list` shows only
   the last comment line above a recipe.
 
-## Burn-in — dxca is currently running the shack (since 2026-08-27)
+## Burn-in log (Mac phase, 2026-08-27 — superseded by the Pi cutover above)
 
 **M2 exit validated live by Manoj**: with the 1.x app stopped, dxca took
 over ports 2333/2334/2335 + 7575 on the Mac Mini with the default config.
