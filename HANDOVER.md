@@ -408,14 +408,15 @@ proven against the Swift app's own artifacts.**
 
 ## Open items → next session
 
-1. **Manoj: ClubLog + Telegram on the Pi** (if not already done there) —
-   My ClubLog (credentials + Refresh) lights the per-user highlighting;
-   My Alerts wires Telegram. The Pi's DB is canonical now.
-2. Post-2.0 backlog (plan): per-user telnet feeds (Meridian server lift),
-   MQTT status/LWT on `shack/dxca/status` (broker is localhost on the
-   Pi!), durable spot history + search, possible Meridian integration
-   (plan §6), web editing for bind-level scalars, additional decoder
-   ports if the shack grows.
+Nothing operational — **v2.0.0 is fully live**: ClubLog and Telegram are
+configured and working on the Pi (confirmed by Manoj 2026-08-27), so
+per-user highlighting and alerts run in production.
+
+Post-2.0 backlog (pick up whenever): per-user telnet feeds (Meridian
+server lift), MQTT status/LWT on `shack/dxca/status` (broker is
+localhost on the Pi!), durable spot history + search, possible Meridian
+integration (plan §6), web editing for bind-level scalars, additional
+decoder ports if the shack grows.
 
 ## Conventions (see ~/.claude/CLAUDE.md)
 
