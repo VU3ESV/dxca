@@ -19,17 +19,19 @@ from [Meridian](https://github.com/thomasbasil/meridian).
 
 ## Status
 
-**M2 code complete** (2026-08-27) — the spot path runs end to end: WSJT-X
-UDP sources → dedupe → telnet cluster server + UDP broadcast including
-verbatim passthrough, proven by an integration test that feeds real
-captured decoder datagrams through real sockets. Earlier milestones: M1
-ported the whole core-logic layer with exact parity against the 1.x app's
-own computed matrix (320 DXCC entities set-for-set) and golden-tested the
-WSJT-X codec against live captures; M0 set up the workspace, embedded web
-UI, local gate, and hardware-verified Pi cross-compile. Remaining M2 box:
-the live RUMlog click-to-fill swap-over. The full design and milestone
-plan: [docs/PLAN.md](docs/PLAN.md). The production DXCA remains the macOS
-1.x app until M6 signs off.
+**M2 complete — running the shack in burn-in** (2026-08-27): the spot path
+(WSJT-X UDP sources → dedupe → telnet cluster server + UDP broadcast
+including verbatim passthrough) was validated live — dxca replaced the 1.x
+app on the Mac's real ports, RUMlog reconnected and populated, and
+click-to-fill worked through the passthrough. dxca has been the live shack
+aggregator since. Earlier milestones: M1 ported the whole core-logic layer
+with exact parity against the 1.x app's own computed matrix (320 DXCC
+entities set-for-set) and golden-tested the WSJT-X codec against live
+captures; M0 set up the workspace, embedded web UI, local gate, and
+hardware-verified Pi cross-compile. Next: M3 cluster-node ingest, M4
+users + alerts, M5 the real dashboard UI. The full design and milestone
+plan: [docs/PLAN.md](docs/PLAN.md). The 1.x macOS app remains the standing
+fallback until M6 signs off.
 
 ## Layout
 

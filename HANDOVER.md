@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-27 · **Status:** M2 code complete (live RUMlog validation pending)
+**Created:** 2026-08-26 · **Last updated:** 2026-08-27 · **Status:** M2 complete — dxca IS the live shack aggregator (burn-in)
 **Repo:** https://github.com/vu2cpl/dxca (private)
 
 ---
@@ -18,9 +18,10 @@ canonical from now on.
 
 Lineage: original concept by Vinod VU3ESV; DX-cluster telnet engines to be
 lifted from `~/projects/meridian` (`crates/meridian-core/src/dxcluster/`).
-The 1.x macOS app stays the production DXCA until M6 signs off.
+Since 2026-08-27 dxca itself runs the shack (burn-in, see below); the 1.x
+macOS app is the standing fallback until M6 signs off.
 
-## Current state (M0 complete)
+## M0 groundwork
 
 - Cargo workspace (edition 2024): `dxca-core` (spot model + 2 tests),
   `dxca-connect` (doc-only placeholder), `dxca-server` (bin `dxca`).
@@ -65,6 +66,32 @@ The 1.x macOS app stays the production DXCA until M6 signs off.
 - Justfile recipe comments must be a single line — `just --list` shows only
   the last comment line above a recipe.
 
+## Burn-in — dxca is currently running the shack (since 2026-08-27)
+
+**M2 exit validated live by Manoj**: with the 1.x app stopped, dxca took
+over ports 2333/2334/2335 + 7575 on the Mac Mini with the default config.
+RUMlog's DX Cluster tab reconnected on its own, its spots table populated
+via both paths, and **click-to-fill worked** from the decoders through
+dxca's passthrough. MSHV + JTDX ingesting live during validation;
+passthrough 180+ datagrams, 0 failures.
+
+Operational state:
+- Runs **on the Mac** (decoders send to 127.0.0.1), detached:
+  `nohup ~/projects/dxca/target/release/dxca` started from
+  `~/projects/dxca` (config-relative paths), log
+  `~/Library/Logs/dxca-burnin.log`. Survives Claude sessions, **not** a
+  reboot — after a reboot either relaunch it the same way or fall back to
+  the 1.x app.
+- **The 1.x macOS app must stay closed while dxca runs** (same ports).
+  Revert = `pkill -f target/release/dxca`, then launch
+  DXClusterAggregator.app.
+- Watch it via `http://localhost:7580/api/status` (per-source spot
+  counts, telnet clients, UDP sent/failed) and `/api/spots`. The web page
+  itself is still the M0 stub shell — the real dashboard is M5.
+- Burn-in gap vs 1.x: **no DX-cluster node ingest yet** (that's M3), no
+  ClubLog highlighting/Telegram (M4), no spots-table UI (M5). The spot
+  aggregation + RUMlog feed paths are at parity.
+
 ## M2 progress
 
 **2026-08-27 — M2 code complete: the spot path runs end to end.**
@@ -97,12 +124,8 @@ The 1.x macOS app stays the production DXCA until M6 signs off.
   from the broadcast gate until M5 decides whether per-user display
   filters should keep gating the shared feed like 1.x does.
 
-**M2 exit box still open:** the live RUMlog click-to-fill validation —
-needs a maintenance window with Manoj: stop the 1.x app (frees ports
-2333/2334/2335), run `dxca` with default config on the Mac (or the Pi
-with decoders repointed at its IP), confirm RUMlog's Data Port 2237 feed
-and DX Cluster tab both populate and click-to-fill works, then hand the
-ports back.
+**M2 exit box: CLOSED 2026-08-27** — the live swap-over validated it (see
+the Burn-in section above).
 
 ## M1 progress
 
@@ -155,16 +178,14 @@ proven against the Swift app's own artifacts.**
 
 ## Open items → next session
 
-1. **M2 exit validation** (needs Manoj at the shack): the live RUMlog
-   click-to-fill swap-over described under "M2 progress".
-2. **M3 — cluster ingest** (plan §10): lift the DX-cluster telnet
+1. **M3 — cluster ingest** (plan §10): lift the DX-cluster telnet
    *client* from `meridian-core/src/dxcluster/client.rs` (+wire.rs),
    graft the v1.8.x honest-status semantics (proven-live / yellow /
    watchdog), wire cluster spots into the pipeline as synthetic decodes
    the way `handleClusterSpot` does (SNR/mode scraped from the comment,
    message `"CQ <call>"`). Exit: status behaviour matches DXCA 1.8.3
    against a deliberately flaky node.
-3. M4+ per docs/PLAN.md §10.
+2. M4+ per docs/PLAN.md §10.
 
 ## Conventions (see ~/.claude/CLAUDE.md)
 
