@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-26 · **Status:** M1 in progress (WSJT-X codec done)
+**Created:** 2026-08-26 · **Last updated:** 2026-08-27 · **Status:** M1 complete
 **Repo:** https://github.com/vu2cpl/dxca (private)
 
 ---
@@ -65,9 +65,31 @@ The 1.x macOS app stays the production DXCA until M6 signs off.
 - Justfile recipe comments must be a single line — `just --list` shows only
   the last comment line above a recipe.
 
-## M1 progress (2026-08-26)
+## M1 progress
 
-**Done — WSJT-X codec + live-captured vectors.**
+**2026-08-27 — M1 complete: all core-logic ports done, full-chain parity
+proven against the Swift app's own artifacts.**
+
+- Ported (`dxca-core/src/`): `adif.rs`, `cty.rs` (with a built-in minimal
+  XML scanner — no XML dependency), `dxcc.rs` (resolver + slash-portable
+  normalization), `matrix.rs` (serde field names match the Swift Codable
+  JSON — 1.x `matrix.json` deserializes as-is), `classify.rs`
+  (AlertClassifier + AlertLevel with Swift raw-value serde names, plus an
+  `AlertConfig` extracted from ClubLogConfig for the per-user model),
+  `bands.rs`, `modes.rs`, `beacons.rs`. 29 unit tests codify the Swift
+  behaviours, including the deliberate quirks (ADIF lengths count
+  characters; header fields leak into the first record; null/invalid-UTF-8
+  QStrings parse as "").
+- **Parity test** (`tests/local_parity.rs`, `#[ignore]`d — needs the 1.x
+  app's cache, run with `-- --ignored`): parses the real cty.xml (402
+  entities, 35,817 rules) and log.adi (56,811 records), rebuilds the
+  matrix the way `ClubLogClient` does, and compares against the Swift
+  app's own matrix.json. **Exact match on first run**: 320 DXCC statuses
+  set-for-set, 26,179 worked calls. Runs in 0.24 s (release).
+- Personal log data stays out of the repo — the parity test reads
+  `~/Library/Application Support/DXClusterAggregator/` locally.
+
+**2026-08-26 — WSJT-X codec + live-captured vectors.**
 
 - `dxca-core/src/wsjtx.rs`: full parser/builder port of the Swift
   `WSJTXMessageParser`/`WSJTXMessageBuilder`, permissive-parse semantics
@@ -94,13 +116,16 @@ The 1.x macOS app stays the production DXCA until M6 signs off.
 
 ## Open items → next session
 
-1. **M1 remainder** (plan §10): port CTY parser, ADIF parser, LogMatrix,
-   AlertClassifier (+ band/mode resolvers) with golden tests against the
-   Swift implementation's output. Swift sources:
-   `~/projects/DXClusterAggregator/DXClusterAggregator/{Protocol,Utils,Models}/`.
-   No QSO was logged during the capture, so no real ADIF-over-UDP sample
-   yet — the 1.x app's ClubLog/ADIF fixtures cover the parser instead.
-2. M2+ per docs/PLAN.md §10.
+1. **M2 — spot path** (plan §10): WSJT-X UDP listener → dedupe →
+   in-memory ring → the telnet server lifted from
+   `meridian-core/src/dxcluster/` (server.rs + wire.rs); UDP broadcaster
+   incl. passthrough (spec baseline: the 1094/1094 byte-identical
+   passthrough capture, and v1.8.3's no-fail-counting rule). Port the
+   exact v1.8.x dedupe-window semantics into `Spot::dedupe_key` while
+   wiring the pipeline (the M0 skeleton keys on raw kHz, deliberately
+   tighter). Exit: RUMlog on the Mac clicks-to-fill from spots served by
+   the Pi.
+2. M3+ per docs/PLAN.md §10.
 
 ## Conventions (see ~/.claude/CLAUDE.md)
 

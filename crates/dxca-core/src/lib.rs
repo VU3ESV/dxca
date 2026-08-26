@@ -10,6 +10,14 @@
 //! DXClusterAggregator-macOS, tested against datagrams captured from the
 //! live shack decoders (`tests/vectors/`).
 
+pub mod adif;
+pub mod bands;
+pub mod beacons;
+pub mod classify;
+pub mod cty;
+pub mod dxcc;
+pub mod matrix;
+pub mod modes;
 mod spot;
 pub mod wsjtx;
 

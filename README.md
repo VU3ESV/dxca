@@ -19,13 +19,16 @@ from [Meridian](https://github.com/thomasbasil/meridian).
 
 ## Status
 
-**M1 in progress** (2026-08-26) — M0 scaffold done (workspace, embedded-web-UI
-server stub, local gate, Pi cross-compile verified on hardware); the WSJT-X
-binary codec is ported and golden-tested against datagrams captured from
-live MSHV/JTDX/WSJT-X instances (`crates/dxca-core/tests/vectors/`). No
-spot pipeline yet. The full design and milestone plan:
-[docs/PLAN.md](docs/PLAN.md). The production DXCA remains the macOS 1.x app
-until M6 signs off.
+**M1 complete** (2026-08-27) — the entire core-logic layer is ported and
+parity-proven: the WSJT-X binary codec is golden-tested against datagrams
+captured from live MSHV/JTDX/WSJT-X instances
+(`crates/dxca-core/tests/vectors/`), and the CTY/ADIF/DXCC/matrix/classifier
+chain reproduces the 1.x macOS app's own computed matrix exactly (320 DXCC
+entities, 26k worked calls, set-for-set). M0 groundwork: workspace,
+embedded-web-UI server stub, local gate, Pi cross-compile verified on
+hardware. No spot pipeline yet — that's M2. The full design and milestone
+plan: [docs/PLAN.md](docs/PLAN.md). The production DXCA remains the macOS
+1.x app until M6 signs off.
 
 ## Layout
 
