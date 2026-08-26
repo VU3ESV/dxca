@@ -1,7 +1,13 @@
-//! DX-cluster telnet **client** — lifted from
+//! DX-cluster telnet **client** — lifted from the Meridian project's
 //! `meridian-core/src/dxcluster/` (plan §6), client half only (the server
 //! half stays upstream; DXCA's own telnet server lives in
 //! `crate::telnet` until per-user feeds need the login-capable one).
+//!
+//! LICENSE: this module (mod.rs, client.rs, wire.rs) is derived from
+//! Meridian — © the Meridian authors (Basil Thomas W6BT, Vinod VU3ESV,
+//! Ram VU3RDD), Apache-2.0 — and remains under Apache-2.0 (see
+//! LICENSE-APACHE at the repo root), unlike the rest of this MIT repo.
+//! DXCA's modifications are marked `// DXCA:`.
 //!
 //! DXCA grafts onto the lift — each marked `// DXCA:` at the site:
 //!  - password prompt support (1.x clusters use username+password);

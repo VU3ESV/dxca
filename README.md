@@ -14,8 +14,9 @@ own ClubLog log matrix, New-DXCC/Slot/Band/Mode highlighting, and Telegram
 alerts over one shared spot stream.
 
 Original concept and reference implementation by Vinod VU3ESV (FT8 Cluster
-Aggregator); rewritten and extended. The DX-cluster telnet engines derive
-from [Meridian](https://github.com/thomasbasil/meridian).
+Aggregator); rewritten and extended. The DX-cluster telnet client engine
+is derived from the **Meridian** project — joint work by Basil Thomas
+W6BT, Vinod VU3ESV, and Ram VU3RDD (repo private).
 
 ## Status
 
@@ -108,4 +109,9 @@ managed in the web GUI per account, not in the file.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE) — except
+`crates/dxca-connect/src/dxcluster/`, which is derived from the Meridian
+project (© the Meridian authors: Basil Thomas W6BT, Vinod VU3ESV, Ram
+VU3RDD) and remains under **Apache-2.0** — see
+[LICENSE-APACHE](LICENSE-APACHE). DXCA's modifications to those files
+are marked `// DXCA:`.

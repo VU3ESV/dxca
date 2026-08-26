@@ -70,9 +70,12 @@ Dependency budget (Meridian discipline — few, pinned once): `tokio`,
 are HTTPS; Meridian's `http1.rs` is plain-HTTP only), `flate2` (ClubLog
 gzip), `argon2`, `rand` (session tokens), `include_dir`.
 
-License: **MIT**, matching DXCA 1.x. The lifted Meridian code is
-Apache-2.0 but same copyright holder, so relicensing the copy is a
-one-line header note, not a negotiation.
+License: **MIT**, matching DXCA 1.x — CORRECTED post-release: Meridian
+is a joint project (Basil Thomas W6BT, Vinod VU3ESV, Ram VU3RDD), not
+solely Manoj's, so the lifted `dxcluster` module stays **Apache-2.0**
+with attribution (LICENSE-APACHE at the root) rather than being
+relicensed. The plan's original "same copyright holder" assumption was
+wrong.
 
 ## 2. What is lifted vs. ported vs. new
 
