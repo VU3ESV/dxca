@@ -736,6 +736,37 @@ Not done: no audit trail of who changed what, and no confirmation step
 beyond the browser `confirm()`. Both were judged out of proportion to a
 shack-scale roster of two or three accounts.
 
+## install.sh now verifies its own work (2026-08-27)
+
+Every failure in this script's history looked like a **successful** install:
+the unit started, the URL printed, the script exited 0, and the dashboard
+was a placeholder. Nothing in the installer ever looked at the result. So it
+now finishes by fetching its own web page:
+
+- **Pi/Linux**: `systemctl is-active` first — a unit that failed to start
+  gives a far better error than a connection refused twenty seconds later —
+  then the HTTP check, then the LAN URL.
+- **macOS**: `launchctl print` on the agent, then the same HTTP check.
+- Both poll for up to 20s (a fresh service needs a moment to bind; failing
+  on the first refused connection would be a false alarm), then look for
+  build.rs's `Web UI not built into this binary` marker. Finding it is a
+  hard failure — **unless `--stub-ui` was passed**, in which case the
+  placeholder is what was asked for and the check passes.
+- `web_url` reads `web_bind` out of the installed `dxca.toml`, so a
+  non-default port is probed correctly. A wildcard bind (`0.0.0.0`, `[::]`)
+  is probed on loopback; a specific address is used as-is, since loopback
+  would not be listening then. No config at all falls back to 7580.
+- No curl on the box is a skip-with-a-note, not a failure.
+
+Tested against fixture servers: real dashboard passes, placeholder fails,
+placeholder + `--stub-ui` passes, nothing listening fails with the right
+log command for the platform. `web_url` verified across all five bind forms.
+
+**Known gap, deliberate:** there is still no Node *version* check, only a
+`command -v pnpm` test — asymmetric with the rustc gate. Vite 6 wants Node
+`^18 || ^20 || >=22`; Bookworm ships 18.19 and Trixie 20.19, so it is
+unlikely to bite, and a bad Node fails loudly inside `pnpm build` anyway.
+
 ## install.sh did not install the web GUI (fixed 2026-08-27)
 
 Two separate holes, both ending in the same symptom: the service comes up,

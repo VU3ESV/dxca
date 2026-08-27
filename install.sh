@@ -180,6 +180,79 @@ require_cargo() {
   say "rustc $RUSTC_HAVE (needs $MIN_RUSTC+) - OK."
 }
 
+# --- post-install verification -------------------------------------------
+# Every failure this script has had looked like a SUCCESSFUL install: the
+# unit started, the URL printed, and the dashboard was a placeholder. So the
+# last thing the installer does is check its own work, and exits non-zero
+# when the thing it just installed is not actually serving.
+
+# `web_bind = "0.0.0.0:7580"` -> http://127.0.0.1:7580/. A wildcard bind is
+# probed on loopback; a specific address is used as-is, because loopback
+# would not be listening in that case.
+web_url() {
+  BIND=""
+  if [ -f "$1" ]; then
+    BIND="$(sed -n 's/^[[:space:]]*web_bind[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$1" | tail -1)"
+  fi
+  [ -n "$BIND" ] || BIND="0.0.0.0:7580"
+  URL_HOST="${BIND%:*}"
+  URL_PORT="${BIND##*:}"
+  case "$URL_HOST" in
+    "" | 0.0.0.0 | "[::]" | "*") URL_HOST=127.0.0.1 ;;
+  esac
+  echo "http://$URL_HOST:$URL_PORT/"
+}
+
+# A freshly started service needs a moment to bind; failing on the first
+# refused connection would be a false alarm, so poll for up to 20s.
+verify_serving() {
+  URL="$1"
+  if ! command -v curl >/dev/null 2>&1; then
+    say "NOTE: curl not found, so the install could not be verified."
+    say "Open $URL and confirm the dashboard loads."
+    return 0
+  fi
+  say "Checking $URL ..."
+  TRIES=0
+  while [ "$TRIES" -lt 20 ]; do
+    if curl -fsS -m 2 -o /dev/null "$URL" 2>/dev/null; then
+      break
+    fi
+    TRIES=$((TRIES + 1))
+    sleep 1
+  done
+  if [ "$TRIES" -ge 20 ]; then
+    say "Installed, but $URL never answered."
+    say "The binary is in place and the service was started, so this is a"
+    say "runtime problem, not a build one. Check the log:"
+    if [ "$PLATFORM" = macos ]; then
+      say "  tail -50 ~/Library/Logs/dxca.log"
+    else
+      say "  journalctl -u dxca -n 50 --no-pager"
+    fi
+    die "install could not be verified"
+  fi
+  # The placeholder is what a binary built without the web UI serves. It is
+  # the exact failure that made this check necessary, so it is named rather
+  # than inferred from the absence of something.
+  PAGE="$(curl -fsS -m 5 "$URL" 2>/dev/null || true)"
+  case "$PAGE" in
+    *"Web UI not built into this binary"*)
+      if [ "$STUB_UI" -eq 1 ]; then
+        say "OK: serving the placeholder page, as --stub-ui asked for."
+        return 0
+      fi
+      say "$URL answers, but it is serving the PLACEHOLDER page rather than"
+      say "the dashboard — the binary was built without web-ui/dist."
+      say "That should be impossible from this script; if you see it, the"
+      say "binary being run is not the one just built. Check that the"
+      say "service points at the binary this script installed."
+      die "install could not be verified"
+      ;;
+  esac
+  say "OK: $URL is serving the dashboard."
+}
+
 case "$PLATFORM" in
   macos)
     require_cargo
@@ -196,7 +269,11 @@ case "$PLATFORM" in
     sleep 1
     launchctl bootstrap "gui/$(id -u)" "$PLIST"
     say "Installed launchd agent com.vu2cpl.dxca (log: ~/Library/Logs/dxca.log)."
-    say "Web UI: http://localhost:7580/"
+    if ! launchctl print "gui/$(id -u)/com.vu2cpl.dxca" >/dev/null 2>&1; then
+      say "The agent did not stay loaded. Check ~/Library/Logs/dxca.log."
+      die "install could not be verified"
+    fi
+    verify_serving "$(web_url "$REPO/config/dxca.toml")"
     ;;
 
   pi|linux)
@@ -249,7 +326,20 @@ case "$PLATFORM" in
     # it is meant to be running.
     sudo systemctl restart dxca
     say "Installed systemd service 'dxca' (status: systemctl status dxca)."
-    say "Web UI: http://$(hostname -I 2>/dev/null | awk '{print $1}'):7580/"
+    # is-active first: a unit that failed to start gives a far better error
+    # than a connection refused twenty seconds later.
+    if ! systemctl is-active --quiet dxca; then
+      say "The dxca service is not active after restart:"
+      systemctl --no-pager --lines=15 status dxca 2>&1 | sed 's/^/  /' || true
+      die "install could not be verified"
+    fi
+    URL="$(web_url /opt/dxca/config/dxca.toml)"
+    verify_serving "$URL"
+    # web_url probes loopback; the operator needs the address other machines
+    # use. A config bound to a specific address leaves the URL unchanged,
+    # which is then already the right one to print.
+    LAN_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    [ -n "$LAN_IP" ] && say "On the LAN: ${URL/127.0.0.1/$LAN_IP}"
     ;;
 
   *)

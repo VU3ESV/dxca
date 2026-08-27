@@ -3,7 +3,9 @@
 FT8/FT4 + DX-cluster spot aggregator with a multi-user web GUI. Rust
 successor to [DXClusterAggregator for
 macOS](https://github.com/vu2cpl/DXClusterAggregator-macOS), built to run
-24/7 on a Raspberry Pi (equally at home on macOS/Linux/Windows).
+24/7 on a Raspberry Pi, and equally at home on macOS or Linux. See
+[How to install](#how-to-install). (Windows is untested — the code is
+written for it, but it has never been built or run there.)
 
 DXCA ingests spots from WSJT-X/JTDX instances (binary UDP) and DX-cluster
 telnet nodes, aggregates and dedupes them, and serves the result to logging
@@ -56,6 +58,194 @@ tokens live in `data/dxca.db` in plain text, file mode 0600, service user
 only — encryption-at-rest on the same host would add ceremony, not
 security. Keep the data directory out of backups you share.
 
+## How to install
+
+Written for someone who has never built a Rust program. You end up with a
+service that starts on boot and a web GUI on port **7580** that you open
+from any machine on the LAN.
+
+Whatever the platform, the shape is the same: install two toolchains (Rust
+and Node), clone this repo, run `./install.sh`, open the URL. The installer
+auto-detects your platform, asks you to confirm, refuses to continue if
+anything it needs is missing or too old, and — since it finishes by fetching
+its own web page — tells you whether the install actually worked rather than
+just that it finished.
+
+### What you need first
+
+| | Why | Minimum |
+|---|---|---|
+| Rust (via **rustup**) | builds the server | **1.88** |
+| Node + **pnpm** | builds the dashboard | Node **20** |
+| git | to clone this repo | any |
+
+**Install Rust with rustup, not your distro's package manager.** Debian
+Trixie's `apt install cargo` gives 1.85, which is below the floor this
+workspace needs, and a distro rustc ignores `rust-toolchain.toml` so it will
+never fix itself. See [Build](#build) for why the floor is 1.88.
+
+### Raspberry Pi
+
+Needs a **64-bit** Raspberry Pi OS (Bookworm or newer). Check with `uname
+-m`: `aarch64` is good, `armv7l` means you are on the 32-bit image and this
+will not run. A Pi 4 or 5 is comfortable; on a Pi 3B the build is slow and
+may run out of memory — see [Low-memory Pis](#low-memory-pis) below.
+
+**1. Update the system and install git.**
+
+```sh
+sudo apt update && sudo apt install -y git curl build-essential
+```
+
+**2. Install Rust.** Accept the default option when it asks.
+
+```sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+source "$HOME/.cargo/env"
+rustc --version          # expect 1.88 or newer
+```
+
+**3. Install Node and pnpm.** If `node --version` already prints 20 or
+higher, skip straight to the `pnpm` line — and **do not** `apt install npm`
+alongside an existing Node, because a NodeSource `nodejs` package provides
+its own npm and conflicts with Debian's.
+
+```sh
+node --version || sudo apt install -y nodejs
+sudo npm install -g pnpm
+```
+
+**4. Get DXCA and install it.**
+
+```sh
+git clone https://github.com/vu2cpl/dxca.git
+cd dxca
+./install.sh
+```
+
+It asks `Auto-detected platform: pi. Is this correct? [Y/n]` — press Enter.
+Then it builds (ten to thirty minutes on a Pi; the Rust compile is the slow
+part), installs to `/opt/dxca`, starts a systemd service called `dxca`, and
+checks the result. Success ends with `OK: http://127.0.0.1:7580/ is serving
+the dashboard.` and the LAN address to use.
+
+**5. Open the web GUI** at the LAN address it printed, e.g.
+`http://192.168.1.50:7580/`.
+
+Useful afterwards:
+
+```sh
+systemctl status dxca              # is it running
+journalctl -u dxca -n 50 --no-pager   # what it said
+```
+
+### macOS
+
+**1. Install [Homebrew](https://brew.sh)** if you do not have it, then the
+toolchains:
+
+```sh
+brew install rustup node pnpm git
+rustup-init -y
+source "$HOME/.cargo/env"
+```
+
+**2. Install DXCA.**
+
+```sh
+git clone https://github.com/vu2cpl/dxca.git
+cd dxca
+./install.sh
+```
+
+Confirm `macos` when asked. It builds, installs a launchd agent called
+`com.vu2cpl.dxca` that survives reboots, and verifies the result. Unlike the
+Pi, macOS runs the binary **from the clone you just made** — so do not move
+or delete that directory.
+
+**3. Open** `http://localhost:7580/`.
+
+The log is at `~/Library/Logs/dxca.log`. To stop it:
+
+```sh
+launchctl bootout "gui/$(id -u)" ~/Library/LaunchAgents/com.vu2cpl.dxca.plist
+```
+
+### Other Linux (x86-64 or ARM)
+
+Identical to the Pi, with your own package manager for step 1 — the
+installer detects `linux` instead of `pi` and installs the same systemd
+service to `/opt/dxca`. Everything else is the same.
+
+### Windows
+
+**Not supported today, and not yet tested.** Be aware of what that means
+before spending time on it:
+
+- The Rust code is written for it — the two Unix-only spots (the SIGTERM
+  handler and the database file's `0600` permissions) are `#[cfg(unix)]`
+  with a portable fallback — but **nobody has ever built or run it on
+  Windows**, so "should work" is a design intent, not a result.
+- There is no Windows installer. `install.sh` is a bash script that installs
+  a launchd agent or a systemd unit; neither exists on Windows. You would
+  build with `cargo build --release -p dxca-server` and run the binary
+  yourself, or wrap it in a service by hand.
+- Building needs the **MSVC Build Tools** (a C compiler), because two
+  dependencies compile C: bundled SQLite and `ring` (the TLS library).
+- **The database would not be permission-protected.** ClubLog app passwords
+  and Telegram tokens are stored in plain text and secured by the file being
+  mode `0600` — a `#[cfg(unix)]` code path. On Windows that step is skipped.
+
+If you want DXCA on a Windows network, the better answer today is to run it
+on a Pi or a Linux box and open the web GUI in the Windows machine's
+browser. That is what the web GUI is for.
+
+### First run
+
+The first page is a setup card, because no account exists yet and there are
+no default credentials, ever. Create the admin account — that callsign and
+password are yours alone; nothing is pre-seeded.
+
+Then, in order of what actually matters:
+
+1. **System tab → ClubLog API key.** Without it, cty.xml never downloads and
+   no spot can be resolved to a DXCC entity. Get a key from
+   [clublog.org](https://clublog.org).
+2. **System tab → cluster nodes.** Add the DX-cluster node(s) you want
+   ingested, with your callsign as the login.
+3. **My ClubLog tab.** Your ClubLog credentials, so your own log loads and
+   New-DXCC highlighting means something for your station.
+4. **Point your decoders at it.** WSJT-X/JTDX/MSHV UDP to ports 2333 (MSHV),
+   2334 (JTDX), 2335 (WSJT-X). Point your logger's telnet cluster at port
+   **7575** on this machine.
+
+### If something goes wrong
+
+The installer stops with an explanation rather than half-finishing, so read
+what it printed. The common ones:
+
+| It says | Meaning |
+|---|---|
+| `rustc 1.85.0 is too old` | distro Rust; install rustup as above |
+| `pnpm not found` | step 3 was skipped — it prints the exact command for your machine |
+| `never answered` | it built and started but is not serving; the message names the log command |
+| `serving the PLACEHOLDER page` | the running binary was built without the dashboard |
+| `nodejs : Conflicts: npm` | you asked apt for `npm` next to a NodeSource Node — drop `npm` |
+
+Re-running `./install.sh` is always safe. In a source tree it rebuilds from
+scratch, so it is the correct fix after installing a missing toolchain — it
+will not reuse the old binary.
+
+#### Low-memory Pis
+
+On a Pi 3B (1 GB) the release build can be killed while linking. Either give
+it swap, or build the binary on a faster machine and copy it over with
+`deploy/pi-deploy.sh --no-seed user@pi` — that cross-compiles on your Mac
+and ships a finished binary, so the Pi needs no Rust toolchain at all. Keep
+`--no-seed` for any Pi that is not your own: without it the deploy also
+copies your database and config, which carry your passwords and your
+station's cluster login.
+
 ## Layout
 
 | Path | What |
@@ -95,25 +285,36 @@ A [Justfile](Justfile) wraps the common flows (`just gate`, `just run`,
 
 ### Install as a service
 
-`./install.sh` sets the current machine up (auto-detects macOS vs
-Raspberry Pi, confirms, never fails silently — a missing or too-old Rust
-is caught before the build starts, not minutes into it):
+Step-by-step instructions are in [How to install](#how-to-install); this is
+the mechanism behind them.
 
-- **macOS**: builds the release binary and installs a launchd agent
-  (`com.vu2cpl.dxca`, survives reboots, log in `~/Library/Logs/dxca.log`).
-The dashboard is embedded into the binary at compile time, so installing it
-means building `web-ui/dist` *then* the binary, in that order. `install.sh`
-does both, and in a source tree it **always rebuilds** rather than reusing
-an existing `target/release/dxca` — otherwise a re-run after installing
-pnpm would keep the old placeholder-page binary. A missing pnpm is a hard
-stop; pass `--stub-ui` if you deliberately want the placeholder (the API
-and telnet server work either way).
+`./install.sh [macos|pi|linux] [--stub-ui]` auto-detects the platform,
+confirms, and never fails silently:
 
-- **Pi/Linux**: installs binary + config + data seeds to `/opt/dxca` and
-  a systemd service (`systemctl status dxca`), running as the invoking
-  user. A fresh install self-bootstraps: the first-run web card creates
-  the admin account, and cty.xml / the LoTW list download on demand once
-  a ClubLog API key is entered — no seed files required.
+- **macOS**: builds and installs a launchd agent (`com.vu2cpl.dxca`,
+  survives reboots, log in `~/Library/Logs/dxca.log`), running the binary
+  from the clone.
+- **Pi/Linux**: installs binary + config + data seeds to `/opt/dxca` and a
+  systemd service (`systemctl status dxca`) running as the invoking user. A
+  fresh install self-bootstraps: the first-run web card creates the admin
+  account, and cty.xml / the LoTW list download on demand once a ClubLog API
+  key is entered — no seed files required.
+
+Three things it guarantees, each of which was once a bug:
+
+1. **Toolchain checked up front.** A missing or too-old Rust stops it before
+   the build rather than minutes into dependency resolution.
+2. **The dashboard is really built.** It is embedded at compile time, so
+   installing it means building `web-ui/dist` *then* the binary, in that
+   order. In a source tree the binary is **always rebuilt** rather than
+   reusing an existing `target/release/dxca`, otherwise a re-run after
+   installing pnpm would keep the old placeholder-page binary. A missing
+   pnpm is a hard stop; `--stub-ui` opts into the placeholder deliberately
+   (the API and telnet server work either way).
+3. **The result is verified.** It waits for the service to answer on the
+   configured port and checks the page is the dashboard and not the
+   placeholder, exiting non-zero if not — so "installed" means serving,
+   not merely "the script reached the end".
 
 To cross-compile on the Mac and ship to a Pi in one step
 (needs cargo-zigbuild + the `aarch64-unknown-linux-gnu` target):
