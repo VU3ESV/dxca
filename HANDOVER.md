@@ -462,6 +462,32 @@ proven against the Swift app's own artifacts.**
 
 ## Open items → next session
 
+**TODO (2026-08-28): MQTT publishes, but nothing shows on the panadapter.**
+Manoj configured the `Shack` destination against `192.168.1.169:1883` as
+`svc` and reports the publish counter climbing — so DXCA's half is
+confirmed working end to end: connect, authenticate, publish. What has NOT
+been shown to work is the **consumer** side, from the topics to a FlexRadio
+/ Aether display. Deferred deliberately; not a DXCA bug as far as anything
+observed so far.
+
+Where to start when picking it up — cheapest checks first:
+
+```sh
+# 1. Is anything actually on the topics? (needs mosquitto-clients)
+mosquitto_sub -h 192.168.1.169 -p 1883 -u svc -P '<pw>' -t 'shack/dxca/spots/#' -v
+
+# 2. What DXCA thinks it has sent, per destination:
+#    System tab → MQTT destinations → "published N, failed N"
+```
+
+If `published` climbs and `mosquitto_sub` sees nothing, it is the broker
+ACL for `svc` on `shack/dxca/#` (auth has been required since 2026-08-21 —
+see `vu2cpl-shack/MQTT_AUTH.md`). If both show traffic, the gap is entirely
+downstream: there is **no Node-RED flow yet** bridging `shack/dxca/spots/json`
+to whatever Flex or Aether consume, and neither is known to read MQTT
+natively — that bridge was always going to be a separate piece of work.
+Topic shapes and payloads are in the "MQTT destinations" section below.
+
 Nothing operational — **v2.1.0 is fully live**: ClubLog and Telegram are
 configured and working on the Pi (confirmed by Manoj 2026-08-27), so
 per-user highlighting and alerts run in production.
