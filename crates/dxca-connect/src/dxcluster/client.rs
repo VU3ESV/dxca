@@ -150,7 +150,9 @@ impl ClientSession {
 
         while let Some(pos) = self.buf.find('\n') {
             let line: String = self.buf.drain(..=pos).collect();
-            let line = line.trim_end_matches(['\r', '\n']).to_string();
+            // DXCA: bells and other C0 decoration come off here, before
+            // anything parses or forwards the line — see wire::strip_c0_controls.
+            let line = wire::strip_c0_controls(line.trim_end_matches(['\r', '\n']));
             if !line.trim().is_empty() {
                 self.on_line(&line, now, &mut events);
             }
@@ -646,6 +648,55 @@ mod tests {
             ev.last(),
             Some(ClientEvent::Spot { spot, .. }) if spot.call == "K1JT"
         ));
+    }
+
+    // DXCA: DO5SSB-2 (db0sue.de:8000, DXSpider 1.57) — captured off the wire
+    // 2026-08-27. Two things here bite a line-oriented parser: the welcome
+    // banner arrives in the SAME read as the unterminated "login: ", and the
+    // node's `\x07` bells ride on the end of every spot line.
+    #[test]
+    fn db0sue_dxspider_logs_in_and_proves() {
+        let mut s = ClientSession::new(&cfg(), 100);
+
+        // Read 1: banner line + the hanging prompt, one packet.
+        assert!(s.on_bytes("* Welcome, DXer! *\r\nlogin: ", 100).is_empty());
+        assert_eq!(
+            s.take_output(),
+            vec!["VU2CPL\r\n".to_string()],
+            "the callsign must go out even though `login: ` has no newline \
+             and shares its read with the banner"
+        );
+        assert!(!s.proven(), "a prompt alone is not evidence");
+
+        // Read 2: the login reply, then the boxed banner, then the node
+        // prompt — the first real evidence the session works.
+        let ev = s.on_bytes(
+            "Hello Manoj Ramawarrier, this is DO5SSB-2 in Frankfurt, Germany\r\n\
+             running DXSpider V1.57 build 633\r\n\
+             Capabilities: ve7cc rbn\r\n\
+             ***********************************************************\r\n\
+             **  **    You are connected to 'spider.dxtron.com'    **  **\r\n\
+             ***********************************************************\r\n\
+             Nodes: 15/406 Users [Loc/Clr]: 101/3995 Max: 233/7822\r\n\
+             VU2CPL de DO5SSB-2 27-Aug-2026 0508Z dxspider >\r\n",
+            101,
+        );
+        assert!(ev.contains(&ClientEvent::LoggedIn));
+        assert_eq!(proven_events(&ev), 1);
+        assert!(s.ready() && s.proven());
+
+        // Read 3: a real spot, bells and all.
+        let ev = s.on_bytes(
+            "DX de SV1OML:    24915.0  JR3UIC       FT8 KM18vc -> PM75 73 t u      0508Z\x07\x07\r\n",
+            102,
+        );
+        assert!(
+            matches!(
+                ev.last(),
+                Some(ClientEvent::Spot { spot, .. }) if spot.call == "JR3UIC"
+            ),
+            "expected a JR3UIC spot, got {ev:?}"
+        );
     }
 
     #[test]

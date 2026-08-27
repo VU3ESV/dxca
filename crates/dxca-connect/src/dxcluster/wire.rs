@@ -212,6 +212,24 @@ pub fn dx_command(spot: &ClusterSpot) -> String {
     format!("dx {:.1} {} {}\r\n", spot.freq_khz, spot.call, remarks)
 }
 
+// DXCA: strip the C0 control bytes a node decorates its lines with. DXSpider
+// rings the terminal on every spot — DO5SSB-2 (db0sue.de:8000) sends
+// `… 0508Z\x07\x07\r\n` — and BEL is NOT whitespace, so `str::trim` leaves it
+// glued to the last token. That turned the `HHMMZ` time into a 7-char
+// `0508Z\x07\x07`, the rightmost-time search found nothing, and
+// `parse_spot_line` returned None: the node proved Live and then dropped
+// every spot it sent.
+//
+// Tab survives (it is real whitespace between fields, and `split_whitespace`
+// wants it); everything else below 0x20, plus DEL, goes. Applied once where
+// lines are cut, so the raw passthrough to telnet clients and the broadcaster
+// is clean too — not just the parse.
+pub fn strip_c0_controls(line: &str) -> String {
+    line.chars()
+        .filter(|c| *c == '\t' || !c.is_control())
+        .collect()
+}
+
 // DXCA: Telnet IAC stripping, ported from the Swift client (1.x). AR-Cluster
 // forks (N2WQ) prefix their banner with IAC option negotiation; the bytes are
 // not UTF-8 and would poison prompt matching. We never respond to the
@@ -283,6 +301,36 @@ mod tests {
         assert_eq!(p.grid.as_deref(), Some("FN20"));
         assert_eq!(p.spotter_grid.as_deref(), Some("EM12"));
         assert_eq!(p.kind, SpotKind::Cq);
+    }
+
+    // DXCA: DXSpider rings the terminal on every spot. BEL is not whitespace,
+    // so before strip_c0_controls the time token was `0508Z\x07\x07` and the
+    // whole line failed to parse — the node went Live and dropped every spot.
+    #[test]
+    fn bells_do_not_break_a_spot_line() {
+        let raw =
+            "DX de SV1OML:    24915.0  JR3UIC       FT8 KM18vc -> PM75 73 t u      0508Z\u{7}\u{7}";
+        assert!(
+            parse_spot_line(raw).is_none(),
+            "guard: without stripping, the trailing BELs must still defeat the parse"
+        );
+
+        let p = parse_spot_line(&strip_c0_controls(raw)).unwrap();
+        assert_eq!(p.spotter, "SV1OML");
+        assert_eq!(p.call, "JR3UIC");
+        assert_eq!(p.freq_khz, 24915.0);
+        assert_eq!(p.mode.as_deref(), Some("FT8"));
+        assert_eq!((p.hour, p.minute), (5, 8));
+    }
+
+    #[test]
+    fn strip_c0_keeps_tabs_and_text() {
+        assert_eq!(strip_c0_controls("a\u{7}b\u{0}c\u{1b}d"), "abcd");
+        assert_eq!(strip_c0_controls("col1\tcol2"), "col1\tcol2");
+        assert_eq!(
+            strip_c0_controls("VU2CPL de DO5SSB-2 >"),
+            "VU2CPL de DO5SSB-2 >"
+        );
     }
 
     #[test]
