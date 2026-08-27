@@ -8,6 +8,9 @@
   // flagged as that level at all. This is the widest of the three controls:
   // switch a level off here and it disappears from the feed AND from
   // Telegram, because the classifier never assigns it.
+  // The <select> yields strings; the server's refresh_hours is an integer and
+  // a quoted "24" fails its deserialize. Coerced on save, not on bind, so the
+  // select still matches the loaded value by identity.
   const FIELD: Record<string, string> = {
     newDXCC: 'alert_new_dxcc',
     newBand: 'alert_new_band',
@@ -19,8 +22,21 @@
     unconfSlot: 'alert_unconf_slot',
   };
 
+  // 0 = manual only. Mirrors the server's `refresh_hours`, whose own default
+  // is 24 — a log that only moves when someone presses a button means
+  // today's QSOs keep alerting as New DXCC tomorrow.
+  const INTERVALS: [number, string][] = [
+    [0, 'Manual only'],
+    [6, 'Every 6 hours'],
+    [12, 'Every 12 hours'],
+    [24, 'Daily'],
+    [48, 'Every 2 days'],
+    [168, 'Weekly'],
+  ];
+
   let cfg = $state<any>({
     callsign: '', email: '', app_password: '', api_key: '',
+    refresh_hours: 24,
     alert_new_dxcc: true, alert_new_slot: true, alert_new_band: true,
     alert_new_mode: true,
     alert_unconf_dxcc: false, alert_unconf_slot: false,
@@ -38,7 +54,10 @@
 
   async function save() {
     busy = true; message = ''; error = '';
-    const r = await api('PUT', '/api/config/me/clublog', cfg);
+    const r = await api('PUT', '/api/config/me/clublog', {
+      ...cfg,
+      refresh_hours: Number(cfg.refresh_hours) || 0,
+    });
     busy = false;
     if (r.status === 200) message = 'Saved.';
     else error = r.json?.error ?? `HTTP ${r.status}`;
@@ -73,7 +92,22 @@
       <input type="password" bind:value={cfg.app_password} />
       <span class="label">API key</span>
       <input bind:value={cfg.api_key} />
+      <span class="label">Auto-refresh</span>
+      <select bind:value={cfg.refresh_hours}>
+        {#each INTERVALS as [hours, label] (hours)}
+          <option value={hours}>{label}</option>
+        {/each}
+      </select>
     </div>
+    <p class="hint note">
+      {#if cfg.refresh_hours > 0}
+        Re-downloads your log in the background, so a QSO worked today stops
+        showing as New DXCC tomorrow. The button below still works any time.
+      {:else}
+        Your log will only change when you press <b>Refresh log now</b> —
+        anything you work keeps alerting as new until you do.
+      {/if}
+    </p>
 
     <h2>Alert levels</h2>
     <p class="hint sub">

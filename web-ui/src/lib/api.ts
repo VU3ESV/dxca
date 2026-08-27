@@ -66,5 +66,8 @@ export function ago(unix: number | null): string {
   const s = Math.max(0, Math.floor(Date.now() / 1000) - unix);
   if (s < 60) return `${s}s`;
   if (s < 3600) return `${Math.floor(s / 60)}m`;
-  return `${Math.floor(s / 3600)}h`;
+  // Days matter now that this also ages a weekly LoTW download and a log
+  // refresh — "168h ago" is a number you have to do arithmetic on.
+  if (s < 86400) return `${Math.floor(s / 3600)}h`;
+  return `${Math.floor(s / 86400)}d`;
 }

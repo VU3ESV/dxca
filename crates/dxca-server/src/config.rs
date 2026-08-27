@@ -76,6 +76,11 @@ pub struct Config {
     /// Directory for runtime state: dxca.db (users, sessions, matrices)
     /// and the cached cty.xml.
     pub data_dir: String,
+    /// How often to re-download the LoTW users list, in days; 0 disables it.
+    /// Server-wide rather than per-user because the list itself is — one
+    /// file, one download, shared by every account. A week is well inside
+    /// the rate at which the list actually moves, and the file is ~6 MB.
+    pub lotw_refresh_days: u64,
     /// Test/debug override: point ClubLog downloads at this base URL.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub clublog_base_override: Option<String>,
@@ -126,6 +131,7 @@ impl Default for Config {
             dedupe_window_secs: 60,
             spot_ring_capacity: 5000,
             data_dir: "data".into(),
+            lotw_refresh_days: 7,
             clublog_base_override: None,
             telegram_base_override: None,
         }

@@ -19,6 +19,12 @@ dedupe_window_secs = 60
 # In-memory spot ring served to the web UI.
 spot_ring_capacity = 5000
 
+# How often to re-download the LoTW users list, in days; 0 = manual only.
+# Server-wide, because the list is one shared ~6 MB file rather than
+# per-account. Each user's own ClubLog log has its own interval, set per
+# account in the web UI (My ClubLog → Auto-refresh).
+lotw_refresh_days = 7
+
 # WSJT-X/JTDX/MSHV source listeners — point each decoder's UDP server at
 # its own port here (DXCA is the sole listener on every port).
 [[udp_sources]]

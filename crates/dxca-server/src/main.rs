@@ -69,6 +69,9 @@ async fn main() {
         }
     });
 
+    // Automatic ClubLog / LoTW re-download (PLAN §5's "refresh schedule").
+    dxca_server::refresh::spawn(users.clone(), cfg.lotw_refresh_days);
+
     let app_state = AppState {
         pipeline: pipeline_state,
         nodes: Arc::new(manager),

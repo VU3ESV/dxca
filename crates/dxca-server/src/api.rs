@@ -449,7 +449,11 @@ async fn get_global(State(app): State<AppState>, headers: HeaderMap) -> Response
             "dedupe_window_secs": cfg.dedupe_window_secs,
             "spot_ring_capacity": cfg.spot_ring_capacity,
             "data_dir": cfg.data_dir,
+            "lotw_refresh_days": cfg.lotw_refresh_days,
         },
+        // When the shared LoTW list was last actually downloaded — 0 = never
+        // recorded, which is what a list seeded from a file cache looks like.
+        "lotw_last_refresh_unix": app.users.db.meta_unix(crate::refresh::LOTW_OK_KEY),
     }))
     .into_response()
 }
