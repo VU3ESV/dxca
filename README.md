@@ -23,7 +23,7 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
-**v2.1.0** (2026-08-27): dxca is the
+**v2.1.1** (2026-08-28): dxca is the
 live shack aggregator with a real web GUI. Decoder UDP sources and five
 DX-cluster telnet nodes (Meridian-lifted client with the 1.x
 honest-status graft) feed one pipeline into the telnet server, the RUMlog

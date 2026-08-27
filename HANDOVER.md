@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-27 (evening) · **Status:** **v2.1.0** IN PRODUCTION on noderedpi4 — the 2.1 wave below — Meridian UI, eight alert levels, Challenge points, automatic refresh. First third-party install is live.
+**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.1.1** IN PRODUCTION on noderedpi4 (deployed 2026-08-28 01:10 IST) — the 2.1 wave below, plus the 2.1.1 fixes: spot-mode inference, account edit/delete, and an installer that checks its prerequisites and verifies its own result. First third-party install (VU2WJ) is live.
 **Repo:** https://github.com/vu2cpl/dxca (**public** — verified via
 `gh repo view` 2026-08-27; the doc said "private" until then, and the
 "Open items" release checklist still lists the public flip as pending)
@@ -735,6 +735,33 @@ end, including the dead-cookie assertion after an admin deletes themselves.
 Not done: no audit trail of who changed what, and no confirmation step
 beyond the browser `confirm()`. Both were judged out of proportion to a
 shack-scale roster of two or three accounts.
+
+## v2.1.1 (2026-08-28)
+
+Seven commits on top of v2.1.0, in three groups. Each has its own section
+below with the reasoning; this is the index.
+
+| what | why it exists |
+|---|---|
+| Spot-mode inference + no more silent DATA | an unknown mode was being scored into the operator's digital award slots |
+| Account edit + delete (`PATCH`/`DELETE /api/users/{id}`) | accounts were create-only; fixing a callsign meant hand-editing SQLite |
+| Installer: rustc gate, Node gate, real rebuild, self-verification | the VU2WJ install failed four different ways, each reporting success |
+
+**Deployed to noderedpi4 2026-08-28 01:10 IST** with
+`deploy/pi-deploy.sh --no-seed vu2cpl@noderedpi4.local`. `--no-seed` on our
+own Pi too: the box already has its config and database, and the flag stops
+this Mac's `dxca.db` being copied into `~/dxca-deploy/` for nothing. The
+installer's own check confirmed the dashboard was serving before it exited.
+
+Verified against live traffic straight after: 38 spots in the ring, **0 with
+a blank mode**, 2 inferred — both from DB0SUE, both correct (3.749 MHz →
+SSB, 7.020 MHz → CW). Small sample; the ring is in-memory and the restart
+emptied it. Worth re-checking on a full ring:
+
+```sh
+ssh vu2cpl@noderedpi4.local 'curl -s "http://127.0.0.1:7580/api/spots?limit=2000"' \
+  | python3 -c "import json,sys; s=json.load(sys.stdin)['spots']; print(sum(1 for x in s if not (x.get('mode') or '').strip()), 'blank of', len(s))"
+```
 
 ## Missing mode on cluster spots — and the DATA default behind it (2026-08-28)
 
