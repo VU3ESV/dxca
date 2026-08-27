@@ -4,24 +4,62 @@
   // 60 s duplicate collapse mirror the 1.x display behaviour.
   import { api, openStream, hhmm, ago } from '../lib/api';
   import { onMount } from 'svelte';
+  import ChipGroup from '../lib/ChipGroup.svelte';
+  import { loadReference, bands, modes, levels, levelLabel } from '../lib/reference.svelte';
 
   let spots = $state<any[]>([]);
   let status = $state<any>(null);
+  let station = $state<any>(null);
   let sortKey = $state('time_unix');
   let sortDesc = $state(true);
-  let newOnly = $state(false);
   let cqOnly = $state(false);
   let hideDupes = $state(true);
   let sourceFilter = $state<Set<string>>(new Set());
-  let bandFilter = $state<Set<string>>(new Set());
   const MAX_ROWS = 1500;
+
+  // The display narrowing. Empty = everything, matching the server's own
+  // convention for the Telegram lists. These are the SPOTS screen's own —
+  // deliberately independent of the Telegram narrowing, so the operator can
+  // watch the whole band plan while being pinged for one slice of it.
+  //
+  // Kept in localStorage rather than the database: it is a per-browser view
+  // preference, it must survive a reload, and persisting it server-side would
+  // quietly make it a second account setting to reconcile with My Alerts.
+  const STORE_KEY = 'dxca.spotfilter';
+  function restore(field: string): Set<string> {
+    try {
+      const raw = JSON.parse(localStorage.getItem(STORE_KEY) ?? '{}');
+      return new Set(Array.isArray(raw[field]) ? raw[field] : []);
+    } catch {
+      return new Set();
+    }
+  }
+  let levelFilter = $state<Set<string>>(restore('levels'));
+  let modeFilter = $state<Set<string>>(restore('modes'));
+  let bandFilter = $state<Set<string>>(restore('bands'));
+
+  $effect(() => {
+    const payload = {
+      levels: [...levelFilter],
+      modes: [...modeFilter],
+      bands: [...bandFilter],
+    };
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(payload));
+    } catch {
+      // Private mode / storage disabled — the filter still works this session.
+    }
+  });
 
   onMount(() => {
     (async () => {
+      await loadReference();
       const r = await api('GET', '/api/spots?limit=500');
       if (r.json?.spots) spots = r.json.spots;
       const s = await api('GET', '/api/status');
       status = s.json;
+      const st = await api('GET', '/api/me/station');
+      if (st.status === 200) station = st.json;
     })();
     return openStream((frame) => {
       if (frame.type === 'spot') {
@@ -34,22 +72,30 @@
 
   const freqKHz = (s: any) =>
     (s.dial_frequency_hz + s.delta_frequency_hz) / 1000;
-  const isNew = (s: any) =>
-    ['newDXCC', 'newSlot', 'newBand', 'newMode'].includes(s.alert);
+
+  // The award bucket the server would file this spot under. Mirrors
+  // dxca-core's modes::canonical so the display filter agrees with the
+  // Telegram gate; anything unrecognised is DATA, exactly as there.
+  const PHONE = ['SSB', 'USB', 'LSB', 'AM', 'FM', 'PHONE', 'VOICE', 'DIGITALVOICE', 'C4FM', 'DMR', 'DSTAR'];
+  function modeClass(mode: string | null | undefined): string {
+    const m = (mode ?? '').trim().toUpperCase();
+    if (m === 'CW') return 'CW';
+    return PHONE.includes(m) ? 'PHONE' : 'DATA';
+  }
 
   let sourceNames = $derived(
     Object.keys(status?.spots_per_source ?? {}).sort(),
-  );
-  let bandNames = $derived(
-    [...new Set(spots.map((s) => s.band).filter(Boolean))].sort(),
   );
 
   let visible = $derived.by(() => {
     let rows = spots.filter((s) => {
       if (cqOnly && !s.message?.toUpperCase().startsWith('CQ ')) return false;
-      if (newOnly && !isNew(s)) return false;
       if (sourceFilter.size && !sourceFilter.has(s.source_name)) return false;
       if (bandFilter.size && (!s.band || !bandFilter.has(s.band))) return false;
+      if (modeFilter.size && !modeFilter.has(modeClass(s.mode))) return false;
+      // A level narrowing shows ONLY those levels — picking "New DXCC" means
+      // the feed becomes a New-DXCC feed, not "everything, DXCC highlighted".
+      if (levelFilter.size && !levelFilter.has(s.alert)) return false;
       return true;
     });
     if (hideDupes) {
@@ -95,16 +141,29 @@
   const caret = (key: string) =>
     sortKey === key ? (sortDesc ? '↓' : '↑') : '';
 
-  const alertLabel: Record<string, string> = {
-    newDXCC: 'NEW DXCC', newSlot: 'New Slot', newBand: 'New Band',
-    newMode: 'New Mode', worked: '', none: '',
-  };
-  const rowClass = (s: any) =>
-    s.alert === 'newDXCC' ? 'a-dxcc'
-    : s.alert === 'newSlot' ? 'a-slot'
-    : s.alert === 'newBand' ? 'a-band'
-    : s.alert === 'newMode' ? 'a-mode'
-    : s.is_beacon ? 'beacon' : '';
+  // Both the label and the colour now come from one place: the label from
+  // the server's own AlertLevel::label() via /api/reference, the colour from
+  // app.css's [data-level] table. Adding a ninth level needs no edit here.
+  const flagged = (s: any) => s.alert && s.alert !== 'worked' && s.alert !== 'none';
+
+  // Every narrowing the operator can be holding, including the older
+  // source/CQ ones — the empty state has to account for all of them or it
+  // will blame the wrong control.
+  let narrowed = $derived(
+    levelFilter.size > 0 ||
+      modeFilter.size > 0 ||
+      bandFilter.size > 0 ||
+      sourceFilter.size > 0 ||
+      cqOnly,
+  );
+
+  function clearFilters() {
+    levelFilter = new Set();
+    modeFilter = new Set();
+    bandFilter = new Set();
+    sourceFilter = new Set();
+    cqOnly = false;
+  }
 
   // Node state in the shared status-dot vocabulary: proven = up, connected
   // but nothing proven through it yet = amber, neither = down.
@@ -113,6 +172,47 @@
 </script>
 
 <div class="page feedpage">
+  <!-- The station card: whose log is driving the highlighting, and how far
+       along it is. Worked/confirmed sit side by side because the gap between
+       them IS the thing the ? levels exist to close. -->
+  {#if station}
+    <div class="card station">
+      <div class="ident">
+        <span class="call mono">{station.log_callsign ?? station.callsign}</span>
+        {#if station.display_name}<span class="opname">{station.display_name}</span>{/if}
+        {#if station.log_callsign && station.log_callsign !== station.callsign}
+          <span class="hint">log · signed in as {station.callsign}</span>
+        {/if}
+      </div>
+      {#if station.stats}
+        <dl class="awards">
+          <div>
+            <dt>DXCC</dt>
+            <dd><b>{station.stats.dxcc_worked}</b><span class="sep">/</span><span class="conf">{station.stats.dxcc_confirmed}</span></dd>
+            <dd class="cap">worked / confirmed</dd>
+          </div>
+          <div>
+            <dt>Slots</dt>
+            <dd><b>{station.stats.slots_worked}</b><span class="sep">/</span><span class="conf">{station.stats.slots_confirmed}</span></dd>
+            <dd class="cap">worked / confirmed</dd>
+          </div>
+          {#if station.qso_count}
+            <div>
+              <dt>QSOs</dt>
+              <dd><b>{station.qso_count}</b></dd>
+              <dd class="cap">refreshed {ago(station.last_refresh_unix)} ago</dd>
+            </div>
+          {/if}
+        </dl>
+      {:else}
+        <span class="hint">
+          No log loaded — set your ClubLog credentials in <b>My ClubLog</b> and
+          refresh to get New/? highlighting.
+        </span>
+      {/if}
+    </div>
+  {/if}
+
   {#if status}
     <div class="pills">
       {#each Object.entries(status.spots_per_source ?? {}) as [name, count]}
@@ -143,22 +243,18 @@
         {/each}
       </div>
     </details>
-    <details>
-      <summary class="filter-chip" class:on={bandFilter.size}>
-        Bands {bandFilter.size ? `(${bandFilter.size})` : ''}
-      </summary>
-      <div class="menu">
-        {#each bandNames as band}
-          <label><input type="checkbox" checked={bandFilter.has(band)}
-            onchange={() => (bandFilter = toggle(bandFilter, band))} />{band}</label>
-        {/each}
-      </div>
-    </details>
     <span class="fsep"></span>
-    <label class="flabel"><input type="checkbox" bind:checked={newOnly} />New only</label>
     <label class="flabel"><input type="checkbox" bind:checked={cqOnly} />CQ only</label>
     <label class="flabel"><input type="checkbox" bind:checked={hideDupes} />Hide duplicates</label>
     <span class="count muted">{visible.length} spots</span>
+  </div>
+
+  <!-- The three narrowings, one row each so a long band list wraps on its own
+       line instead of shoving the others around. Remembered per browser. -->
+  <div class="pickers">
+    <ChipGroup label="Alerts" options={levels()} bind:selected={levelFilter} levelKeys />
+    <ChipGroup label="Modes" options={modes()} bind:selected={modeFilter} />
+    <ChipGroup label="Bands" options={bands()} bind:selected={bandFilter} />
   </div>
 
   <div class="card feed">
@@ -180,7 +276,11 @@
         </thead>
         <tbody>
           {#each visible as s}
-            <tr class={rowClass(s)}>
+            <tr
+              class:flagged={flagged(s)}
+              class:beacon={!flagged(s) && s.is_beacon}
+              data-level={flagged(s) ? s.alert : undefined}
+            >
               <td class="mono">{hhmm(s.time_unix)}Z</td>
               <td>{s.source_name}</td>
               <td class="mono call">
@@ -191,12 +291,26 @@
               <td class="mono">{s.snr_db}</td>
               <td>{s.band ?? ''}</td>
               <td>{s.dxcc_name ?? ''}</td>
-              <td class="alert">{alertLabel[s.alert] ?? ''}</td>
+              <td class="alert">{flagged(s) ? levelLabel(s.alert) : ''}</td>
               <td class="muted msg">{s.is_beacon ? '[BEACON] ' : ''}{s.message}</td>
             </tr>
           {/each}
         </tbody>
       </table>
+      <!-- A narrowed feed that shows nothing looks identical to a dead feed.
+           Say which of the two it is, and name the way out. -->
+      {#if visible.length === 0}
+        <p class="empty hint">
+          {#if spots.length === 0}
+            No spots yet — waiting for the first one.
+          {:else if narrowed}
+            None of the {spots.length} spots held match this narrowing.
+            <button class="link" onclick={clearFilters}>Show everything</button>
+          {:else}
+            Nothing to show.
+          {/if}
+        </p>
+      {/if}
     </div>
   </div>
 </div>
@@ -214,6 +328,100 @@
     display: flex;
     flex-wrap: wrap;
     gap: 0.4rem;
+  }
+
+  /* --- Station card --- */
+  .station {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    flex-wrap: wrap;
+    padding: 0.9rem 1.25rem;
+  }
+
+  .ident {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+
+  .station .call {
+    font-size: 1.35rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  .opname {
+    font-size: var(--fs-hint);
+    color: var(--muted);
+  }
+
+  .awards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 2rem;
+    margin: 0;
+  }
+
+  .awards dt {
+    font-size: var(--fs-hint);
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .awards dd {
+    margin: 0.1rem 0 0;
+    font-size: 1.15rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Worked reads as the headline, confirmed as the qualifier under it —
+     the gap between the two is what the ? levels exist to close. */
+  .awards dd b {
+    font-weight: 600;
+  }
+
+  .awards .sep {
+    color: var(--muted);
+    margin: 0 0.2rem;
+    font-weight: 400;
+  }
+
+  .awards .conf {
+    color: var(--ok);
+  }
+
+  .awards dd.cap {
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 0.02em;
+  }
+
+  .pickers {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .empty {
+    margin: 0;
+    padding: 1.5rem 1rem;
+    text-align: center;
+  }
+
+  /* Reads as the sentence's own escape hatch, not as a third button idiom. */
+  .empty .link {
+    border: none;
+    background: transparent;
+    color: var(--accent);
+    font: inherit;
+    padding: 0 0.15rem;
+    cursor: pointer;
+  }
+
+  .empty .link:hover {
+    text-decoration: underline;
   }
 
   /* One line: the two subset menus, then the boolean narrowings, then the
@@ -368,15 +576,11 @@
     font-weight: 600;
   }
 
-  /* Level colour and row wash come from the same `--alert-*` token, so the
-     cell and its tint can never disagree. */
-  tr.a-dxcc td { background: var(--alert-dxcc-bg); }
-  tr.a-dxcc .alert { color: var(--alert-dxcc); }
-  tr.a-slot td { background: var(--alert-slot-bg); }
-  tr.a-slot .alert { color: var(--alert-slot); }
-  tr.a-band td { background: var(--alert-band-bg); }
-  tr.a-band .alert { color: var(--alert-band); }
-  tr.a-mode td { background: var(--alert-mode-bg); }
-  tr.a-mode .alert { color: var(--alert-mode); }
+  /* Eight levels, two rules. `data-level` on the row resolves `--lvl` and
+     `--lvl-bg` from app.css's level table, and the cell and the wash both
+     read them — so they can never disagree, and a new level needs no rule
+     here at all. */
+  tr.flagged td { background: var(--lvl-bg); }
+  tr.flagged .alert { color: var(--lvl); }
   tr.beacon td { color: var(--muted); }
 </style>

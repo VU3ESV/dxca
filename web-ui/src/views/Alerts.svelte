@@ -1,20 +1,56 @@
 <script lang="ts">
-  // My alerts (plan §8 page 5): Telegram setup + test, cooldown, levels.
+  // My alerts (plan §8 page 5): Telegram setup + test, cooldown, and the
+  // Telegram-side narrowing — which of the eight levels ping, and on which
+  // bands and mode classes.
+  //
+  // This narrowing is INDEPENDENT of the Spots screen's: the point is to be
+  // able to watch the whole band plan on screen while only being pinged for
+  // one slice of it. The two controls look alike on purpose; the wording
+  // ("ping me") is what says which one you are editing.
   import { api } from '../lib/api';
   import { onMount } from 'svelte';
+  import ChipGroup from '../lib/ChipGroup.svelte';
+  import { loadReference, bands, modes, levels } from '../lib/reference.svelte';
+
+  // Level key → the notify_* field that gates it. The server owns the ladder
+  // and its order (AlertLevel::FLAGGABLE); this only maps key → field name.
+  const FIELD: Record<string, string> = {
+    newDXCC: 'notify_new_dxcc',
+    newBand: 'notify_new_band',
+    newMode: 'notify_new_mode',
+    newSlot: 'notify_new_slot',
+    unconfDXCC: 'notify_unconf_dxcc',
+    unconfBand: 'notify_unconf_band',
+    unconfMode: 'notify_unconf_mode',
+    unconfSlot: 'notify_unconf_slot',
+  };
 
   let cfg = $state<any>({
     telegram_enabled: false, telegram_bot_token: '', telegram_chat_id: '',
-    cooldown_minutes: 15, notify_new_dxcc: true, notify_new_slot: true,
+    cooldown_minutes: 15,
+    notify_new_dxcc: true, notify_new_slot: true,
     notify_new_band: true, notify_new_mode: true,
+    notify_unconf_dxcc: false, notify_unconf_slot: false,
+    notify_unconf_band: false, notify_unconf_mode: false,
+    notify_bands: [], notify_modes: [],
   });
   let message = $state('');
   let error = $state('');
   let busy = $state(false);
 
+  // The two list fields ride as Sets so ChipGroup can bind them, and are
+  // written back as arrays on save.
+  let bandSel = $state<Set<string>>(new Set());
+  let modeSel = $state<Set<string>>(new Set());
+
   onMount(async () => {
+    await loadReference();
     const r = await api('GET', '/api/config/me/notifications');
-    if (r.status === 200 && r.json) cfg = { ...cfg, ...r.json };
+    if (r.status === 200 && r.json) {
+      cfg = { ...cfg, ...r.json };
+      bandSel = new Set(r.json.notify_bands ?? []);
+      modeSel = new Set(r.json.notify_modes ?? []);
+    }
   });
 
   async function save() {
@@ -22,6 +58,8 @@
     const r = await api('PUT', '/api/config/me/notifications', {
       ...cfg,
       cooldown_minutes: Number(cfg.cooldown_minutes) || 15,
+      notify_bands: [...bandSel],
+      notify_modes: [...modeSel],
     });
     busy = false;
     if (r.status === 200) message = 'Saved.';
@@ -35,6 +73,8 @@
     if (r.status === 200) message = 'Test message sent — check Telegram.';
     else error = r.json?.error ?? `HTTP ${r.status}`;
   }
+
+  let anyLevel = $derived(levels().some((l) => cfg[FIELD[l.key]]));
 </script>
 
 <div class="page narrow">
@@ -52,12 +92,27 @@
       <input class="short" type="number" min="5" max="60" bind:value={cfg.cooldown_minutes} />
     </div>
 
-    <h2>Notify on</h2>
-    <div class="check-list">
-      <label><input type="checkbox" bind:checked={cfg.notify_new_dxcc} />New DXCC</label>
-      <label><input type="checkbox" bind:checked={cfg.notify_new_slot} />New slot</label>
-      <label><input type="checkbox" bind:checked={cfg.notify_new_band} />New band</label>
-      <label><input type="checkbox" bind:checked={cfg.notify_new_mode} />New mode</label>
+    <h2>Ping me for</h2>
+    <p class="hint sub">
+      A level only pings if <b>My ClubLog</b> is allowed to flag it in the
+      first place — this narrows, it never widens.
+    </p>
+    <div class="levels">
+      {#each levels() as l (l.key)}
+        <label data-level={l.key}>
+          <input type="checkbox" bind:checked={cfg[FIELD[l.key]]} />
+          <span class="level-dot"></span>{l.label}
+        </label>
+      {/each}
+    </div>
+    {#if cfg.telegram_enabled && !anyLevel}
+      <p class="warn">No levels ticked — Telegram is on but nothing will ever ping.</p>
+    {/if}
+
+    <h2>Only on</h2>
+    <div class="pickers">
+      <ChipGroup label="Modes" options={modes()} bind:selected={modeSel} />
+      <ChipGroup label="Bands" options={bands()} bind:selected={bandSel} />
     </div>
 
     <div class="actions">
@@ -70,15 +125,53 @@
 </div>
 
 <style>
-  /* The master switch stands ahead of the fields it governs, so it sits above
-     the label grid rather than inside it. */
   .enable {
     margin-bottom: 0.9rem;
   }
 
-  /* A cooldown is two digits — a full-width field would promise otherwise. */
   .short {
     width: 6rem;
+  }
+
+  .sub {
+    margin: -0.35rem 0 0.7rem;
+    line-height: 1.45;
+  }
+
+  /* Column-major over four rows, so FLAGGABLE order lands as pairs — New
+     DXCC beside ? DXCC, and so on. Same shape as My ClubLog's, because the
+     two lists ask the same question about the same eight levels. */
+  .levels {
+    display: grid;
+    grid-auto-flow: column;
+    grid-template-rows: repeat(4, auto);
+    grid-template-columns: repeat(2, minmax(8.5rem, 1fr));
+    gap: 0.35rem 1rem;
+    max-width: 24rem;
+  }
+
+  .levels label {
+    gap: 0.45rem;
+  }
+
+  @media (max-width: 30rem) {
+    .levels {
+      grid-auto-flow: row;
+      grid-template-columns: 1fr;
+      grid-template-rows: none;
+    }
+  }
+
+  .pickers {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .warn {
+    color: var(--warn);
+    font-size: var(--fs-hint);
+    margin: 0.5rem 0 0;
   }
 
   p {
