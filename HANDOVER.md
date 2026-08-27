@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.1.1** IN PRODUCTION on noderedpi4 (deployed 2026-08-28 01:10 IST) — the 2.1 wave below, plus the 2.1.1 fixes: spot-mode inference, account edit/delete, and an installer that checks its prerequisites and verifies its own result. First third-party install (VU2WJ) is live.
+**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.1.1** IN PRODUCTION on **both** Pis — noderedpi4 (redeployed 02:46 IST) and the third-party `adersh@192.168.1.151` (02:58 IST), byte-identical builds, each verified by the installer's own serving check. Beyond the 2.1 wave below, 2.1.1 carries: spot-mode inference (Region 3, *marked* as inferred) and the end of the silent-DATA default; a working CQ-only filter; account edit/delete; a server-wide call **blacklist**; **MQTT publish** for panadapter overlays; **My ClubLog statistics** (per-band / per-mode entity breakdowns); an **alerts-sent history** including failures; a boxed status bar and chip-row Sources filter; and an installer that checks rustc and Node up front, always rebuilds in a source tree, warns when the checkout is behind, and verifies the result is genuinely serving. Note the tag `v2.1.1` predates most of that — the version string did not move again, so compare **binary hashes**, not `/api/status`, when checking whether a host is current. VU2WJ's Pi is the one install NOT updated.
 **Repo:** https://github.com/vu2cpl/dxca (**public** — verified via
 `gh repo view` 2026-08-27; the doc said "private" until then, and the
 "Open items" release checklist still lists the public flip as pending)
@@ -470,23 +470,39 @@ been shown to work is the **consumer** side, from the topics to a FlexRadio
 / Aether display. Deferred deliberately; not a DXCA bug as far as anything
 observed so far.
 
-Where to start when picking it up — cheapest checks first:
+**Narrowed the same evening — the broker side is RULED OUT.** A
+`mosquitto_sub -t 'shack/dxca/spots/#'` as `svc` shows both topics carrying
+live traffic, correctly formed. So publishing, authentication and the ACL
+are all confirmed good, and the only missing piece is that **nothing
+subscribes**: there is no Node-RED flow yet bridging
+`shack/dxca/spots/json` to whatever Flex or Aether consume, and neither is
+known to read MQTT natively. That bridge was always separate work, not part
+of the DXCA feature — a point that should have been made plainer when MQTT
+shipped.
 
-```sh
-# 1. Is anything actually on the topics? (needs mosquitto-clients)
-mosquitto_sub -h 192.168.1.169 -p 1883 -u svc -P '<pw>' -t 'shack/dxca/spots/#' -v
+That capture also validated three of the day's spot fixes on real traffic,
+which is worth keeping:
 
-# 2. What DXCA thinks it has sent, per destination:
-#    System tab → MQTT destinations → "published N, failed N"
-```
+- `RI1FJL` 21270.0 from **DB0SUE**, comment `QSX 21286.10 UP 16.10 LR40` —
+  no mode word at all → `"mode":"SSB","mode_inferred":true`. The Region 3
+  15m phone segment, honestly labelled. Before, this was blank and scored
+  DATA.
+- The **same station** from **N2WQ-2**, comment starting `USB …` →
+  `"mode":"USB","mode_inferred":false`. The widened mode table; `USB` was
+  absent from the 1.x list of ten.
+- `4X6TU` **14100.0** from VU2OY, `9 dB 20 WPM` → `"mode":"CW"`, not
+  inferred. That is the parser's WPM→CW read that `synthetic_spot` used to
+  throw away — and 14.100 sits in the beacon window where band-plan
+  inference deliberately declines, so without it that spot would have had
+  no mode at all.
 
-If `published` climbs and `mosquitto_sub` sees nothing, it is the broker
-ACL for `svc` on `shack/dxca/#` (auth has been required since 2026-08-21 —
-see `vu2cpl-shack/MQTT_AUTH.md`). If both show traffic, the gap is entirely
-downstream: there is **no Node-RED flow yet** bridging `shack/dxca/spots/json`
-to whatever Flex or Aether consume, and neither is known to read MQTT
-natively — that bridge was always going to be a separate piece of work.
 Topic shapes and payloads are in the "MQTT destinations" section below.
+
+**Credential note (2026-08-28):** the `svc` broker password was pasted into
+a Claude session transcript while debugging this. Rotate it in Mosquitto and
+update the DXCA MQTT destination plus the other `svc` publishers
+(`monitor.sh`, chrony, ubersdr — see `vu2cpl-shack/MQTT_AUTH.md`) if that
+transcript is ever shared.
 
 Nothing operational — **v2.1.0 is fully live**: ClubLog and Telegram are
 configured and working on the Pi (confirmed by Manoj 2026-08-27), so
