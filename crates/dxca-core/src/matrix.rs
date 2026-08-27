@@ -91,6 +91,12 @@ impl LogMatrix {
     /// **at least one** confirmed slot — the DXCC-award rule — not entities
     /// whose every slot is confirmed.
     pub fn stats(&self) -> MatrixStats {
+        let challenge = |bands: &HashSet<String>| {
+            bands
+                .iter()
+                .filter(|b| crate::bands::is_challenge_band(b))
+                .count()
+        };
         MatrixStats {
             dxcc_worked: self.by_dxcc.len(),
             dxcc_confirmed: self
@@ -100,6 +106,12 @@ impl LogMatrix {
                 .count(),
             slots_worked: self.by_dxcc.values().map(|s| s.slots.len()).sum(),
             slots_confirmed: self.by_dxcc.values().map(|s| s.confirmed_slots.len()).sum(),
+            challenge_worked: self.by_dxcc.values().map(|s| challenge(&s.bands)).sum(),
+            challenge_confirmed: self
+                .by_dxcc
+                .values()
+                .map(|s| challenge(&s.confirmed_bands))
+                .sum(),
         }
     }
 }
@@ -109,8 +121,19 @@ impl LogMatrix {
 pub struct MatrixStats {
     pub dxcc_worked: usize,
     pub dxcc_confirmed: usize,
+    /// Band × MODE combinations — this crate's "slot".
     pub slots_worked: usize,
     pub slots_confirmed: usize,
+    /// **DXCC Challenge** points: entity × band over the ten Challenge bands,
+    /// mode-agnostic. Distinct from `slots_*` in both respects — a station
+    /// worked on 20M in CW and FT8 is two slots but one Challenge point, and
+    /// a 60M contact is a slot but never a Challenge point.
+    ///
+    /// The award counts `challenge_confirmed` (1000 points to claim,
+    /// endorsements every 500). `challenge_worked` is carried alongside it
+    /// because the gap between the two is the QSL chase.
+    pub challenge_worked: usize,
+    pub challenge_confirmed: usize,
 }
 
 #[cfg(test)]
@@ -127,6 +150,27 @@ mod tests {
         assert_eq!(s.confirmed_slots, HashSet::from(["20M-CW".into()]));
         assert!(m.worked_calls.contains("vu2abc"));
         assert_eq!(m.total_dxcc_count(), 1);
+    }
+
+    #[test]
+    fn challenge_counts_entity_bands_not_slots() {
+        let mut m = LogMatrix::default();
+        // India on 20M in two modes: two slots, but ONE Challenge point.
+        m.record(324, "20M", "DATA", "VU2AAA", true);
+        m.record(324, "20M", "CW", "VU2BBB", true);
+        // A second band adds a second point.
+        m.record(324, "40M", "CW", "VU2CCC", true);
+        // 60M is a real slot and a real band — and worth nothing here.
+        m.record(324, "60M", "PHONE", "VU2DDD", true);
+        // Worked but unconfirmed: counts as worked, not as a point.
+        m.record(291, "15M", "CW", "K1AAA", false);
+
+        let s = m.stats();
+        assert_eq!(s.slots_confirmed, 4, "20M×2 + 40M + 60M");
+        assert_eq!(s.challenge_confirmed, 2, "20M + 40M; 60M excluded");
+        assert_eq!(s.challenge_worked, 3, "the above plus K1AAA on 15M");
+        assert_eq!(s.dxcc_worked, 2);
+        assert_eq!(s.dxcc_confirmed, 1, "K1AAA has nothing confirmed");
     }
 
     #[test]

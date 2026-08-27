@@ -42,6 +42,27 @@ pub const SELECTABLE_BANDS: &[&str] = &[
     "6M", "4M", "2M", "1.25M", "70CM",
 ];
 
+/// The ten bands that score for the **ARRL DXCC Challenge**: one point per
+/// entity per band, confirmed contacts only, 1945 onward.
+///
+/// The trap is **60M, which does not count** — it is in `SELECTABLE_BANDS`
+/// and in the resolver, and an operator filtering the spots screen by band
+/// sees it there, but a 60m QSL adds nothing to the Challenge total. The
+/// three WARC bands (30/17/12) DO count, which is the other half of the same
+/// confusion. Nothing above 6M scores either.
+///
+/// Mode is irrelevant here — that is what separates a Challenge point from
+/// this crate's "slot", which is band × mode.
+#[rustfmt::skip]
+pub const CHALLENGE_BANDS: &[&str] = &[
+    "160M", "80M", "40M", "30M", "20M", "17M", "15M", "12M", "10M", "6M",
+];
+
+/// Does a band score for the DXCC Challenge?
+pub fn is_challenge_band(band: &str) -> bool {
+    CHALLENGE_BANDS.contains(&band)
+}
+
 pub fn band_from_mhz(freq: f64) -> Option<&'static str> {
     BANDS
         .iter()
@@ -75,6 +96,26 @@ mod tests {
         }
         assert_eq!(SELECTABLE_BANDS.first(), Some(&"160M"));
         assert_eq!(SELECTABLE_BANDS.last(), Some(&"70CM"));
+    }
+
+    #[test]
+    fn challenge_bands_are_the_ten_that_score() {
+        assert_eq!(CHALLENGE_BANDS.len(), 10);
+        for name in CHALLENGE_BANDS {
+            assert!(
+                BANDS.iter().any(|b| b.name == *name),
+                "{name} scores for the Challenge but the resolver never emits it"
+            );
+        }
+        // WARC counts...
+        for b in ["30M", "17M", "12M"] {
+            assert!(is_challenge_band(b), "{b} (WARC) must count");
+        }
+        // ...60M does not, despite being a filterable band, and neither does
+        // anything above 6M or below 160M.
+        for b in ["60M", "4M", "2M", "1.25M", "70CM", "630M", "2190M"] {
+            assert!(!is_challenge_band(b), "{b} must NOT count");
+        }
     }
 
     #[test]

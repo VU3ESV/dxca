@@ -26,7 +26,8 @@ live shack aggregator with a real web GUI. Decoder UDP sources and five
 DX-cluster telnet nodes (Meridian-lifted client with the 1.x
 honest-status graft) feed one pipeline into the telnet server, the RUMlog
 passthrough, and a WebSocket-streamed spots dashboard — station card with
-worked/confirmed DXCC and slot totals, status pills, live sortable table,
+worked/confirmed DXCC, DXCC Challenge and slot totals, status pills,
+live sortable table,
 per-user alert row tints, LoTW markers. Spots are flagged across **eight
 alert levels** — New DXCC/Band/Mode/Slot for never worked, and ? DXCC/Band/
 Mode/Slot for worked-but-unconfirmed — each independently switchable, and

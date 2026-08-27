@@ -424,6 +424,28 @@ Remaining before any public release: x86-64-Linux (+ optional Windows)
 release artifacts, a Windows build test, then the repo-public flip +
 vu2cpl.com card with the VU3ESV credit line.
 
+## DXCC Challenge points (2026-08-27)
+
+On the Spots station card, beside DXCC. **A Challenge point is entity ×
+band, mode-agnostic, over ten bands only** — 160/80/40/30/20/17/15/12/10/6.
+
+Two things to keep straight, because both are easy to get wrong later:
+
+- **60M does NOT score.** It is in `SELECTABLE_BANDS`, the resolver emits
+  it, and the spots screen offers it as a filter — but a 60m QSL adds
+  nothing to the Challenge total. The WARC bands (30/17/12) *do* score,
+  which is the other half of the same confusion.
+- **Challenge is not this crate's "slot".** A slot is band × MODE, so a
+  station worked on 20M in both CW and FT8 is two slots but one Challenge
+  point. The card shows both totals, side by side, for exactly that reason.
+
+`bands::CHALLENGE_BANDS` / `is_challenge_band()`, summed in
+`LogMatrix::stats()` into `challenge_worked` / `challenge_confirmed`. The
+award counts the confirmed figure (1000 to claim, endorsements every 500);
+worked is carried alongside because the gap is the QSL chase. The unit test
+`challenge_counts_entity_bands_not_slots` pins the 60m exclusion and the
+one-point-per-band rule together.
+
 ## Automatic ClubLog / LoTW refresh (2026-08-27)
 
 Both were manual-only until now — one button each — which on a 24/7 box
