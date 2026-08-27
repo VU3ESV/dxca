@@ -878,6 +878,35 @@ and not worth failing an install over.
 Tested against stub `node` binaries at 16 / 18 / 19 / 20 / 21 / 22 / 24 / 26
 — accepted, rejected, and the `--stub-ui` skip all behave.
 
+## System-tab editors dragged the page sideways (fixed 2026-08-28)
+
+Reported against the new MQTT card. Two faults, one visual and one that
+looked like a data problem.
+
+**The row is eleven columns** — name, broker, port, user, password, base
+topic, client id, sources CSV, plus two checkboxes and the delete — which at
+the editor's input widths comes to roughly **77rem (~1230px)**. Wider than a
+1280px laptop, so the whole page scrolled horizontally and the nav slid off
+the left. Every editor table is now wrapped in `.editor-scroll`
+(`overflow-x: auto`), so a wide row scrolls **inside its card** and the page
+never does. Measured after the fix at a 1350px viewport: page
+`scrollWidth == clientWidth`, table 1240px inside a 974px wrapper that
+scrolls.
+
+**"published 0, failed 0" never moved.** The counters were only fetched on
+mount and after a save, so they sat at zero while spots were in fact being
+published, until a reload. They are polled on the same 5 s tick as the
+server status now — via a **stats-only** `loadMqttStats()`, deliberately
+separate from `loadMqtt()`: the latter replaces the `mqtt` array, which is
+bound to the inputs, so polling it would have wiped whatever the operator
+was halfway through typing.
+
+Gotcha for the next person doing a bulk edit here: a `perl -0pi` replacing
+`      </table>` also matched the **refdata** and **nodes-live** tables,
+which are not editors, and produced two stray `</div>`s. The Svelte compiler
+caught both. Wrapping by opening tag is safe; closing tags at a shared
+indentation are not.
+
 ## MQTT destinations (2026-08-28)
 
 Requested as "add an MQTT send option to destinations like FlexRadio or

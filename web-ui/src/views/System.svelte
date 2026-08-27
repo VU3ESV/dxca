@@ -26,7 +26,13 @@
     loadStatus();
     loadConfig();
     loadMqtt();
-    const t = setInterval(loadStatus, 5000);
+    // MQTT counters are polled with the rest of the status, not only on save
+    // — otherwise "published 0, failed 0" sits there until a page reload
+    // while spots are in fact flowing.
+    const t = setInterval(() => {
+      loadStatus();
+      loadMqttStats();
+    }, 5000);
     return () => clearInterval(t);
   });
 
@@ -99,6 +105,15 @@
       mqtt = r.json.destinations ?? [];
       mqttStats = r.json;
     }
+  }
+
+  /// Counters only. Deliberately does NOT touch `mqtt`: that array is bound
+  /// to the inputs, so refreshing it on a timer would wipe whatever the
+  /// operator was halfway through typing.
+  async function loadMqttStats() {
+    if (!isAdmin) return;
+    const r = await api('GET', '/api/mqtt');
+    if (r.status === 200) mqttStats = r.json;
   }
 
   async function saveMqtt() {
@@ -241,6 +256,7 @@
   {#if isAdmin && cfg}
     <div class="card">
       <h2>UDP sources</h2>
+      <div class="editor-scroll">
       <table class="editor">
         <thead><tr><th>Name</th><th>Port</th><th>On</th><th></th></tr></thead>
         <tbody>
@@ -254,11 +270,13 @@
           {/each}
         </tbody>
       </table>
+      </div>
       <div class="actions"><button onclick={addSource}>+ Add source</button></div>
     </div>
 
     <div class="card">
       <h2>DX-cluster nodes — config</h2>
+      <div class="editor-scroll">
       <table class="editor">
         <thead><tr><th>Name</th><th>Host</th><th>Port</th><th>Login</th><th>Password</th><th>On</th><th></th></tr></thead>
         <tbody>
@@ -275,11 +293,13 @@
           {/each}
         </tbody>
       </table>
+      </div>
       <div class="actions"><button onclick={addNode}>+ Add node</button></div>
     </div>
 
     <div class="card">
       <h2>Broadcast destinations</h2>
+      <div class="editor-scroll">
       <table class="editor">
         <thead><tr><th>Name</th><th>IP</th><th>Port</th><th>Format</th><th>Sources (CSV, empty = all)</th><th>Unf</th><th>On</th><th></th></tr></thead>
         <tbody>
@@ -310,6 +330,7 @@
           {/each}
         </tbody>
       </table>
+      </div>
       <div class="actions"><button onclick={addDest}>+ Add destination</button></div>
     </div>
 
@@ -318,6 +339,7 @@
          broker password does not belong in a 0644 file. -->
     <div class="card">
       <h2>MQTT destinations</h2>
+      <div class="editor-scroll">
       <table class="editor">
         <thead>
           <tr>
@@ -351,6 +373,7 @@
           {/each}
         </tbody>
       </table>
+      </div>
       <div class="actions">
         <button onclick={addMqtt}>+ Add MQTT destination</button>
         <button class="primary" onclick={saveMqtt} disabled={mqttBusy}>Apply &amp; save</button>
@@ -431,6 +454,14 @@
 
   /* Sized to its fields, not to the page: at `width: 100%` the table hands
      all the slack to the first column and a source name gets a 30rem box. */
+  /* An editor row wider than the window scrolls inside its own card instead
+     of dragging the whole page sideways. The MQTT row is eleven columns —
+     broker, port, user, password, topic, client id, sources — and comes to
+     roughly 77rem, which overflows a 1280px laptop outright. */
+  .editor-scroll {
+    overflow-x: auto;
+  }
+
   .editor {
     width: auto;
   }
