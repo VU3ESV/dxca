@@ -739,6 +739,19 @@ with the right hint, `--stub-ui` proceeds, and the branch picks rebuild /
 prebuilt / die for a clone-with-stale-binary, a deploy bundle, and an empty
 directory respectively.
 
+**Follow-up — never suggest `apt install nodejs npm`.** The first version of
+that hard-stop message did, and on VU2WJ's Pi it failed outright: Node there
+came from **NodeSource** (22.23.2), whose `nodejs` package provides its own
+npm and declares `Conflicts: npm`, so apt refused with ~30 unsatisfiable
+`node-*` dependencies. The fix on that box was simply `sudo npm install -g
+pnpm` — npm was already present the whole time.
+
+`build_web` now prints the command that fits the box it is running on:
+npm present → `npm install -g pnpm`; only corepack → `corepack enable
+pnpm`; macOS → `brew install node pnpm`; nothing → `apt install -y nodejs`
+(**without** `npm`) then npm's own pnpm. Tested against stub PATHs for all
+four shapes.
+
 ## The rustc floor is 1.88, and install.sh now enforces it (2026-08-27)
 
 A third-party install on VU2WJ's Pi died at `cargo build` with *"rustc

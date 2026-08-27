@@ -85,12 +85,29 @@ build_web() {
   fi
   say "pnpm not found, so the dashboard cannot be built. The binary would"
   say "still run, serving a placeholder page instead of the web GUI — which"
-  say "for an installer is a failure, not a warning. Install Node >= 20:"
-  if [ "$PLATFORM" = macos ]; then
+  say "for an installer is a failure, not a warning."
+  say ""
+  # Print the command that fits THIS box. The obvious one-liner
+  # `apt install -y nodejs npm` is wrong wherever Node came from NodeSource:
+  # that nodejs package provides its own npm and declares Conflicts: npm, so
+  # apt refuses with a wall of unsatisfiable node-* dependencies. Seen on
+  # VU2WJ's Pi (Trixie + nodesource 22.23.2). Use what is already installed.
+  if command -v npm >/dev/null 2>&1; then
+    say "Node $(node --version 2>/dev/null || echo '?') and npm are already here, so:"
+    say "  sudo npm install -g pnpm"
+  elif command -v corepack >/dev/null 2>&1; then
+    say "Node ships corepack, so:"
+    say "  sudo corepack enable pnpm"
+  elif [ "$PLATFORM" = macos ]; then
+    say "Install Node >= 20 and pnpm:"
     say "  brew install node pnpm"
   else
-    say "  sudo apt install -y nodejs npm && sudo npm install -g pnpm"
+    say "Install Node >= 20, then pnpm with the npm it brings:"
+    say "  sudo apt install -y nodejs      # NOT 'npm' — nodejs provides it,"
+    say "                                  # and NodeSource's conflicts with it"
+    say "  sudo npm install -g pnpm"
   fi
+  say ""
   die "then re-run, or pass --stub-ui to accept the placeholder"
 }
 
