@@ -348,6 +348,107 @@ impl Db {
             .map_err(db_err)
     }
 
+    pub fn user_by_id(&self, id: i64) -> DbResult<Option<User>> {
+        self.conn
+            .lock()
+            .unwrap()
+            .query_row(
+                "SELECT id, callsign, display_name, role FROM users WHERE id = ?1",
+                params![id],
+                |r| {
+                    Ok(User {
+                        id: r.get(0)?,
+                        callsign: r.get(1)?,
+                        display_name: r.get(2)?,
+                        role: r.get(3)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(db_err)
+    }
+
+    /// How many accounts hold the admin role. The API uses this to refuse
+    /// the two edits that cannot be undone from the web UI: removing or
+    /// demoting the last admin while other accounts still exist.
+    pub fn admin_count(&self) -> DbResult<i64> {
+        self.conn
+            .lock()
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM users WHERE role = 'admin'", [], |r| {
+                r.get(0)
+            })
+            .map_err(db_err)
+    }
+
+    /// Delete an account. Its sessions, per-user config and worked matrix go
+    /// with it through `ON DELETE CASCADE` — which is live because `open`
+    /// turns `PRAGMA foreign_keys` on. (Hand-editing the file with the
+    /// sqlite3 CLI does NOT: that defaults to off and orphans the children.)
+    /// Returns false when no such id.
+    pub fn delete_user(&self, id: i64) -> DbResult<bool> {
+        let n = self
+            .conn
+            .lock()
+            .unwrap()
+            .execute("DELETE FROM users WHERE id = ?1", params![id])
+            .map_err(db_err)?;
+        Ok(n > 0)
+    }
+
+    /// Patch the mutable identity fields; `None` leaves one alone. Callsign
+    /// is uppercased like `create_user` does, so a rename cannot produce a
+    /// row that `user_by_callsign` (which uppercases its argument) can never
+    /// match — that would be an account nobody could log into.
+    ///
+    /// Renaming is safe for the rest of the schema: user_configs, matrices
+    /// and sessions all key on user_id, and ClubLogUserConfig carries its
+    /// own callsign for the ADIF download, independent of the login name.
+    pub fn update_user(
+        &self,
+        id: i64,
+        callsign: Option<&str>,
+        display_name: Option<&str>,
+        role: Option<&str>,
+    ) -> DbResult<bool> {
+        let conn = self.conn.lock().unwrap();
+        let mut changed = false;
+        if let Some(c) = callsign {
+            conn.execute(
+                "UPDATE users SET callsign = ?2 WHERE id = ?1",
+                params![id, c.trim().to_uppercase()],
+            )
+            .map_err(|e| format!("rename user: {e}"))?;
+            changed = true;
+        }
+        if let Some(d) = display_name {
+            conn.execute(
+                "UPDATE users SET display_name = ?2 WHERE id = ?1",
+                params![id, d],
+            )
+            .map_err(db_err)?;
+            changed = true;
+        }
+        if let Some(r) = role {
+            conn.execute("UPDATE users SET role = ?2 WHERE id = ?1", params![id, r])
+                .map_err(db_err)?;
+            changed = true;
+        }
+        Ok(changed)
+    }
+
+    pub fn set_pass_hash(&self, id: i64, hash: &str) -> DbResult<()> {
+        self.conn
+            .lock()
+            .unwrap()
+            .execute(
+                "UPDATE users SET pass_hash = ?2 WHERE id = ?1",
+                params![id, hash],
+            )
+            .map_err(db_err)?;
+        Ok(())
+    }
+
     // --- sessions ---------------------------------------------------------
 
     pub fn create_session(&self, token_hash: &str, user_id: i64, ttl_secs: i64) -> DbResult<()> {

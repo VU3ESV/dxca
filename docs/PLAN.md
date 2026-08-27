@@ -204,7 +204,8 @@ GET/PUT /api/config/me/clublog          # per-user
 GET/PUT /api/config/me/notifications
 POST /api/clublog/refresh               # per-user log re-download
 GET  /api/status                        # nodes, sources, destinations, uptime
-GET/POST/DELETE /api/users              # admin
+GET/POST /api/users                     # admin: list, create
+PATCH/DELETE /api/users/{id}            # admin: edit (any subset), remove
 GET  /                                  # embedded Svelte UI
 ```
 
@@ -227,7 +228,9 @@ GET  /                                  # embedded Svelte UI
 4. **My ClubLog** — credentials, refresh, matrix summary (QSO count, last
    refresh), alert toggles.
 5. **My alerts** — Telegram setup + test button, cooldown, levels.
-6. **Users** (admin) — add/remove, reset password, role.
+6. **Users** (admin) — add/remove, reset password, role. Removal goes down
+   to zero accounts (which re-arms the setup page); the last *admin* cannot
+   be removed or demoted while other accounts remain.
 
 ## 9. Deployment (Pi-first)
 

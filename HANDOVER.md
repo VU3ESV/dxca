@@ -700,6 +700,42 @@ Note for triage: `/api/spots` fills `band` / `dxcc_name` / `alert` /
 — an unauthenticated `curl` shows them null and that is by design, not a
 classification bug.
 
+## Account editing and deletion (2026-08-27)
+
+Accounts used to be **create-only**: `/api/users` was `get(list).post(create)`
+and the db layer had no update or delete at all, so fixing a typo'd callsign
+or removing a test account meant stopping the service and editing SQLite by
+hand — with `PRAGMA foreign_keys = ON` typed manually, because the CLI
+defaults it off and would otherwise orphan the user's config and matrix.
+
+Now `PATCH /api/users/{id}` and `DELETE /api/users/{id}`, both admin-gated,
+with Edit/Delete buttons per row in the Users tab. PATCH takes any subset of
+callsign / display_name / role / password; absent fields are left alone, so
+the UI sends only what changed and an untouched password box is not an empty
+string. Callsign is uppercased on write exactly as `create_user` does —
+otherwise a lowercase rename would produce a row that `user_by_callsign`
+(which uppercases its argument) could never match, i.e. an account nobody
+can log into. A rename onto a taken callsign is checked *before* any write,
+so the operator sees "already exists" rather than a raw UNIQUE-constraint
+string.
+
+**The guard rule, and why it is asymmetric.** Deleting the last account is
+ALLOWED — the roster goes to zero, `/api/setup` re-arms, and that is the
+intended way to start a server over. What is refused is removing *or
+demoting* the last **admin** while other accounts remain: `/api/setup` only
+opens at zero accounts, so that state leaves users nobody can administer and
+no route back through the web UI at all. Demotion is refused regardless of
+the account count, since unlike deletion it can never reach zero.
+
+Deleting your own account is allowed and is not a special case — sessions
+cascade with the row, so the cookie dies with it; the UI reloads into the
+login (or setup) card. `tests/user_admin.rs` walks the whole thing end to
+end, including the dead-cookie assertion after an admin deletes themselves.
+
+Not done: no audit trail of who changed what, and no confirmation step
+beyond the browser `confirm()`. Both were judged out of proportion to a
+shack-scale roster of two or three accounts.
+
 ## install.sh did not install the web GUI (fixed 2026-08-27)
 
 Two separate holes, both ending in the same symptom: the service comes up,

@@ -8,10 +8,10 @@ use crate::db::{ClubLogUserConfig, NotifyUserConfig, User};
 use crate::nodes::NodeManager;
 use crate::pipeline::{PipelineInput, PipelineState};
 use crate::users::UserService;
-use axum::extract::{Query, State};
+use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{get, patch, post};
 use axum::{Json, Router};
 use serde::Deserialize;
 use std::path::PathBuf;
@@ -52,6 +52,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/lotw/refresh", post(lotw_refresh))
         .route("/api/cty/refresh", post(cty_refresh))
         .route("/api/users", get(list_users).post(create_user))
+        .route("/api/users/{id}", patch(update_user).delete(delete_user))
         .with_state(state)
         .fallback(crate::assets::serve)
 }
@@ -257,6 +258,173 @@ struct CreateUserReq {
     display_name: String,
     #[serde(default)]
     role: String,
+}
+
+/// Every field optional — an absent one is left alone, so the UI can send
+/// just the password or just the role without restating the whole account.
+#[derive(Deserialize)]
+struct UpdateUserReq {
+    #[serde(default)]
+    callsign: Option<String>,
+    #[serde(default)]
+    display_name: Option<String>,
+    #[serde(default)]
+    role: Option<String>,
+    #[serde(default)]
+    password: Option<String>,
+}
+
+/// Admin edits an account: callsign, display name, role, password — any
+/// subset. Deliberately reachable for every account including the caller's
+/// own, because an admin renaming or re-passwording themselves is ordinary.
+async fn update_user(
+    State(app): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<i64>,
+    Json(req): Json<UpdateUserReq>,
+) -> Response {
+    if let Err(resp) = require_admin(&app, &headers) {
+        return resp;
+    }
+    let target = match app.users.db.user_by_id(id) {
+        Ok(Some(u)) => u,
+        Ok(None) => return err(StatusCode::NOT_FOUND, "no such user"),
+        Err(e) => return err(StatusCode::INTERNAL_SERVER_ERROR, e),
+    };
+
+    // Role must be one of the two the rest of the code understands; a typo'd
+    // "Admin" would silently create an account that is neither.
+    let role = match req.role.as_deref().map(str::trim) {
+        None => None,
+        Some("admin") => Some("admin"),
+        Some("user") => Some("user"),
+        Some(other) => {
+            return err(
+                StatusCode::BAD_REQUEST,
+                format!("role must be 'user' or 'admin', not '{other}'"),
+            );
+        }
+    };
+
+    // Demoting the last admin is unrecoverable in a way deleting is not:
+    // /api/setup only re-arms at zero accounts, so a system left with users
+    // and no admin has no way back through the UI at all. Refuse it whatever
+    // the user count, and say what to do instead.
+    if target.is_admin() && role == Some("user") {
+        match app.users.db.admin_count() {
+            Ok(1) => {
+                return err(
+                    StatusCode::CONFLICT,
+                    "this is the only admin — promote another account first, \
+                     otherwise nobody could administer the server",
+                );
+            }
+            Ok(_) => {}
+            Err(e) => return err(StatusCode::INTERNAL_SERVER_ERROR, e),
+        }
+    }
+
+    // Reject a rename onto a callsign someone else holds before writing
+    // anything, so the operator gets "already taken" rather than a raw
+    // UNIQUE-constraint string from SQLite.
+    let callsign = match req.callsign.as_deref().map(str::trim) {
+        Some("") => return err(StatusCode::BAD_REQUEST, "callsign cannot be empty"),
+        Some(c) => {
+            match app.users.db.user_by_callsign(c) {
+                Ok(Some((other, _))) if other.id != id => {
+                    return err(
+                        StatusCode::CONFLICT,
+                        format!("{} already exists", other.callsign),
+                    );
+                }
+                Ok(_) => {}
+                Err(e) => return err(StatusCode::INTERNAL_SERVER_ERROR, e),
+            }
+            Some(c)
+        }
+        None => None,
+    };
+
+    // Same 6-char floor as account creation — one rule, not two.
+    if let Some(pw) = &req.password {
+        if pw.len() < 6 {
+            return err(StatusCode::BAD_REQUEST, "password ≥ 6 chars");
+        }
+        let hash = match auth::hash_password(pw) {
+            Ok(h) => h,
+            Err(e) => return err(StatusCode::INTERNAL_SERVER_ERROR, e),
+        };
+        if let Err(e) = app.users.db.set_pass_hash(id, &hash) {
+            return err(StatusCode::INTERNAL_SERVER_ERROR, e);
+        }
+    }
+
+    if let Err(e) = app
+        .users
+        .db
+        .update_user(id, callsign, req.display_name.as_deref(), role)
+    {
+        return err(StatusCode::INTERNAL_SERVER_ERROR, e);
+    }
+
+    match app.users.db.user_by_id(id) {
+        Ok(Some(u)) => Json(serde_json::json!({ "user": u })).into_response(),
+        Ok(None) => err(StatusCode::NOT_FOUND, "no such user"),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e),
+    }
+}
+
+/// Admin deletes an account, including their own and including the very
+/// last one — deleting down to zero is allowed and re-arms the first-run
+/// setup card, which is the intended way to start a server over.
+///
+/// The single refusal is removing the last admin while other accounts
+/// remain: that leaves users who cannot be administered and a `/api/setup`
+/// that stays closed because the account count is not zero.
+async fn delete_user(
+    State(app): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<i64>,
+) -> Response {
+    if let Err(resp) = require_admin(&app, &headers) {
+        return resp;
+    }
+    let target = match app.users.db.user_by_id(id) {
+        Ok(Some(u)) => u,
+        Ok(None) => return err(StatusCode::NOT_FOUND, "no such user"),
+        Err(e) => return err(StatusCode::INTERNAL_SERVER_ERROR, e),
+    };
+
+    if target.is_admin() {
+        let admins = match app.users.db.admin_count() {
+            Ok(n) => n,
+            Err(e) => return err(StatusCode::INTERNAL_SERVER_ERROR, e),
+        };
+        let total = match app.users.db.user_count() {
+            Ok(n) => n,
+            Err(e) => return err(StatusCode::INTERNAL_SERVER_ERROR, e),
+        };
+        if admins == 1 && total > 1 {
+            return err(
+                StatusCode::CONFLICT,
+                "this is the only admin and other accounts remain — promote \
+                 another admin first, or delete the other accounts before \
+                 this one",
+            );
+        }
+    }
+
+    match app.users.db.delete_user(id) {
+        // Sessions cascade with the row, so deleting yourself logs you out
+        // on the next request; the UI reloads into the login card.
+        Ok(true) => Json(serde_json::json!({
+            "deleted": target.callsign,
+            "remaining": app.users.db.user_count().unwrap_or(0),
+        }))
+        .into_response(),
+        Ok(false) => err(StatusCode::NOT_FOUND, "no such user"),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e),
+    }
 }
 
 async fn create_account(

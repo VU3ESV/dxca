@@ -137,6 +137,20 @@ passthrough → RUMlog **2237**.
 Per-user settings (ClubLog credentials, alert preferences, Telegram) are
 managed in the web GUI per account, not in the file.
 
+### Accounts
+
+The admin-only **Users** tab lists, creates, edits and deletes accounts.
+Edit covers callsign, display name, role and password — any subset, and an
+admin may edit their own. Deleting an account takes its sessions, ClubLog
+settings, alert preferences and worked matrix with it.
+
+Deletion goes all the way down: removing the **last** account is allowed
+and returns the server to the first-run setup card, which is how you start
+one over. The single refusal is removing — or demoting — the last **admin**
+while other accounts remain, because `/api/setup` only re-arms at zero
+accounts, so that state would leave users nobody can administer and no way
+back through the UI. Promote another admin first, or delete the others.
+
 ## License
 
 MIT — see [LICENSE](LICENSE) — except the files derived from the Meridian
