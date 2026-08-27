@@ -4,14 +4,23 @@
 # (daily driver) and Raspberry Pi (always-on host), auto-detect, confirm,
 # and never fail silently.
 #
-#   macOS : builds the release binary (web UI included when pnpm exists)
-#           and installs a launchd agent (survives reboots).
-#   Pi    : installs the binary + config + data to /opt/dxca and a systemd
-#           service (needs sudo). Uses a prebuilt ./dxca or target/ binary
-#           when present, else builds with cargo.
+#   install.sh [macos|pi|linux] [--stub-ui]
 #
-# Building needs rustc >= $MIN_RUSTC (checked up front, see require_cargo)
-# and, for the real web UI rather than the stub page, Node >= 20 + pnpm.
+#   macOS : builds the dashboard + release binary and installs a launchd
+#           agent (survives reboots).
+#   Pi    : builds the same, or uses the prebuilt ./dxca from a
+#           pi-deploy.sh bundle; installs to /opt/dxca + a systemd
+#           service (needs sudo).
+#
+#   --stub-ui   proceed without pnpm, embedding build.rs's placeholder
+#               page instead of the dashboard. Without it a missing pnpm
+#               is a hard stop: the web GUI is part of what "install"
+#               means here.
+#
+# Needs rustc >= MIN_RUSTC (checked up front, see require_cargo) and, for
+# the dashboard, Node >= 20 + pnpm. In a source tree the binary is ALWAYS
+# rebuilt, so a re-run after installing pnpm really does pick the
+# dashboard up — the embed happens at compile time.
 set -euo pipefail
 
 say() { printf '%s\n' "$*"; }
@@ -31,7 +40,19 @@ detect() {
   esac
 }
 
-PLATFORM="${1:-}"
+STUB_UI=0
+PLATFORM=""
+for arg in "$@"; do
+  case "$arg" in
+    --stub-ui) STUB_UI=1 ;;
+    # Print the whole header comment, however long it grows — a hardcoded
+    # line range silently truncates the help the next time it is edited.
+    -h|--help) awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "$0"; exit 0 ;;
+    -*) die "unknown option '$arg' (try --help)" ;;
+    *) PLATFORM="$arg" ;;
+  esac
+done
+
 if [ -z "$PLATFORM" ]; then
   PLATFORM="$(detect)"
   printf 'Auto-detected platform: %s. Is this correct? [Y/n] ' "$PLATFORM"
@@ -45,24 +66,45 @@ fi
 REPO="$(cd "$(dirname "$0")" && pwd)"
 cd "$REPO"
 
+# The dashboard is embedded at COMPILE time (include_dir over web-ui/dist),
+# so "install the web GUI" means "build dist, then build the binary" — in
+# that order, every time. Without pnpm the binary still links, but what it
+# serves is build.rs's placeholder page. For `cargo build` that is the right
+# trade (no Node required, Meridian rule); for an INSTALLER it is a silent
+# failure, so this stops unless --stub-ui says the placeholder is wanted.
 build_web() {
   if command -v pnpm >/dev/null 2>&1; then
     say "Building web UI (pnpm)..."
     pnpm -C web-ui install && pnpm -C web-ui build
-  else
-    say "NOTE: pnpm not found — the binary will embed whatever web-ui/dist"
-    say "holds (a stub page on a fresh clone). Install Node ≥ 20 + pnpm and"
-    say "re-run for the full dashboard."
+    return 0
   fi
+  if [ "$STUB_UI" -eq 1 ]; then
+    say "NOTE: --stub-ui and no pnpm — embedding the placeholder page, not"
+    say "the dashboard. The API and telnet server are unaffected."
+    return 0
+  fi
+  say "pnpm not found, so the dashboard cannot be built. The binary would"
+  say "still run, serving a placeholder page instead of the web GUI — which"
+  say "for an installer is a failure, not a warning. Install Node >= 20:"
+  if [ "$PLATFORM" = macos ]; then
+    say "  brew install node pnpm"
+  else
+    say "  sudo apt install -y nodejs npm && sudo npm install -g pnpm"
+  fi
+  die "then re-run, or pass --stub-ui to accept the placeholder"
 }
 
 # Minimum rustc. The floor is set by the committed Cargo.lock, not by our
 # own code: ureq -> url -> idna -> idna_adapter -> icu_* 2.3.0 all require
-# 1.88. Nothing in the manifests declares a rust-version, so without this
-# check the only complaint comes from cargo minutes into dependency
-# resolution — and Debian Trixie's apt rustc is 1.85.0, so a plain
-# `apt install cargo` lands under the floor on a fresh Pi. Bump this when
-# the lockfile's floor moves.
+# 1.88. Debian Trixie's apt rustc is 1.85.0, so a plain `apt install cargo`
+# lands under the floor on a fresh Pi.
+#
+# `rust-version = "1.88"` in [workspace.package] now makes cargo refuse
+# early on its own, so this is no longer the only guard. It stays because
+# it fires before the pnpm web build and before the first sudo, and because
+# it can name WHICH remedy applies — a stale rustup versus a distro package
+# that will never honour rust-toolchain.toml — which cargo cannot.
+# Keep this constant in step with the manifest's rust-version.
 MIN_RUSTC=1.88
 
 rust_install_hint() {
@@ -142,17 +184,26 @@ case "$PLATFORM" in
 
   pi|linux)
     command -v sudo >/dev/null 2>&1 || die "sudo is required to install the systemd service"
-    # Prefer a prebuilt binary (shipped by deploy/pi-deploy.sh) over building.
-    BIN=""
-    for candidate in "$REPO/dxca" "$REPO/target/release/dxca"; do
-      [ -x "$candidate" ] && BIN="$candidate" && break
-    done
-    if [ -z "$BIN" ]; then
+    # Two shapes of install, and conflating them is what broke the web GUI:
+    #
+    #   source tree (git clone) -> ALWAYS rebuild. This used to prefer an
+    #     existing target/release/dxca over building, so a re-run after
+    #     installing pnpm reused the stale binary and went on serving the
+    #     placeholder page — install.sh appearing not to install the web GUI
+    #     at all. cargo is incremental; rebuilding an unchanged tree is cheap.
+    #   pi-deploy.sh bundle -> no crates/, no web-ui/, just ./dxca that was
+    #     cross-compiled on the Mac with the dashboard already embedded.
+    if [ -d "$REPO/crates" ]; then
       require_cargo
       build_web
       say "Building release binary (native — this takes a while on a Pi)..."
       cargo build --release -p dxca-server
       BIN="$REPO/target/release/dxca"
+    elif [ -x "$REPO/dxca" ]; then
+      say "Using the prebuilt binary shipped in this bundle."
+      BIN="$REPO/dxca"
+    else
+      die "no crates/ to build from and no prebuilt ./dxca — nothing to install"
     fi
     # The service runs as whoever invokes this script — no hardcoded user.
     SERVICE_USER="$(id -un)"

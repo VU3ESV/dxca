@@ -76,8 +76,12 @@ That 1.88 floor comes from the committed `Cargo.lock` (`ureq` → `url` →
 `idna` → `icu_*`), not from dxca's own code, so it cannot be lowered by
 editing this workspace. Distro packages often sit below it — Debian Trixie
 ships 1.85.0 — and a distro rustc ignores `rust-toolchain.toml`, so install
-rustup rather than `apt install cargo`. `install.sh` checks the version up
-front and says which of the two situations you are in.
+rustup rather than `apt install cargo`.
+
+It is declared as `rust-version` in `[workspace.package]`, so cargo refuses
+an old toolchain immediately rather than after resolving the dependency
+graph. `install.sh` checks it too, before the web build and before any
+sudo, and tells you which of the two situations you are in.
 
 ```sh
 cargo build --workspace          # all crates
@@ -97,6 +101,14 @@ is caught before the build starts, not minutes into it):
 
 - **macOS**: builds the release binary and installs a launchd agent
   (`com.vu2cpl.dxca`, survives reboots, log in `~/Library/Logs/dxca.log`).
+The dashboard is embedded into the binary at compile time, so installing it
+means building `web-ui/dist` *then* the binary, in that order. `install.sh`
+does both, and in a source tree it **always rebuilds** rather than reusing
+an existing `target/release/dxca` — otherwise a re-run after installing
+pnpm would keep the old placeholder-page binary. A missing pnpm is a hard
+stop; pass `--stub-ui` if you deliberately want the placeholder (the API
+and telnet server work either way).
+
 - **Pi/Linux**: installs binary + config + data seeds to `/opt/dxca` and
   a systemd service (`systemctl status dxca`), running as the invoking
   user. A fresh install self-bootstraps: the first-run web card creates

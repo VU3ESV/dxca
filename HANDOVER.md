@@ -109,12 +109,15 @@ which is now the rule for any host that is not noderedpi4.
   `pnpm install` errors with ERR_PNPM_IGNORED_BUILDS.
 - `include_dir` embeds whatever `web-ui/dist` held at **compile** time —
   after `pnpm build`, rebuild the server or you serve the old page.
-  `just run` sequences this correctly.
+  `just run` sequences this correctly, and so does `install.sh` (which is
+  why it always rebuilds in a source tree — see "install.sh did not install
+  the web GUI" below).
 - Justfile recipe comments must be a single line — `just --list` shows only
   the last comment line above a recipe.
 - **The workspace needs rustc ≥ 1.88** (a `Cargo.lock` floor, not ours) and
-  distro packages are below it. `install.sh` checks it up front; see "The
-  rustc floor is 1.88" below.
+  distro packages are below it. Declared as `rust-version` in
+  `[workspace.package]` and re-checked by `install.sh` (`MIN_RUSTC`) — the
+  two move together. See "The rustc floor is 1.88" below.
 
 ## Burn-in log (Mac phase, 2026-08-27 — superseded by the Pi cutover above)
 
@@ -697,6 +700,45 @@ Note for triage: `/api/spots` fills `band` / `dxcc_name` / `alert` /
 — an unauthenticated `curl` shows them null and that is by design, not a
 classification bug.
 
+## install.sh did not install the web GUI (fixed 2026-08-27)
+
+Two separate holes, both ending in the same symptom: the service comes up,
+the dashboard does not. What you get instead is build.rs's placeholder —
+*"Web UI not built into this binary"* — which is easy to read as a broken
+install rather than a missing build step.
+
+**1. A re-run never rebuilt.** The pi/linux branch picked the first of
+`./dxca` or `target/release/dxca` that existed and, if it found one,
+skipped the entire `require_cargo` / `build_web` / `cargo build` block. So
+the classic recovery — hit the missing-pnpm warning, install pnpm, re-run
+`./install.sh` — reused the stale binary and kept serving the placeholder
+**forever**. Nothing in the output said so; the install "succeeded" each
+time.
+
+The two cases were being conflated. A git clone has `crates/` and must
+always rebuild (cargo is incremental, so an unchanged tree is cheap). A
+`pi-deploy.sh` bundle has no `crates/` and no `web-ui/` — just a `./dxca`
+cross-compiled on the Mac with the dashboard already inside. The branch now
+keys on `[ -d "$REPO/crates" ]`, and a directory with neither is a `die`
+instead of a confusing half-install.
+
+**2. Missing pnpm was a warning.** `build_web` printed a NOTE and carried
+on, which is right for `cargo build` (the Meridian rule: plain builds never
+need Node) but wrong for an installer — the web GUI is part of what
+"install" means. It is now a hard stop naming the platform's install
+command, with `--stub-ui` as the explicit opt-out for a deliberately
+headless install.
+
+`--stub-ui` meant install.sh needed real argument parsing, so it now loops
+over `"$@"` like pi-deploy.sh does, and `--help` prints the header comment
+via awk rather than a hardcoded `sed` line range — the range had already
+silently truncated the help by the time it was first tried.
+
+Verified with stubbed toolchains: build_web hard-stops on both platforms
+with the right hint, `--stub-ui` proceeds, and the branch picks rebuild /
+prebuilt / die for a clone-with-stale-binary, a deploy bundle, and an empty
+directory respectively.
+
 ## The rustc floor is 1.88, and install.sh now enforces it (2026-08-27)
 
 A third-party install on VU2WJ's Pi died at `cargo build` with *"rustc
@@ -724,10 +766,22 @@ Comparison is major.minor via awk, so `1.99.0-nightly` passes. Verified
 under `/bin/bash` 3.2 against fake toolchains at 1.85.0 / 1.88.0 / 1.96.1 /
 1.99.0-nightly / 2.0.0, plus no-cargo and cargo-without-rustc.
 
-**Bump `MIN_RUSTC` whenever the lockfile's floor moves.** The check is only
-as honest as that constant. Declaring `rust-version` in the workspace
-manifest would make cargo itself say it early — deliberately not done yet,
-since it also constrains anyone vendoring the crates.
+**Follow-up, same day — `rust-version = "1.88"` is now declared** in
+`[workspace.package]` and inherited by all three crates via
+`rust-version.workspace = true`. Cargo now refuses in seconds with its own
+message, and because the workspace is on `resolver = "3"` (MSRV-aware) a
+future `cargo update` will prefer dependency versions that keep the floor
+where it is instead of raising it silently. Adding it left `Cargo.lock`
+untouched and `cargo check --workspace --all-targets` clean.
+
+**There are now two constants, and they must move together:**
+`rust-version` in `Cargo.toml` and `MIN_RUSTC` in `install.sh`. The
+installer's check was kept on purpose — it fires before the pnpm web build
+and before the first sudo, and it can name the remedy (stale rustup versus a
+distro package that ignores `rust-toolchain.toml`), which cargo cannot.
+
+Note the floor is the *lockfile's*, not the edition's: edition 2024 only
+needs 1.85. If a dependency bump raises the real floor, both constants move.
 
 ## Local toolchain wart (2026-08-27)
 
