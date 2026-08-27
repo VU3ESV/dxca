@@ -424,6 +424,46 @@ Remaining before any public release: x86-64-Linux (+ optional Windows)
 release artifacts, a Windows build test, then the repo-public flip +
 vu2cpl.com card with the VU3ESV credit line.
 
+## Automatic ClubLog / LoTW refresh (2026-08-27)
+
+Both were manual-only until now — one button each — which on a 24/7 box
+meant the log stopped moving whenever nobody pressed anything, and anything
+worked since kept alerting as New DXCC. PLAN §5's "refresh schedule" line,
+finally built.
+
+- **Per-user ClubLog**: `refresh_hours` in the account's clublog config
+  (0 = manual, default **24**). Set in the web UI, My ClubLog →
+  Auto-refresh. Per-user because each account pulls its own log with its own
+  credentials.
+- **Server-wide LoTW**: `lotw_refresh_days` in `config/dxca.toml`
+  (0 = off, default **7**). File-edited + restart, like the other scalars,
+  and shown in System's file-only line. Server-wide because the list is one
+  shared ~6 MB file.
+
+`crates/dxca-server/src/refresh.rs`, spawned from main. Ticks every 15 min
+and does **at most one job per tick** (LoTW first when both are due). Things
+that are load-bearing:
+
+- **Attempt stamps are separate from success stamps, and written before the
+  outcome is known.** `matrices.last_refresh_unix` only advances on success,
+  so a failing account would read as due on every tick and hammer ClubLog.
+  `RETRY_AFTER_SECS` (1 h) is the floor either way, persisted so a crash
+  loop can't reset it.
+- **No refresh on boot.** The check is purely time-based; a restart pulls
+  only what was already overdue.
+- The LoTW **success stamp is written inside `UserService::refresh_lotw`**,
+  not in the scheduler, so the manual button resets the automatic clock too.
+- Timestamps live in a new **`meta`** table (`key`/`value`), *not* on file
+  mtimes — `install -m 600` rewrites mtimes on every deploy and would reset
+  the LoTW clock each time.
+- The decision itself is a pure function, `is_due(now, last_ok,
+  last_attempt, interval_secs)`, so it is unit-tested without SQLite or the
+  network. Change scheduling behaviour there, not in the callers.
+
+`ClubLogUserConfig::Default` is hand-written: deriving it would give a new
+account 0 (manual) while serde's per-field default gives an existing stored
+row 24, and those must agree.
+
 ## Alert levels 2.1 (2026-08-27)
 
 **Four levels became eight, and the band/mode narrowing arrived on both
