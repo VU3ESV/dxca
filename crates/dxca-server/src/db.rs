@@ -4,7 +4,7 @@
 //! Telegram token) live here in plain text by design; the file is created
 //! 0600 and the trade-off is documented in the README (plan §5).
 
-use dxca_core::classify::AlertConfig;
+use dxca_core::classify::{AlertConfig, AlertLevel};
 use dxca_core::matrix::LogMatrix;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
@@ -24,7 +24,15 @@ pub struct ClubLogUserConfig {
     pub alerts: AlertConfigOpt,
 }
 
-/// AlertConfig with serde defaults matching 1.x (all on, unconfirmed off).
+/// AlertConfig with serde defaults matching 1.x for the `New*` half; the
+/// `Unconf*` half defaults off, so an existing account behaves exactly as it
+/// did until the operator ticks something.
+///
+/// The 1.x `alert_unconfirmed` switch is **gone**. Stored rows may still
+/// carry the key — serde ignores unknown fields, so they deserialize fine —
+/// and it needs no migration: it swapped the whole comparison to the
+/// confirmed sets, which the four `alert_unconf_*` levels now express
+/// directly and, unlike the switch, alongside the `New*` half.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AlertConfigOpt {
@@ -32,7 +40,10 @@ pub struct AlertConfigOpt {
     pub alert_new_slot: bool,
     pub alert_new_band: bool,
     pub alert_new_mode: bool,
-    pub alert_unconfirmed: bool,
+    pub alert_unconf_dxcc: bool,
+    pub alert_unconf_slot: bool,
+    pub alert_unconf_band: bool,
+    pub alert_unconf_mode: bool,
 }
 
 impl Default for AlertConfigOpt {
@@ -43,7 +54,10 @@ impl Default for AlertConfigOpt {
             alert_new_slot: d.alert_new_slot,
             alert_new_band: d.alert_new_band,
             alert_new_mode: d.alert_new_mode,
-            alert_unconfirmed: d.alert_unconfirmed,
+            alert_unconf_dxcc: d.alert_unconf_dxcc,
+            alert_unconf_slot: d.alert_unconf_slot,
+            alert_unconf_band: d.alert_unconf_band,
+            alert_unconf_mode: d.alert_unconf_mode,
         }
     }
 }
@@ -55,7 +69,10 @@ impl From<&AlertConfigOpt> for AlertConfig {
             alert_new_slot: o.alert_new_slot,
             alert_new_band: o.alert_new_band,
             alert_new_mode: o.alert_new_mode,
-            alert_unconfirmed: o.alert_unconfirmed,
+            alert_unconf_dxcc: o.alert_unconf_dxcc,
+            alert_unconf_slot: o.alert_unconf_slot,
+            alert_unconf_band: o.alert_unconf_band,
+            alert_unconf_mode: o.alert_unconf_mode,
         }
     }
 }
@@ -73,6 +90,19 @@ pub struct NotifyUserConfig {
     pub notify_new_slot: bool,
     pub notify_new_band: bool,
     pub notify_new_mode: bool,
+    // DXCA 2.1: the confirmation-hunting half, off by default like the
+    // classifier's. A level ticked here still only fires if the classifier is
+    // allowed to flag it at all (My ClubLog) — notify narrows, never widens.
+    pub notify_unconf_dxcc: bool,
+    pub notify_unconf_slot: bool,
+    pub notify_unconf_band: bool,
+    pub notify_unconf_mode: bool,
+    // DXCA 2.1: band / mode-class narrowing for Telegram only. **Empty means
+    // ALL** — the same convention `broadcast_destinations.sources` uses, and
+    // the reason a fresh account is not silent. Bands are resolver names
+    // ("20M"), modes are award buckets ("CW"/"PHONE"/"DATA").
+    pub notify_bands: Vec<String>,
+    pub notify_modes: Vec<String>,
 }
 
 impl Default for NotifyUserConfig {
@@ -86,6 +116,39 @@ impl Default for NotifyUserConfig {
             notify_new_slot: true,
             notify_new_band: true,
             notify_new_mode: true,
+            notify_unconf_dxcc: false,
+            notify_unconf_slot: false,
+            notify_unconf_band: false,
+            notify_unconf_mode: false,
+            notify_bands: Vec::new(),
+            notify_modes: Vec::new(),
+        }
+    }
+}
+
+impl NotifyUserConfig {
+    /// Does this spot's band/mode survive the Telegram narrowing? Empty list
+    /// = no narrowing on that axis.
+    pub fn passes_band_mode(&self, band: Option<&str>, mode_class: &str) -> bool {
+        let band_ok = self.notify_bands.is_empty()
+            || band.is_some_and(|b| self.notify_bands.iter().any(|x| x == b));
+        let mode_ok =
+            self.notify_modes.is_empty() || self.notify_modes.iter().any(|x| x == mode_class);
+        band_ok && mode_ok
+    }
+
+    /// Whether this level is wanted, over all eight flaggable levels.
+    pub fn wants_level(&self, level: AlertLevel) -> bool {
+        match level {
+            AlertLevel::NewDxcc => self.notify_new_dxcc,
+            AlertLevel::NewSlot => self.notify_new_slot,
+            AlertLevel::NewBand => self.notify_new_band,
+            AlertLevel::NewMode => self.notify_new_mode,
+            AlertLevel::UnconfDxcc => self.notify_unconf_dxcc,
+            AlertLevel::UnconfSlot => self.notify_unconf_slot,
+            AlertLevel::UnconfBand => self.notify_unconf_band,
+            AlertLevel::UnconfMode => self.notify_unconf_mode,
+            AlertLevel::Worked | AlertLevel::None => false,
         }
     }
 }
@@ -358,6 +421,19 @@ impl Db {
             .map_err(db_err)
     }
 
+    /// One user's log provenance: (qso_count, last_refresh_unix). The matrix
+    /// itself is already in memory, so the station card only needs these two.
+    pub fn matrix_meta(&self, user_id: i64) -> DbResult<Option<(i64, i64)>> {
+        let conn = self.conn.lock().unwrap();
+        conn.query_row(
+            "SELECT qso_count, last_refresh_unix FROM matrices WHERE user_id = ?1",
+            params![user_id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()
+        .map_err(db_err)
+    }
+
     /// Every stored matrix: (user_id, matrix, qso_count, last_refresh).
     pub fn matrices(&self) -> DbResult<Vec<(i64, LogMatrix, i64, i64)>> {
         let conn = self.conn.lock().unwrap();
@@ -387,6 +463,51 @@ impl Db {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn empty_band_mode_lists_mean_all() {
+        let n = NotifyUserConfig::default();
+        assert!(n.passes_band_mode(Some("20M"), "CW"));
+        assert!(n.passes_band_mode(Some("70CM"), "DATA"));
+        // A spot whose frequency fell in no band still passes an unset filter
+        // — silence there would be a filter nobody asked for.
+        assert!(n.passes_band_mode(None, "PHONE"));
+    }
+
+    #[test]
+    fn band_and_mode_narrowing_are_anded() {
+        let n = NotifyUserConfig {
+            notify_bands: vec!["20M".into(), "15M".into()],
+            notify_modes: vec!["CW".into()],
+            ..Default::default()
+        };
+        assert!(n.passes_band_mode(Some("20M"), "CW"));
+        assert!(!n.passes_band_mode(Some("20M"), "DATA"), "mode must gate");
+        assert!(!n.passes_band_mode(Some("40M"), "CW"), "band must gate");
+        // Band narrowing is on, and this spot has no band at all → excluded.
+        assert!(!n.passes_band_mode(None, "CW"));
+    }
+
+    #[test]
+    fn wants_level_covers_all_eight_and_never_worked() {
+        let all_on = NotifyUserConfig {
+            notify_unconf_dxcc: true,
+            notify_unconf_slot: true,
+            notify_unconf_band: true,
+            notify_unconf_mode: true,
+            ..Default::default()
+        };
+        for level in AlertLevel::FLAGGABLE {
+            assert!(all_on.wants_level(level), "{level:?} should be wanted");
+        }
+        // Worked / None are outcomes, not alerts — never notifiable.
+        assert!(!all_on.wants_level(AlertLevel::Worked));
+        assert!(!all_on.wants_level(AlertLevel::None));
+        // Default keeps the ? half quiet.
+        let d = NotifyUserConfig::default();
+        assert!(d.wants_level(AlertLevel::NewDxcc));
+        assert!(!d.wants_level(AlertLevel::UnconfDxcc));
+    }
 
     fn temp_db() -> (Db, std::path::PathBuf) {
         use std::sync::atomic::{AtomicU32, Ordering};

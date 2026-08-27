@@ -54,7 +54,14 @@
      old `rgba(…)` tints only ever composited correctly over #0d1117.
 
      Each level is a colour plus a row wash mixed from it, so the Alert cell
-     and its row tint can never disagree about what a level looks like. */
+     and its row tint can never disagree about what a level looks like.
+
+     The `?` (worked-but-unconfirmed) half reuses its New counterpart's HUE,
+     pulled toward `--muted` and washed lighter. Hue therefore answers "which
+     axis — DXCC, band, mode, slot?" and saturation answers "how badly do I
+     need it?", so the ladder reads as four pairs rather than eight unrelated
+     colours. Inventing four more hues would have collided with the severity
+     palette and left the operator memorising a legend. */
   --alert-dxcc: var(--err);
   --alert-slot: light-dark(#bd5b00, #f0883e);
   --alert-band: var(--accent);
@@ -63,6 +70,40 @@
   --alert-slot-bg: color-mix(in srgb, var(--alert-slot) 11%, Canvas);
   --alert-band-bg: color-mix(in srgb, var(--alert-band) 11%, Canvas);
   --alert-mode-bg: color-mix(in srgb, var(--alert-mode) 10%, Canvas);
+
+  --alert-unconf-dxcc: color-mix(in srgb, var(--alert-dxcc) 58%, var(--muted));
+  --alert-unconf-slot: color-mix(in srgb, var(--alert-slot) 58%, var(--muted));
+  --alert-unconf-band: color-mix(in srgb, var(--alert-band) 58%, var(--muted));
+  --alert-unconf-mode: color-mix(in srgb, var(--alert-mode) 58%, var(--muted));
+  --alert-unconf-dxcc-bg: color-mix(in srgb, var(--alert-dxcc) 6%, Canvas);
+  --alert-unconf-slot-bg: color-mix(in srgb, var(--alert-slot) 6%, Canvas);
+  --alert-unconf-band-bg: color-mix(in srgb, var(--alert-band) 6%, Canvas);
+  --alert-unconf-mode-bg: color-mix(in srgb, var(--alert-mode) 5%, Canvas);
+}
+
+/* --- The level table -------------------------------------------------------
+   One row per level, mapping the API's own `alert` key to a pair of local
+   custom properties. Everything downstream — the feed's row tint, the Alert
+   cell, a legend dot, a filter chip — reads `--lvl` / `--lvl-bg` and so can
+   never disagree with this table or need extending when a level is added.
+   Keyed off the server's string, so the CSS and the classifier share one
+   vocabulary. */
+[data-level='newDXCC']    { --lvl: var(--alert-dxcc); --lvl-bg: var(--alert-dxcc-bg); }
+[data-level='newBand']    { --lvl: var(--alert-band); --lvl-bg: var(--alert-band-bg); }
+[data-level='newMode']    { --lvl: var(--alert-mode); --lvl-bg: var(--alert-mode-bg); }
+[data-level='newSlot']    { --lvl: var(--alert-slot); --lvl-bg: var(--alert-slot-bg); }
+[data-level='unconfDXCC'] { --lvl: var(--alert-unconf-dxcc); --lvl-bg: var(--alert-unconf-dxcc-bg); }
+[data-level='unconfBand'] { --lvl: var(--alert-unconf-band); --lvl-bg: var(--alert-unconf-band-bg); }
+[data-level='unconfMode'] { --lvl: var(--alert-unconf-mode); --lvl-bg: var(--alert-unconf-mode-bg); }
+[data-level='unconfSlot'] { --lvl: var(--alert-unconf-slot); --lvl-bg: var(--alert-unconf-slot-bg); }
+
+/* The level's colour as a small square — legend, filter chip, config row. */
+.level-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 2px;
+  flex: none;
+  background: var(--lvl, var(--muted));
 }
 
 * {

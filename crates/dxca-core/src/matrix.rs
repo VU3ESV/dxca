@@ -86,6 +86,31 @@ impl LogMatrix {
     pub fn total_dxcc_count(&self) -> usize {
         self.by_dxcc.len()
     }
+
+    /// Award totals for the station card. Confirmed DXCC counts entities with
+    /// **at least one** confirmed slot — the DXCC-award rule — not entities
+    /// whose every slot is confirmed.
+    pub fn stats(&self) -> MatrixStats {
+        MatrixStats {
+            dxcc_worked: self.by_dxcc.len(),
+            dxcc_confirmed: self
+                .by_dxcc
+                .values()
+                .filter(|s| !s.confirmed_slots.is_empty())
+                .count(),
+            slots_worked: self.by_dxcc.values().map(|s| s.slots.len()).sum(),
+            slots_confirmed: self.by_dxcc.values().map(|s| s.confirmed_slots.len()).sum(),
+        }
+    }
+}
+
+/// What the Spots screen's station card reports.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MatrixStats {
+    pub dxcc_worked: usize,
+    pub dxcc_confirmed: usize,
+    pub slots_worked: usize,
+    pub slots_confirmed: usize,
 }
 
 #[cfg(test)]

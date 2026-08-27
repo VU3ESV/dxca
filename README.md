@@ -25,9 +25,13 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 live shack aggregator with a real web GUI. Decoder UDP sources and five
 DX-cluster telnet nodes (Meridian-lifted client with the 1.x
 honest-status graft) feed one pipeline into the telnet server, the RUMlog
-passthrough, and a WebSocket-streamed spots dashboard — status pills,
-live sortable table, source/band/new-only/duplicate filters, per-user
-alert row tints, LoTW markers. The GUI wears Meridian's design system
+passthrough, and a WebSocket-streamed spots dashboard — station card with
+worked/confirmed DXCC and slot totals, status pills, live sortable table,
+per-user alert row tints, LoTW markers. Spots are flagged across **eight
+alert levels** — New DXCC/Band/Mode/Slot for never worked, and ? DXCC/Band/
+Mode/Slot for worked-but-unconfirmed — each independently switchable, and
+narrowable by level, mode class (CW/Phone/Data) and band (160m–70cm) both
+on screen and, separately, for Telegram. The GUI wears Meridian's design system
 (2026-08-27): one card/pill/table vocabulary across every screen, and
 **light and dark appearances** that follow the OS unless the header's
 toggle pins one. SQLite-backed accounts (argon2 + session

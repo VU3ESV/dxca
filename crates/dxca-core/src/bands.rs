@@ -30,6 +30,18 @@ static BANDS: &[BandRange] = &[
     BandRange { name: "23CM",  low_mhz: 1240.0, high_mhz: 1300.0 },
 ];
 
+/// The bands offered as filter/alert choices, 160M → 70CM, in the operator's
+/// customary order (longest wavelength first). Deliberately narrower than
+/// `BANDS`: the LF/MF pair below 160M and the microwave bands above 70CM are
+/// still *resolved* from frequency — a spot there keeps its band name — they
+/// just aren't worth a checkbox in this shack. Serving it from here keeps the
+/// UI, the Telegram gate and the resolver reading one list.
+#[rustfmt::skip]
+pub const SELECTABLE_BANDS: &[&str] = &[
+    "160M", "80M", "60M", "40M", "30M", "20M", "17M", "15M", "12M", "10M",
+    "6M", "4M", "2M", "1.25M", "70CM",
+];
+
 pub fn band_from_mhz(freq: f64) -> Option<&'static str> {
     BANDS
         .iter()
@@ -51,6 +63,18 @@ mod tests {
         assert_eq!(band_from_hz(7_074_000), Some("40M"));
         assert_eq!(band_from_hz(24_915_000), Some("12M"));
         assert_eq!(band_from_mhz(50.313), Some("6M"));
+    }
+
+    #[test]
+    fn every_selectable_band_is_a_real_band() {
+        for name in SELECTABLE_BANDS {
+            assert!(
+                BANDS.iter().any(|b| b.name == *name),
+                "{name} is offered as a filter but the resolver never emits it"
+            );
+        }
+        assert_eq!(SELECTABLE_BANDS.first(), Some(&"160M"));
+        assert_eq!(SELECTABLE_BANDS.last(), Some(&"70CM"));
     }
 
     #[test]
