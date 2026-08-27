@@ -424,6 +424,53 @@ Remaining before any public release: x86-64-Linux (+ optional Windows)
 release artifacts, a Windows build test, then the repo-public flip +
 vu2cpl.com card with the VU3ESV credit line.
 
+## DXSpider bells ate every spot (fixed 2026-08-27)
+
+Adding **db0sue.de:8000** (DO5SSB-2, DXSpider 1.57) looked like a connection
+failure. It wasn't: the node connected, logged in, and proved **Live** — and
+then delivered nothing.
+
+Its spot lines end `… 0508Z\x07\x07\r\n` — DXSpider rings the terminal on
+every spot. BEL is not whitespace, so `str::trim` left it stuck to the last
+token; `parse_spot_line`'s rightmost-`HHMMZ` search wants a 5-char token and
+saw a 7-char `0508Z\x07\x07`, found no time, returned `None`, and every spot
+fell through to the raw `Line` arm. **A node that reads healthy while
+dropping 100% of its traffic** — worth remembering as a failure shape.
+
+`wire::strip_c0_controls` now runs where lines are cut in `on_bytes` (tab
+kept — it is real field whitespace), so the parse, the telnet fan-out and
+the broadcaster all see the clean line. Two tests pin it, captured off the
+wire; the wire-level one asserts the *un-stripped* line still fails to
+parse, so the guard can't rot into a tautology.
+
+DB0SUE is now the **fifth node** in `/opt/dxca/config/dxca.toml` (Live,
+delivering). Config backup before the edit:
+`/opt/dxca/config/dxca.toml.bak-before-db0sue`.
+
+Note for triage: `/api/spots` fills `band` / `dxcc_name` / `alert` /
+`is_beacon` **only for an authenticated session** (`annotate_spot`, api.rs)
+— an unauthenticated `curl` shows them null and that is by design, not a
+classification bug.
+
+## Local toolchain wart (2026-08-27)
+
+`/usr/local/bin/cargo` + `/usr/local/bin/rustc` (a standalone Rust install)
+**shadow the rustup shims** on this Mac, and that install ships no
+`cargo-fmt`, `cargo-clippy`, or `rustdoc`. So `just gate`'s lint step and
+`cargo test`'s doctests both die with "no such command" / "could not execute
+rustdoc" — nothing to do with the code. Run the gate through the toolchain's
+own bin dir until it's sorted:
+
+```sh
+TC=~/.rustup/toolchains/stable-aarch64-apple-darwin
+PATH="$TC/bin:$PATH" "$TC/bin/cargo" fmt --all --check
+PATH="$TC/bin:$PATH" "$TC/bin/cargo" clippy --workspace --all-targets -- -D warnings
+```
+
+Real fix when there's time: remove the standalone install so rustup's shims
+win (`/usr/local/bin/{cargo,rustc,...}`), or put `~/.cargo/bin` ahead of
+`/usr/local/bin` on PATH.
+
 ## Deploy gotcha (fixed 2026-08-27)
 
 `install.sh` ended with `systemctl enable --now dxca`. `--now` starts an
