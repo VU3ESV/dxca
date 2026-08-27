@@ -878,6 +878,48 @@ and not worth failing an install over.
 Tested against stub `node` binaries at 16 / 18 / 19 / 20 / 21 / 22 / 24 / 26
 — accepted, rejected, and the `--stub-ui` skip all behave.
 
+## Blacklist tab (2026-08-28)
+
+Requested as "add a tab for blacklisted calls". Three decisions, all Manoj's:
+
+**Server-wide, admin-managed** — one list, not per-user. The first pass at
+the question offered scope and effect separately and allowed an impossible
+pairing (per-user + drop-at-pipeline); the ring is shared, so a pipeline drop
+cannot be per-user. Re-asked as one coupled choice.
+
+**Drops at the pipeline**, before the ring: gone from the Spots table, the
+telnet cluster server, the filtered UDP destinations and Telegram, for
+everyone. Not a display filter.
+
+**Exact match on the spotted DX call**, case-insensitive, no wildcards.
+
+Implementation notes:
+
+- New `blacklist` table (`callsign` PK, `added_unix`). `CREATE TABLE IF NOT
+  EXISTS`, so an existing database picks it up with no migration step.
+- The pipeline holds its own `RwLock<HashSet<String>>` rather than querying
+  SQLite per spot — this is the hot path for every decode and every cluster
+  line. `apply_blacklist` swaps it, the same hot-apply shape as sources and
+  destinations, so an edit lands on the next spot with no restart. `main`
+  loads the stored list before the first spot can arrive.
+- The check sits **after** the `source_counts` increment on purpose: that
+  counter is what proves a node is alive, and a node sending only blocked
+  calls is still up. The count means "received", not "shown".
+- `GET/POST /api/blacklist`, `DELETE /api/blacklist/{callsign}`, all
+  admin-gated. Every write refreshes the live set as well as the database.
+
+**Known limitation, stated in the UI and the README:** the verbatim UDP
+passthrough forwards decoder datagrams *before* parsing (that is what makes
+click-to-fill work), so a blocked call inside a WSJT-X decode still reaches a
+logger by that path. Cluster spots have no passthrough and are dropped
+completely. Closing that would mean parsing before passthrough and giving up
+1.x byte-verbatim parity — deliberately not done.
+
+`tests/blacklist.rs` drives the real API and the real pipeline: baseline
+through, block, next spot never reaches `/api/spots` while the pre-block one
+survives, idempotent re-add, unblock, spot flows again, 404 on removing
+something unlisted, 401 for anonymous.
+
 ## Status bar boxed by category; Sources became a chip row (2026-08-28)
 
 Two reports on the Spots screen, both fixed together because they are the

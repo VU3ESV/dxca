@@ -433,6 +433,24 @@ and New Slot alerts** rather than being assumed digital. Note the limitation:
 mode follows the *transmitting* station's band plan, so a Region 1 station
 operating phone low in 40m can be inferred wrongly.
 
+### Blacklisted calls
+
+The admin-only **Blacklist** tab holds one server-wide list of callsigns to
+drop. A listed call is discarded in the pipeline **before the spot ring**, so
+it is absent from the Spots table, the telnet cluster server, the filtered
+UDP destinations and Telegram alerts — for every account at once. It is not
+a display filter; the band and mode chips are that.
+
+Matching is exact and case-insensitive against the **spotted** station's
+callsign: `R1ABC` blocks that call and nothing else. Edits take effect on the
+next spot, with no restart.
+
+One honest exception: the **verbatim UDP passthrough** forwards decoder
+datagrams untouched, before anything is parsed — that is what keeps a
+logger's click-to-fill working — so a blocked call inside a WSJT-X decode can
+still reach the logger by that path. Cluster spots have no passthrough and
+are dropped completely.
+
 ### Accounts
 
 The admin-only **Users** tab lists, creates, edits and deletes accounts.

@@ -53,6 +53,11 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/cty/refresh", post(cty_refresh))
         .route("/api/users", get(list_users).post(create_user))
         .route("/api/users/{id}", patch(update_user).delete(delete_user))
+        .route("/api/blacklist", get(list_blacklist).post(add_blacklist))
+        .route(
+            "/api/blacklist/{callsign}",
+            axum::routing::delete(del_blacklist),
+        )
         .with_state(state)
         .fallback(crate::assets::serve)
 }
@@ -548,6 +553,86 @@ async fn list_users(State(app): State<AppState>, headers: HeaderMap) -> Response
         Ok(users) => Json(serde_json::json!({ "users": users })).into_response(),
         Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e),
     }
+}
+
+// --- blacklist -----------------------------------------------------------
+//
+// Server-wide and admin-gated. Every write refreshes the pipeline's live
+// set as well as the database, so an edit takes effect on the next spot
+// without a restart — the same hot-apply contract as sources and nodes.
+
+/// Push the stored list into the running pipeline. Called on every write and
+/// once at startup; the database stays the source of truth.
+fn refresh_blacklist(app: &AppState) -> Result<Vec<String>, String> {
+    let calls = app.users.db.blacklist()?;
+    app.pipeline.apply_blacklist(calls.clone());
+    Ok(calls)
+}
+
+async fn list_blacklist(State(app): State<AppState>, headers: HeaderMap) -> Response {
+    if let Err(resp) = require_admin(&app, &headers) {
+        return resp;
+    }
+    match app.users.db.blacklist() {
+        Ok(calls) => Json(serde_json::json!({ "calls": calls })).into_response(),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e),
+    }
+}
+
+#[derive(Deserialize)]
+struct BlacklistReq {
+    callsign: String,
+}
+
+async fn add_blacklist(
+    State(app): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<BlacklistReq>,
+) -> Response {
+    if let Err(resp) = require_admin(&app, &headers) {
+        return resp;
+    }
+    let call = req.callsign.trim().to_uppercase();
+    if call.is_empty() {
+        return err(StatusCode::BAD_REQUEST, "callsign required");
+    }
+    let added = match app.users.db.blacklist_add(&call) {
+        Ok(a) => a,
+        Err(e) => return err(StatusCode::INTERNAL_SERVER_ERROR, e),
+    };
+    match refresh_blacklist(&app) {
+        Ok(calls) => Json(serde_json::json!({
+            "callsign": call, "added": added, "calls": calls,
+        }))
+        .into_response(),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e),
+    }
+}
+
+async fn del_blacklist(
+    State(app): State<AppState>,
+    headers: HeaderMap,
+    Path(callsign): Path<String>,
+) -> Response {
+    if let Err(resp) = require_admin(&app, &headers) {
+        return resp;
+    }
+    match app.users.db.blacklist_remove(&callsign) {
+        Ok(false) => err(StatusCode::NOT_FOUND, "not listed"),
+        Ok(true) => match refresh_blacklist(&app) {
+            Ok(calls) => Json(serde_json::json!({
+                "removed": callsign.trim().to_uppercase(), "calls": calls,
+            }))
+            .into_response(),
+            Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e),
+        },
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e),
+    }
+}
+
+/// Load the stored blacklist into the pipeline at startup.
+pub fn load_blacklist(app: &AppState) -> Result<usize, String> {
+    refresh_blacklist(app).map(|c| c.len())
 }
 
 // --- per-user config -----------------------------------------------------

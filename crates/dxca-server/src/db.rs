@@ -240,6 +240,10 @@ CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS blacklist (
+    callsign TEXT PRIMARY KEY,
+    added_unix INTEGER NOT NULL
+);
 ";
 
 fn now_unix() -> i64 {
@@ -447,6 +451,53 @@ impl Db {
             )
             .map_err(db_err)?;
         Ok(())
+    }
+
+    // --- blacklist --------------------------------------------------------
+    //
+    // Server-wide and admin-managed by design: a matching spot is dropped in
+    // the pipeline, before the ring, so it is gone from the Spots table, the
+    // telnet cluster server, the UDP fan-out and Telegram for every account
+    // at once. That is only coherent as one shared list — a per-user drop
+    // cannot exist, because the ring is shared.
+    //
+    // Callsigns are stored uppercase and matched exactly.
+
+    pub fn blacklist(&self) -> DbResult<Vec<String>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare("SELECT callsign FROM blacklist ORDER BY callsign")
+            .map_err(db_err)?;
+        let rows = stmt.query_map([], |r| r.get(0)).map_err(db_err)?;
+        rows.collect::<Result<_, _>>().map_err(db_err)
+    }
+
+    /// Returns false when the call was already listed.
+    pub fn blacklist_add(&self, callsign: &str) -> DbResult<bool> {
+        let n = self
+            .conn
+            .lock()
+            .unwrap()
+            .execute(
+                "INSERT OR IGNORE INTO blacklist (callsign, added_unix) VALUES (?1, ?2)",
+                params![callsign.trim().to_uppercase(), now_unix()],
+            )
+            .map_err(|e| format!("blacklist add: {e}"))?;
+        Ok(n > 0)
+    }
+
+    /// Returns false when the call was not listed.
+    pub fn blacklist_remove(&self, callsign: &str) -> DbResult<bool> {
+        let n = self
+            .conn
+            .lock()
+            .unwrap()
+            .execute(
+                "DELETE FROM blacklist WHERE callsign = ?1",
+                params![callsign.trim().to_uppercase()],
+            )
+            .map_err(db_err)?;
+        Ok(n > 0)
     }
 
     // --- sessions ---------------------------------------------------------

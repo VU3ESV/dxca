@@ -89,6 +89,14 @@ async fn main() {
         config_path: Path::new(config::DEFAULT_PATH).to_path_buf(),
         input_tx: input_tx.clone(),
     };
+    // The pipeline drops blacklisted calls from its own live set, so the
+    // stored list has to reach it before the first spot does.
+    match api::load_blacklist(&app_state) {
+        Ok(0) => {}
+        Ok(n) => println!("dxca: blacklist loaded ({n} calls)"),
+        Err(e) => eprintln!("dxca: blacklist load failed, nothing is blocked: {e}"),
+    }
+
     let app = api::build_router(app_state.clone());
 
     let listener = match tokio::net::TcpListener::bind(&cfg.web_bind).await {

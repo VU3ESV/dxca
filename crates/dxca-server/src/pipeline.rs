@@ -36,6 +36,11 @@ pub struct PipelineState {
     /// Running listener tasks per (source name, port) — aborting the
     /// handles drops the socket and frees the port.
     sources: Mutex<HashMap<(String, u16), tokio::task::JoinHandle<()>>>,
+    /// Callsigns to drop, uppercase. Held here rather than read from SQLite
+    /// per spot: this is on the hot path for every decode and every cluster
+    /// line. `apply_blacklist` swaps it when an admin edits the list, the
+    /// same hot-apply shape as sources and destinations.
+    blacklist: RwLock<std::collections::HashSet<String>>,
 }
 
 impl PipelineState {
@@ -46,6 +51,18 @@ impl PipelineState {
 
     pub fn broadcaster(&self) -> Arc<UdpBroadcaster> {
         self.broadcaster.read().unwrap().clone()
+    }
+
+    pub fn apply_blacklist(&self, calls: impl IntoIterator<Item = String>) {
+        *self.blacklist.write().unwrap() =
+            calls.into_iter().map(|c| c.trim().to_uppercase()).collect();
+    }
+
+    pub fn is_blacklisted(&self, call: &str) -> bool {
+        self.blacklist
+            .read()
+            .unwrap()
+            .contains(&call.to_uppercase())
     }
 
     /// Hot-apply new broadcast destinations: a fresh broadcaster replaces
@@ -156,6 +173,10 @@ pub async fn start(
         source_counts: Mutex::new(HashMap::new()),
         spot_events,
         sources: Mutex::new(HashMap::new()),
+        // Loaded from the database by main() once the Db is open; empty
+        // until then, so a spot arriving in that window is never wrongly
+        // dropped.
+        blacklist: RwLock::new(std::collections::HashSet::new()),
     });
 
     let (tx, rx) = mpsc::channel::<PipelineInput>(1024);
@@ -254,12 +275,31 @@ fn process_spot(
     ring_capacity: usize,
 ) {
     let now = now_unix();
+    // Counted BEFORE the blacklist check on purpose: this counter is what
+    // proves a node is alive, and a node sending only blacklisted calls is
+    // still a node that is up. The count is "received", not "shown".
     *state
         .source_counts
         .lock()
         .unwrap()
         .entry(spot.source_name.clone())
         .or_insert(0) += 1;
+
+    // Blacklist: drop before the ring, so the spot is absent from the Spots
+    // table, the telnet server, the filtered UDP destinations and Telegram
+    // alike. A spot with no extractable callsign can never match, and is
+    // never dropped by accident.
+    //
+    // The one thing this cannot suppress is the VERBATIM UDP passthrough:
+    // that forwards the original datagram before anything is parsed (1.x
+    // behaviour, and the reason click-to-fill works), so a blacklisted call
+    // inside a WSJT-X decode still reaches the logger by that path. Cluster
+    // spots have no passthrough and are dropped completely.
+    if let Some(call) = spot.dx_callsign()
+        && state.is_blacklisted(&call)
+    {
+        return;
+    }
 
     // Rebroadcast dedupe: first spot per CALL-BAND-MODE per window reaches
     // the telnet feed + filtered destinations.

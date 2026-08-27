@@ -8,6 +8,7 @@
   import ClubLog from './views/ClubLog.svelte';
   import Alerts from './views/Alerts.svelte';
   import Users from './views/Users.svelte';
+  import Blacklist from './views/Blacklist.svelte';
   import System from './views/System.svelte';
 
   type View = 'loading' | 'setup' | 'login' | 'main';
@@ -46,7 +47,7 @@
     ['spots', 'Spots'],
     ['clublog', 'My ClubLog'],
     ['alerts', 'My Alerts'],
-    ...(me?.role === 'admin' ? [['users', 'Users']] : []),
+    ...(me?.role === 'admin' ? [['users', 'Users'], ['blacklist', 'Blacklist']] : []),
     ['system', 'System'],
   ] as [string, string][]);
 </script>
@@ -80,6 +81,8 @@
     <Alerts />
   {:else if tab === 'users'}
     <Users />
+  {:else if tab === 'blacklist'}
+    <Blacklist />
   {:else if tab === 'system'}
     <System isAdmin={me.role === 'admin'} />
   {/if}
