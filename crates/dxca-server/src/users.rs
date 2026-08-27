@@ -126,20 +126,39 @@ impl UserService {
     /// The 1.x refresh flow for one user: cty.xml (when an API key is set),
     /// then the ADIF log, then the matrix build. Blocking — run it on a
     /// blocking task. Returns (qso_count, dxcc_count).
+    /// Download and reload **cty.xml** (blocking). Server-wide: one file, one
+    /// resolver, every account classified against it — which is why the key
+    /// is a server setting and this is admin-only, matching `refresh_lotw`.
+    ///
+    /// It used to ride along inside `refresh_user`, keyed off whichever
+    /// account happened to have an `api_key`. That meant any non-admin could
+    /// swap a server-wide resource, and with automatic refresh every keyed
+    /// user re-downloaded the same ~10 MB daily.
+    pub fn refresh_cty(&self, api_key: &str) -> Result<usize, String> {
+        if api_key.is_empty() {
+            return Err("no ClubLog API key configured (System → ClubLog API key)".into());
+        }
+        let xml = clublog::download_cty(&self.endpoints, api_key)?;
+        let data = cty::parse(&xml).ok_or("cty.xml parse failed")?;
+        let count = data.entities.len();
+        if let Some(dir) = self.cty_path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        std::fs::write(&self.cty_path, &xml).map_err(|e| format!("save cty.xml: {e}"))?;
+        let mut resolver = DxccResolver::default();
+        resolver.load(data.entities, &data.prefix_rules, now_unix());
+        *self.resolver.write().unwrap() = Arc::new(resolver);
+        // Stamped here so the manual button and the scheduler share one
+        // clock, exactly as refresh_lotw does.
+        let _ = self.db.meta_set_now(crate::refresh::CTY_OK_KEY);
+        Ok(count)
+    }
+
+    /// Download one user's ClubLog log and rebuild their matrix (blocking).
+    /// Uses their email + app password only — the API key plays no part
+    /// here, it was only ever for cty.xml.
     pub fn refresh_user(&self, user_id: i64) -> Result<(usize, usize), String> {
         let cfg = self.db.clublog_config(user_id)?;
-
-        if !cfg.api_key.is_empty() {
-            let xml = clublog::download_cty(&self.endpoints, &cfg.api_key)?;
-            let data = cty::parse(&xml).ok_or("cty.xml parse failed")?;
-            if let Some(dir) = self.cty_path.parent() {
-                let _ = std::fs::create_dir_all(dir);
-            }
-            std::fs::write(&self.cty_path, &xml).map_err(|e| format!("save cty.xml: {e}"))?;
-            let mut resolver = DxccResolver::default();
-            resolver.load(data.entities, &data.prefix_rules, now_unix());
-            *self.resolver.write().unwrap() = Arc::new(resolver);
-        }
 
         if cfg.callsign.is_empty() || cfg.email.is_empty() || cfg.app_password.is_empty() {
             return Err("need callsign, email and app password".into());
@@ -157,7 +176,12 @@ impl UserService {
 
         let resolver = self.resolver.read().unwrap().clone();
         if !resolver.is_loaded() {
-            return Err("no cty.xml loaded — set the ClubLog API key and refresh".into());
+            // The key is an admin/server setting now, so a plain user cannot
+            // fix this themselves — say who can.
+            return Err(
+                "no cty.xml loaded — an admin must set the ClubLog API key in System and refresh"
+                    .into(),
+            );
         }
         let (matrix, qso_count) = LogMatrix::build_from_adif(&content, &resolver);
         let dxcc_count = matrix.total_dxcc_count();

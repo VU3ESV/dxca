@@ -274,18 +274,46 @@ async fn two_users_same_stream_different_highlights_and_pings() {
     assert_eq!(status, 200);
     let cookie_b = cookie_b.expect("login returns a session cookie");
 
-    // Per-user ClubLog + Telegram config. A holds the API key (cty.xml).
-    for (cookie, call, token, api_key) in [
-        (&cookie_a, "VU2CPL", "tokA", "test-key"),
-        (&cookie_b, "K1ABC", "tokB", ""),
-    ] {
+    // cty.xml is SERVER-wide now: one API key, set by an admin, fetched
+    // once — not something either user carries. A is the admin.
+    let (status, _, body) = http(
+        "PUT",
+        format!("{base}/api/config/global"),
+        Some(cookie_a.clone()),
+        Some(serde_json::json!({
+            "udp_sources": [], "cluster_nodes": [], "broadcast_destinations": [],
+            "clublog_api_key": "test-key",
+        })),
+    )
+    .await;
+    assert_eq!(status, 200, "set server API key: {body}");
+    let (status, _, body) = http(
+        "POST",
+        format!("{base}/api/cty/refresh"),
+        Some(cookie_a.clone()),
+        None,
+    )
+    .await;
+    assert_eq!(status, 200, "cty refresh: {body}");
+
+    // A non-admin must not be able to touch a server-wide resource.
+    let (status, _, _) = http(
+        "POST",
+        format!("{base}/api/cty/refresh"),
+        Some(cookie_b.clone()),
+        None,
+    )
+    .await;
+    assert_eq!(status, 403, "cty refresh is admin-only");
+
+    // Per-user ClubLog + Telegram config: credentials for THEIR OWN log.
+    for (cookie, call, token) in [(&cookie_a, "VU2CPL", "tokA"), (&cookie_b, "K1ABC", "tokB")] {
         let (status, _, _) = http(
             "PUT",
             format!("{base}/api/config/me/clublog"),
             Some(cookie.clone()),
             Some(serde_json::json!({
                 "callsign": call, "email": "x@y.z", "app_password": "pw",
-                "api_key": api_key,
             })),
         )
         .await;

@@ -69,8 +69,17 @@ async fn main() {
         }
     });
 
-    // Automatic ClubLog / LoTW re-download (PLAN §5's "refresh schedule").
-    dxca_server::refresh::spawn(users.clone(), cfg.lotw_refresh_days);
+    // The ClubLog API key used to live in each user's ClubLog config even
+    // though it only ever fetched the SHARED cty.xml. Lift a pre-existing one
+    // to the server setting, once, so an upgrade needs no manual step.
+    match users.db.adopt_legacy_api_key() {
+        Ok(Some(from)) => println!("dxca: adopted ClubLog API key from {from}'s settings"),
+        Ok(None) => {}
+        Err(e) => eprintln!("dxca: could not check for a legacy ClubLog API key: {e}"),
+    }
+
+    // Automatic cty / ClubLog / LoTW re-download (PLAN §5's "refresh schedule").
+    dxca_server::refresh::spawn(users.clone(), cfg.cty_refresh_days, cfg.lotw_refresh_days);
 
     let app_state = AppState {
         pipeline: pipeline_state,

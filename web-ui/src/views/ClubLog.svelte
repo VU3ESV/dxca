@@ -35,7 +35,7 @@
   ];
 
   let cfg = $state<any>({
-    callsign: '', email: '', app_password: '', api_key: '',
+    callsign: '', email: '', app_password: '',
     refresh_hours: 24,
     alert_new_dxcc: true, alert_new_slot: true, alert_new_band: true,
     alert_new_mode: true,
@@ -80,8 +80,10 @@
   <div class="card">
     <h2>My ClubLog</h2>
     <p class="hint intro">
-      Your log drives the New DXCC / Slot / Band / Mode highlighting — only
-      for your account.
+      Your log drives the New / ? highlighting — only for your account.
+      The <b>ClubLog API key</b> is not here: it only fetches the shared DXCC
+      prefix database, so it is one server-wide setting an admin manages in
+      <b>System</b>. These credentials download <em>your</em> log.
     </p>
     <div class="settings-form">
       <span class="label">Callsign</span>
@@ -90,8 +92,6 @@
       <input bind:value={cfg.email} />
       <span class="label">App password</span>
       <input type="password" bind:value={cfg.app_password} />
-      <span class="label">API key</span>
-      <input bind:value={cfg.api_key} />
       <span class="label">Auto-refresh</span>
       <select bind:value={cfg.refresh_hours}>
         {#each INTERVALS as [hours, label] (hours)}
