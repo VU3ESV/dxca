@@ -38,7 +38,7 @@ dxca/
 │   │   ├── adif.rs            #   ADIF parser             (port of ADIFParser)
 │   │   ├── dxcc.rs            #   DXCC resolver
 │   │   ├── matrix.rs          #   per-user worked matrix  (port of LogMatrix)
-│   │   ├── classify.rs        #   New DXCC/Slot/Band/Mode (port of AlertClassifier)
+│   │   ├── classify.rs        #   New + ? DXCC/Slot/Band/Mode (port of AlertClassifier)
 │   │   ├── beacons.rs         #   NCDXF/IBP + national DB (port of BeaconDatabase)
 │   │   ├── bands.rs, modes.rs #   BandResolver, ModeNormalizer (DATA grouping)
 │   │   └── format.rs          #   DX-cluster line formatter (port of ClusterFormatter)
@@ -148,8 +148,13 @@ Tailscale problem, not DXCA's.
 **Ownership split.**
 - *Admin:* global config (§4), user management, node/source control.
 - *Each user:* own ClubLog email + app password + API key, refresh
-  schedule, alert toggles (New DXCC/Slot/Band/Mode, unconfirmed, import
-  bands), own Telegram chat ID + cooldown, own display filters.
+  schedule, alert toggles, own Telegram chat ID + cooldown, own display
+  filters.
+  > **Amended 2026-08-27:** "unconfirmed" is no longer one switch. The
+  > ladder is eight independent levels — New DXCC/Slot/Band/Mode plus
+  > ? DXCC/Slot/Band/Mode — and the narrowing by band and mode class
+  > applies separately to the display and to Telegram. See HANDOVER's
+  > "Alert levels 2.1".
 
 **Per-user classification.** One shared spot pipeline; at classify time the
 spot is scored against **every** user's matrix (hash lookups — trivial for

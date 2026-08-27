@@ -424,6 +424,64 @@ Remaining before any public release: x86-64-Linux (+ optional Windows)
 release artifacts, a Windows build test, then the repo-public flip +
 vu2cpl.com card with the VU3ESV credit line.
 
+## Alert levels 2.1 (2026-08-27)
+
+**Four levels became eight, and the band/mode narrowing arrived on both
+tabs.** The old `alert_unconfirmed` was a *global switch* that swapped the
+whole comparison to the confirmed sets — so "never worked" and "worked but
+unconfirmed" were mutually exclusive and the UI could never say which kind
+of gap a spot was.
+
+The ladder now runs, rarest first:
+
+| | never worked | worked, not confirmed |
+|---|---|---|
+| entity | `newDXCC` | `unconfDXCC` |
+| band | `newBand` | `unconfBand` |
+| mode | `newMode` | `unconfMode` |
+| slot | `newSlot` | `unconfSlot` |
+
+`raw_level` decides the whole `New*` half against the **worked** sets first;
+only a spot whose slot really is in the log reaches the **confirmed** sets.
+That ordering is the meaning — a band never worked beats a band worked and
+unconfirmed. `unconfDXCC` is checked before the narrower `?` levels because
+with nothing confirmed for an entity the band/mode/slot gaps are all true.
+
+`alert_unconfirmed` was **retired, not migrated**: serde ignores the leftover
+key and the only stored account had it `false`. All four `?` levels default
+off, so an existing account behaves exactly as it did until something is
+ticked.
+
+**Three narrowings, three scopes** — worth keeping straight, since "alerts"
+now appears on three tabs:
+
+- **My ClubLog** — which levels this account flags *at all* (the classifier's
+  `alert_*`). Off here means the level never reaches the feed or Telegram.
+- **Spots** — which flagged levels are on screen. Client-side, kept in
+  `localStorage['dxca.spotfilter']`, deliberately NOT server-side: it is a
+  per-browser view preference and persisting it would make it a second
+  account setting to reconcile with My Alerts.
+- **My Alerts** — which levels ping Telegram (`notify_*`), plus
+  `notify_bands` / `notify_modes`. **Empty list = ALL**, the same convention
+  `broadcast_destinations.sources` uses — which is why a fresh account is not
+  silent.
+
+New endpoints: `GET /api/reference` (bands, mode classes, the level ladder
+with labels — served so the UI cannot drift from `AlertLevel`) and
+`GET /api/me/station` (callsign + `MatrixStats` + QSO count for the Spots
+station card). Confirmed-DXCC there follows the **award** rule: an entity
+with at least one confirmed slot, not an entity fully confirmed.
+
+Level colour is a CSS data table — `[data-level=…]` in app.css resolves
+`--lvl` / `--lvl-bg`, and the feed row, Alert cell, chips and config lists
+all read those two. A ninth level needs no CSS. The `?` half reuses its New
+counterpart's hue pulled toward `--muted`, so hue says *which axis* and
+saturation says *how badly you need it*.
+
+`bands::SELECTABLE_BANDS` (160M–70CM) is narrower than `BANDS` on purpose:
+LF/MF and microwave are still *resolved* from frequency, they just aren't
+worth a checkbox here.
+
 ## DXSpider bells ate every spot (fixed 2026-08-27)
 
 Adding **db0sue.de:8000** (DO5SSB-2, DXSpider 1.57) looked like a connection
