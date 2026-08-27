@@ -22,4 +22,4 @@ pub mod modes;
 mod spot;
 pub mod wsjtx;
 
-pub use spot::{Spot, time_from_decode_ms};
+pub use spot::{Spot, message_is_cq, time_from_decode_ms};

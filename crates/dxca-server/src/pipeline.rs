@@ -226,7 +226,12 @@ async fn run_pipeline(
                     delta_frequency_hz: decode.delta_frequency_hz,
                     mode,
                     mode_inferred,
+                    // A decoder's message IS the transmitted text, so the
+                    // "CQ " prefix is a real answer here — unlike a cluster
+                    // spot, whose message is synthesised.
+                    is_cq: dxca_core::message_is_cq(&decode.message),
                     message: decode.message,
+                    comment: String::new(),
                     low_confidence: decode.low_confidence,
                     off_air: decode.off_air,
                     dial_frequency_hz: dial,

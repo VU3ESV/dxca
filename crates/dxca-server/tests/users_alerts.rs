@@ -163,6 +163,8 @@ fn test_spot() -> Spot {
         mode: "FT8".into(),
         mode_inferred: false,
         message: "CQ VU2ZZZ MK83".into(),
+        is_cq: true,
+        comment: String::new(),
         low_confidence: false,
         off_air: false,
         dial_frequency_hz: 14_074_000,

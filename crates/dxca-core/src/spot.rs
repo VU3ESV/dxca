@@ -28,6 +28,23 @@ pub struct Spot {
     /// assumption. A decoder-reported mode always wins over an inferred one.
     pub mode_inferred: bool,
     pub message: String,
+    /// Does this spot report a station **calling CQ**?
+    ///
+    /// Stored rather than sniffed from `message`, because for a cluster spot
+    /// the message is synthesised and cannot carry the answer. Every cluster
+    /// spot used to be built as `CQ <call>`, so the CQ-only filter matched
+    /// 100% of the feed and appeared to do nothing.
+    ///
+    /// Cluster spots take it from the parsed `SpotKind`, widened to count
+    /// skimmer spots: a skimmer only reports stations calling CQ, so an
+    /// unmarked skimmer spot is one even though its comment never says so.
+    /// A human spot with no marker is somebody logging a station they heard
+    /// or worked, which is not.
+    pub is_cq: bool,
+    /// The spotter's free-text comment, for cluster spots — what a human
+    /// actually typed. Empty for decoder spots, whose `message` already IS
+    /// the decoded text.
+    pub comment: String,
     pub low_confidence: bool,
     pub off_air: bool,
     pub dial_frequency_hz: u64,
@@ -47,9 +64,9 @@ impl Spot {
         self.frequency_hz() as f64 / 1_000_000.0
     }
 
-    pub fn is_cq(&self) -> bool {
-        self.message.to_uppercase().starts_with("CQ ")
-    }
+    // `is_cq` used to be derived here from the message text. It is a stored
+    // field now — see the doc comment on it — because a synthesised cluster
+    // message can only ever answer "yes".
 
     /// "HHmm" in UTC, for the cluster line.
     pub fn hhmm(&self) -> String {
@@ -91,6 +108,12 @@ impl Spot {
         let band = crate::bands::band_from_hz(self.frequency_hz()).unwrap_or("");
         Some(format!("{call}-{band}-{}", self.mode.to_uppercase()))
     }
+}
+
+/// Does a decoded message announce a CQ? Only meaningful for real decoder
+/// text — a synthesised cluster message can only ever say yes.
+pub fn message_is_cq(message: &str) -> bool {
+    message.to_uppercase().starts_with("CQ ")
 }
 
 /// Map a WSJT-X decode time (ms since midnight UTC) onto today's UTC date —
@@ -166,6 +189,8 @@ mod tests {
             mode: "FT8".into(),
             mode_inferred: false,
             message: message.into(),
+            is_cq: true,
+            comment: String::new(),
             low_confidence: false,
             off_air: false,
             dial_frequency_hz: 14_074_000,
@@ -197,7 +222,7 @@ mod tests {
     #[test]
     fn cq_and_keys() {
         let s = spot("CQ P5DX PM95");
-        assert!(s.is_cq());
+        assert!(s.is_cq);
         assert_eq!(s.duplicate_key().as_deref(), Some("P5DX-20M-FT8"));
         assert_eq!(spot("73").duplicate_key(), None);
         assert_eq!(s.frequency_hz(), 14_075_487);

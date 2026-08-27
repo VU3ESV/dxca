@@ -92,7 +92,10 @@
 
   let visible = $derived.by(() => {
     let rows = spots.filter((s) => {
-      if (cqOnly && !s.message?.toUpperCase().startsWith('CQ ')) return false;
+      // The server decides this now. Sniffing the message text matched
+      // every cluster spot, because those messages are synthesised as
+      // "CQ <call>" whatever the spot actually reported.
+      if (cqOnly && !s.is_cq) return false;
       if (sourceFilter.size && !sourceFilter.has(s.source_name)) return false;
       if (bandFilter.size && (!s.band || !bandFilter.has(s.band))) return false;
       // A spot whose mode is unknown matches no mode narrowing — the same
@@ -320,7 +323,9 @@
               <td>{s.band ?? ''}</td>
               <td>{s.dxcc_name ?? ''}</td>
               <td class="alert">{flagged(s) ? levelLabel(s.alert) : ''}</td>
-              <td class="muted msg">{s.is_beacon ? '[BEACON] ' : ''}{s.message}</td>
+              <!-- A cluster spot's `message` is synthesised; `comment` is
+                   what the spotter actually typed, so prefer it. -->
+              <td class="muted msg">{s.is_beacon ? '[BEACON] ' : ''}{s.comment || s.message}</td>
             </tr>
           {/each}
         </tbody>

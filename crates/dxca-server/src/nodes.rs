@@ -5,7 +5,7 @@
 //! `handleClusterSpot` did.
 
 use crate::pipeline::PipelineInput;
-use dxca_connect::dxcluster::{ClientConfig, ClientEvent, ClusterClient, ParsedSpot};
+use dxca_connect::dxcluster::{ClientConfig, ClientEvent, ClusterClient, ParsedSpot, SpotKind};
 use dxca_core::Spot;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -202,6 +202,11 @@ fn synthetic_spot(node_name: &str, p: &ParsedSpot) -> Spot {
         _ => scrape_mode(&p.comment),
     };
     let (mode, mode_inferred) = dxca_core::modes::resolve(&reported, p.freq_khz / 1000.0);
+    // The parser already worked out what the comment reported; this used to
+    // discard it and stamp "CQ" on every cluster spot, which is why the
+    // CQ-only filter matched 100% of the feed. A skimmer spot with no marker
+    // still counts — a skimmer only reports stations calling CQ.
+    let is_cq = matches!(p.kind, SpotKind::Cq | SpotKind::Dx) || p.spotter_is_skimmer;
     Spot {
         time_unix: now_unix(),
         snr_db: p.snr_db.unwrap_or(0),
@@ -209,7 +214,13 @@ fn synthetic_spot(node_name: &str, p: &ParsedSpot) -> Spot {
         delta_frequency_hz: 0,
         mode,
         mode_inferred,
+        // Kept as "CQ <call>" whatever the kind: it is what `dx_callsign`
+        // parses the callsign out of, and the outbound cluster line and the
+        // dedupe key both ride on that. What the spotter actually typed is
+        // carried in `comment` and is what the UI shows.
         message: format!("CQ {}", p.call),
+        is_cq,
+        comment: p.comment.clone(),
         low_confidence: false,
         off_air: false,
         dial_frequency_hz: (p.freq_khz * 1000.0) as u64,
@@ -329,6 +340,32 @@ mod tests {
         let s = synthetic_spot("DB0SUE", &p);
         assert_eq!(s.mode, "CW");
         assert!(!s.mode_inferred, "reported beats inferred");
+    }
+
+    #[test]
+    fn cq_is_taken_from_the_spot_not_from_the_synthetic_message() {
+        // Every cluster spot's message is "CQ <call>", so a message-text
+        // test said yes to all of them and the CQ-only filter did nothing.
+        let go = |line: &str| synthetic_spot("NODE", &parse_spot_line(line).unwrap());
+
+        // Human spot, free-text comment, no marker → not a CQ.
+        let s = go("DX de DB0SUE:    14200.0  N2WQ           up 2                1428Z");
+        assert!(!s.is_cq, "an unmarked human spot is not a CQ");
+        assert_eq!(s.comment, "up 2", "and the real comment is carried");
+        assert!(
+            s.message.starts_with("CQ "),
+            "message stays the callsign carrier for dx_callsign/format/dedupe"
+        );
+
+        // The comment says CQ → a CQ.
+        assert!(go("DX de DB0SUE:    14200.0  N2WQ           CQ DX               1428Z").is_cq);
+
+        // Skimmer with no marker → still a CQ: skimmers only report CQ calls.
+        let s = go("DX de W3LPL-#:   14025.0  K1ABC          22 WPM -15 dB       1428Z");
+        assert!(s.is_cq, "unmarked skimmer spot counts as CQ");
+
+        // Beacon → not a CQ.
+        assert!(!go("DX de DB0SUE:    14100.0  4U1UN          NCDXF BCN           1428Z").is_cq);
     }
 
     #[test]

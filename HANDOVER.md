@@ -878,6 +878,38 @@ and not worth failing an install over.
 Tested against stub `node` binaries at 16 / 18 / 19 / 20 / 21 / 22 / 24 / 26
 — accepted, rejected, and the `--stub-ui` skip all behave.
 
+## "CQ only" filtered nothing (fixed 2026-08-28)
+
+Reported as "cq only has no effect". Measured on production before touching
+anything: **800 of 800 spots started with "CQ "**, across all five sources.
+The checkbox was wired correctly; it had nothing to bite on.
+
+`synthetic_spot` built every cluster spot as `message: format!("CQ {}",
+p.call)`, and both `Spot::is_cq()` and the UI filter tested that string. So
+the answer was yes by construction. Meanwhile `wire.rs` had already worked
+out the real `SpotKind` (Cq / Dx / De / Bcn / Ncdxf, `Unknown` when the
+comment carries no marker) and `synthetic_spot` discarded it — the same
+shape as the mode bug two sections down: real information thrown away and a
+confident-looking default put in its place.
+
+`is_cq` is now a **stored field** on `Spot`, not a derivation:
+
+- cluster: `SpotKind::Cq | SpotKind::Dx`, **or the spotter is a skimmer**.
+  Manoj chose the skimmer widening deliberately — a skimmer only reports
+  stations calling CQ, so an unmarked skimmer spot is one even though its
+  comment never says so, whereas an unmarked human spot is somebody logging
+  a station they heard. Strict marker-only was the alternative and would
+  have hidden most of the feed behind the filter.
+- decoder: `message_is_cq()` on the real decoded text, where the prefix
+  genuinely means something.
+
+`message` deliberately stays `"CQ <call>"` whatever the kind, because
+`dx_callsign()` parses the callsign out of it and both the outbound cluster
+line (`format.rs`) and `duplicate_key` ride on that. The spotter's actual
+text is carried in the new `Spot::comment` and is what the Spots table now
+shows in the Message column — previously it displayed a synthesised "CQ
+<call>" for every cluster spot, which was never what anyone typed.
+
 ## Users edit row overflowed the card (fixed 2026-08-28)
 
 Reported with screenshots: editing a user at a wide window pushed the Save
