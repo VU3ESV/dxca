@@ -177,7 +177,10 @@ impl AlertClassifier<'_> {
             .and_then(|id| self.resolver.entity(id))
             .map(|e| e.name.clone());
         // FT8/FT4/JT*/RTTY/… → DATA: digital modes share one award slot.
-        let normalized_mode = modes::canonical(mode);
+        // `None` when the mode is genuinely unknown — `canonical` would call
+        // that DATA, which is how phone spots from comment-only cluster
+        // nodes used to be credited to digital slots.
+        let normalized_mode = modes::canonical_opt(mode);
 
         let (Some(dxcc), Some(bnd)) = (dxcc_id, band) else {
             return Classification {
@@ -205,10 +208,29 @@ impl AlertClassifier<'_> {
     /// decide the `Unconf*` half. That ordering is the whole point — a band
     /// you have never worked is a better catch than one you have worked and
     /// not confirmed, so it must win even though both are "missing".
-    fn raw_level(&self, dxcc: i32, band: &str, mode: &str) -> AlertLevel {
+    fn raw_level(&self, dxcc: i32, band: &str, mode: Option<&str>) -> AlertLevel {
         let Some(status) = self.matrix.status(dxcc) else {
             return AlertLevel::NewDxcc;
         };
+
+        // No mode means no slot and no mode gap that can honestly be
+        // answered, so only the band half of the ladder runs. Inventing a
+        // slot would put the spot in an award bucket it may not belong to;
+        // returning nothing would hide a genuinely new band. Band gaps are
+        // mode-independent, so they stay.
+        let Some(mode) = mode else {
+            if !status.bands.contains(band) {
+                return AlertLevel::NewBand;
+            }
+            if status.confirmed_slots.is_empty() {
+                return AlertLevel::UnconfDxcc;
+            }
+            if !status.confirmed_bands.contains(band) {
+                return AlertLevel::UnconfBand;
+            }
+            return AlertLevel::Worked;
+        };
+
         let slot = format!("{band}-{mode}");
 
         // --- never worked -------------------------------------------------
@@ -328,6 +350,55 @@ mod tests {
             config,
         }
         .classify(call, mhz, mode)
+    }
+
+    #[test]
+    fn unknown_mode_answers_only_the_band_half() {
+        let cfg = AlertConfig::default();
+        // The matrix has India on 20M-DATA (confirmed) and 40M-CW.
+        //
+        // An empty mode used to reach `canonical("")` and come back DATA, so
+        // this spot was scored as the worked 20M-DATA slot — a phone spot
+        // silently credited to a digital one. Now the mode half is simply
+        // not answered: 20M is worked and confirmed, so nothing is flagged.
+        assert_eq!(
+            classify("VU2ZZZ", 14.200, "", &cfg).level,
+            AlertLevel::Worked,
+            "no mode: cannot claim a new mode or slot on a worked band"
+        );
+        // A band gap is mode-independent, so it still reports.
+        assert_eq!(
+            classify("VU2ZZZ", 21.200, "", &cfg).level,
+            AlertLevel::NewBand,
+            "no mode: a never-worked band is still a never-worked band"
+        );
+        // So is a whole-entity gap.
+        assert_eq!(
+            classify("K1JT", 14.200, "", &cfg).level,
+            AlertLevel::NewDxcc
+        );
+        // 40M-CW is worked but unconfirmed, so the band is unconfirmed too —
+        // visible only with the Unconf half switched on, since it is off by
+        // default and `apply_filter` downgrades a disabled level to Worked.
+        let unconf = AlertConfig {
+            alert_unconf_band: true,
+            ..AlertConfig::default()
+        };
+        assert_eq!(
+            classify("VU2ZZZ", 7.150, "", &unconf).level,
+            AlertLevel::UnconfBand
+        );
+        assert_eq!(
+            classify("VU2ZZZ", 7.150, "", &cfg).level,
+            AlertLevel::Worked,
+            "same spot, default config: the disabled level reads as Worked"
+        );
+        // Contrast: the SAME frequency WITH a mode does reach the mode half.
+        assert_eq!(
+            classify("VU2ZZZ", 14.200, "SSB", &cfg).level,
+            AlertLevel::NewMode,
+            "a known mode still gets the full ladder"
+        );
     }
 
     #[test]

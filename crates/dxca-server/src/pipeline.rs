@@ -211,12 +211,21 @@ async fn run_pipeline(
                     .get(&datagram.source_name)
                     .copied()
                     .unwrap_or(0);
+                // A decoder always names its mode, so this is effectively
+                // pass-through; resolve() only matters if one ever sends a
+                // blank, in which case the dial frequency is a better guess
+                // than DATA-by-default.
+                let (mode, mode_inferred) = dxca_core::modes::resolve(
+                    &decode.mode,
+                    (dial + u64::from(decode.delta_frequency_hz)) as f64 / 1_000_000.0,
+                );
                 let spot = Spot {
                     time_unix: time_from_decode_ms(now, decode.time_ms),
                     snr_db: decode.snr_db,
                     delta_time_s: decode.delta_time_s,
                     delta_frequency_hz: decode.delta_frequency_hz,
-                    mode: decode.mode,
+                    mode,
+                    mode_inferred,
                     message: decode.message,
                     low_confidence: decode.low_confidence,
                     off_air: decode.off_air,

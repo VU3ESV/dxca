@@ -74,11 +74,14 @@
     (s.dial_frequency_hz + s.delta_frequency_hz) / 1000;
 
   // The award bucket the server would file this spot under. Mirrors
-  // dxca-core's modes::canonical so the display filter agrees with the
-  // Telegram gate; anything unrecognised is DATA, exactly as there.
+  // dxca-core's modes::canonical_opt so the display filter agrees with the
+  // Telegram gate: anything unrecognised is DATA, but an EMPTY mode is null,
+  // not DATA. Returning DATA there is what used to hide a phone spot behind
+  // a digital filter, matching the server bug this pairs with.
   const PHONE = ['SSB', 'USB', 'LSB', 'AM', 'FM', 'PHONE', 'VOICE', 'DIGITALVOICE', 'C4FM', 'DMR', 'DSTAR'];
-  function modeClass(mode: string | null | undefined): string {
+  function modeClass(mode: string | null | undefined): string | null {
     const m = (mode ?? '').trim().toUpperCase();
+    if (!m) return null;
     if (m === 'CW') return 'CW';
     return PHONE.includes(m) ? 'PHONE' : 'DATA';
   }
@@ -92,7 +95,12 @@
       if (cqOnly && !s.message?.toUpperCase().startsWith('CQ ')) return false;
       if (sourceFilter.size && !sourceFilter.has(s.source_name)) return false;
       if (bandFilter.size && (!s.band || !bandFilter.has(s.band))) return false;
-      if (modeFilter.size && !modeFilter.has(modeClass(s.mode))) return false;
+      // A spot whose mode is unknown matches no mode narrowing — the same
+      // rule the server applies when it declines to guess a slot.
+      if (modeFilter.size) {
+        const cls = modeClass(s.mode);
+        if (!cls || !modeFilter.has(cls)) return false;
+      }
       // A level narrowing shows ONLY those levels — picking "New DXCC" means
       // the feed becomes a New-DXCC feed, not "everything, DXCC highlighted".
       if (levelFilter.size && !levelFilter.has(s.alert)) return false;
@@ -295,7 +303,19 @@
                 {s.dx_call ?? '—'}{#if s.is_lotw}<span class="lotw" title="LoTW user">●</span>{/if}
               </td>
               <td class="mono">{freqKHz(s).toFixed(1)}</td>
-              <td class="mode">{s.mode}</td>
+              <td class="mode">
+                {#if s.mode_inferred}
+                  <span
+                    class="inferred"
+                    title="Guessed from the frequency — this spot's comment carried no mode"
+                    >{s.mode}</span
+                  >
+                {:else if s.mode}
+                  {s.mode}
+                {:else}
+                  <span class="unknown" title="No mode reported and none could be inferred">—</span>
+                {/if}
+              </td>
               <td class="mono">{s.snr_db}</td>
               <td>{s.band ?? ''}</td>
               <td>{s.dxcc_name ?? ''}</td>
@@ -563,6 +583,18 @@
 
   .mode {
     color: var(--muted);
+  }
+
+  /* An inferred mode is a guess the operator should be able to see is one —
+     award slots rest on it. Dotted underline rather than a colour, so it
+     does not compete with the alert-level tints in the same row. */
+  .inferred {
+    border-bottom: 1px dotted currentColor;
+    cursor: help;
+  }
+
+  .unknown {
+    opacity: 0.5;
   }
 
   /* The message is the widest column and the least urgent — it may run out

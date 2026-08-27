@@ -736,6 +736,76 @@ Not done: no audit trail of who changed what, and no confirmation step
 beyond the browser `confirm()`. Both were judged out of proportion to a
 shack-scale roster of two or three accounts.
 
+## Missing mode on cluster spots — and the DATA default behind it (2026-08-28)
+
+Reported as "mode is missing in some of the spots, noticed N2WQ", then
+narrowed to **DB0SUE and N2WQ**. Both relay *human* spots, whose comment is
+free text with no mode field, so nothing in the pipeline could name a mode.
+Chasing it turned up four separate defects, the last of which was the one
+that mattered.
+
+**1. The parser's own answer was thrown away.** `wire.rs` parses mode from
+comment *tokens* and additionally infers CW from a `WPM` token and RTTY from
+`BPS`. `synthetic_spot` ignored `p.mode` entirely and re-scanned the comment
+itself. A skimmer line commented `-15 dB 22 WPM` therefore arrived with no
+mode even though the parser had already worked out CW.
+
+**2. Substring matching invented modes.** The 1.x scan was
+`comment.contains("CW")`, so `QSL via N1CW` scored CW, `tnx OM DO5SSB relay`
+scored SSB, and `CWops number 123` scored CW. A wrong mode is worse than a
+blank one: it files the spot in an award slot it does not belong to, and
+nothing ever flags it again.
+
+**3. The known list was ten modes and had no `USB`/`LSB`.** An ordinary
+phone spot commented "USB" got no mode while the identical spot commented
+"SSB" got one. `JS8`, `Q65`, `FST4`, `PSK63`, `OLIVIA`, `FM`, `SSTV` were
+all likewise invisible.
+
+**4. An unknown mode was silently scored as DATA.** This is the real bug.
+`modes::canonical("")` returns `"DATA"`, and `classify` fed it straight into
+the award ladder — so a 14.200 phone spot with no mode was credited to the
+operator's **digital** slots, capable of firing a false New Slot/New Mode
+alert and of masking a genuine phone need. Nothing about that was visible.
+
+### What it does now
+
+Mode is settled in three steps, best source first: the parser's token-based
+`p.mode`; then a widened, **token-matched** comment scrape; then, only if the
+spot genuinely says nothing, `bands::mode_from_mhz`.
+
+The band plan is **IARU Region 3** by explicit choice (this shack's own).
+Digital watering holes (`14.074` FT8, `7.0475` FT4, JS8, WSPR…) are checked
+*before* the broad segments, because several sit inside a phone segment —
+50.313 FT8 is in the middle of the 6m SSB range and would otherwise infer as
+SSB. Segments deliberately leave gaps (beacon windows, 60m, everything above
+2m): an uncertain frequency infers **nothing** rather than something wrong.
+
+Every inferred mode is marked. `Spot::mode_inferred` rides through the API
+and the WebSocket frame, and the Spots table underlines an inferred mode with
+a dotted rule and a tooltip; a mode that could not be inferred at all shows
+`—`. The operator can see which award slots rest on a guess.
+
+`classify` no longer bottoms out at DATA. `modes::canonical_opt` returns
+`None` for an unknown mode and `raw_level` then answers **only the band half
+of the ladder** — New DXCC and New Band still report, because those are
+mode-independent, while New Mode and New Slot are withheld rather than
+invented. The web UI's `modeClass` mirrors the same rule, so an unknown-mode
+spot matches no mode narrowing instead of hiding behind the DATA chip.
+
+### Honest limitation
+
+A spot's mode follows the **transmitting** station's band plan, not ours. A
+Region 1 station working phone low in 40m can infer wrongly under a Region 3
+table. That is why the segments are coarse and why inference is labelled
+rather than asserted. If this proves annoying, the options are a
+per-region table keyed on the spotted call's DXCC, or dropping segment
+inference and keeping only the watering holes.
+
+**Test gotcha worth remembering:** the ±500 Hz watering-hole tolerance is
+compared in **integer Hz**. As MHz f64, `(14.0745 - 14.074).abs()` is
+0.0005000000000000004 — a dial exactly 500 Hz up fell outside its own
+tolerance. The test caught it; the float version would have shipped.
+
 ## install.sh now verifies its own work (2026-08-27)
 
 Every failure in this script's history looked like a **successful** install:

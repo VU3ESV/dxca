@@ -161,6 +161,7 @@ fn test_spot() -> Spot {
         delta_time_s: 0.1,
         delta_frequency_hz: 1500,
         mode: "FT8".into(),
+        mode_inferred: false,
         message: "CQ VU2ZZZ MK83".into(),
         low_confidence: false,
         off_air: false,

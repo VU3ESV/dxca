@@ -17,6 +17,16 @@ pub struct Spot {
     /// through unmapped (WSJT-X uses mode characters like "~" for FT8),
     /// and the DATA bucket in the classifier absorbs whatever it is.
     pub mode: String,
+    /// True when `mode` was **guessed from the frequency** rather than
+    /// reported by the decoder or the spot comment.
+    ///
+    /// Cluster nodes that relay human spots (DB0SUE, N2WQ) send free-text
+    /// comments with no mode field, and an empty mode used to be bucketed as
+    /// DATA by `modes::canonical` — a silent, and often wrong, guess. It is
+    /// still a guess now, but a labelled one: the UI marks it and the API
+    /// exposes it, so an operator can see which award slots rest on an
+    /// assumption. A decoder-reported mode always wins over an inferred one.
+    pub mode_inferred: bool,
     pub message: String,
     pub low_confidence: bool,
     pub off_air: bool,
@@ -154,6 +164,7 @@ mod tests {
             delta_time_s: 0.2,
             delta_frequency_hz: 1487,
             mode: "FT8".into(),
+            mode_inferred: false,
             message: message.into(),
             low_confidence: false,
             off_air: false,

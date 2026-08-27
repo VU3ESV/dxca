@@ -345,6 +345,27 @@ passthrough → RUMlog **2237**.
 Per-user settings (ClubLog credentials, alert preferences, Telegram) are
 managed in the web GUI per account, not in the file.
 
+### Spot modes
+
+A spot's mode comes from the decoder (WSJT-X and friends always name it) or
+from the cluster comment. Nodes that relay **human** spots — DB0SUE, N2WQ —
+send free text with no mode field at all, so for those DXCA falls back to
+inferring the mode from the frequency against an **IARU Region 3** band
+plan, with the digital calling frequencies (14.074 FT8, 7.0475 FT4, JS8,
+WSPR…) taking precedence over the broad segments.
+
+An inferred mode is **marked as one**: the Spots table underlines it with a
+dotted rule and says so on hover, and the API exposes `mode_inferred` on
+every spot. Award slots can rest on these guesses, so they are visible
+rather than silent.
+
+Where the frequency is genuinely ambiguous — beacon windows, 60m, above 2m —
+nothing is inferred and the mode shows `—`. Such a spot still classifies for
+DXCC entity and band (both mode-independent) but is **excluded from New Mode
+and New Slot alerts** rather than being assumed digital. Note the limitation:
+mode follows the *transmitting* station's band plan, so a Region 1 station
+operating phone low in 40m can be inferred wrongly.
+
 ### Accounts
 
 The admin-only **Users** tab lists, creates, edits and deletes accounts.

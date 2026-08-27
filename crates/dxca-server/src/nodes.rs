@@ -191,12 +191,24 @@ fn now_unix() -> i64 {
 /// decode — message `CQ <call>`, receive-time stamp, SNR and mode scraped
 /// from the comment, dial = spot frequency with zero offset.
 fn synthetic_spot(node_name: &str, p: &ParsedSpot) -> Spot {
+    // Three sources, best first. `p.mode` is the parser's own token-based
+    // read, which also infers CW from a `WPM` token and RTTY from `BPS` —
+    // strictly better than re-scanning the comment, and it used to be thrown
+    // away here. Then the widened comment scrape. Then, only if the spot
+    // genuinely says nothing (DB0SUE and N2WQ relay human spots with free-
+    // text comments), the band plan.
+    let reported = match p.mode.as_deref() {
+        Some(m) if !m.is_empty() => m.to_string(),
+        _ => scrape_mode(&p.comment),
+    };
+    let (mode, mode_inferred) = dxca_core::modes::resolve(&reported, p.freq_khz / 1000.0);
     Spot {
         time_unix: now_unix(),
         snr_db: p.snr_db.unwrap_or(0),
         delta_time_s: 0.0,
         delta_frequency_hz: 0,
-        mode: scrape_mode(&p.comment),
+        mode,
+        mode_inferred,
         message: format!("CQ {}", p.call),
         low_confidence: false,
         off_air: false,
@@ -205,17 +217,37 @@ fn synthetic_spot(node_name: &str, p: &ParsedSpot) -> Spot {
     }
 }
 
-/// The 1.x known-mode scan: first list entry found anywhere in the
-/// uppercased comment (order matters — FT8 before CW etc.).
+/// Modes recognised in a spot comment. Wider than the 1.x list of ten, which
+/// knew no `USB`/`LSB` — so an ordinary phone spot commented "USB" got no
+/// mode at all while the same spot commented "SSB" got one.
+///
+/// `canonical` maps these into the three award buckets, so `USB`/`LSB` need
+/// no translation here; they land in PHONE on their own.
+#[rustfmt::skip]
+const KNOWN_MODES: &[&str] = &[
+    // Digital
+    "FT8", "FT4", "JS8", "Q65", "FST4", "FST4W", "WSPR", "MSK144",
+    "JT65", "JT9", "JT6M", "RTTY", "PSK", "PSK31", "PSK63", "PSK125",
+    "OLIVIA", "CONTESTIA", "MFSK", "DOMINO", "THOR", "HELL", "SSTV", "ROS",
+    // CW
+    "CW",
+    // Phone
+    "SSB", "USB", "LSB", "PHONE", "AM", "FM", "C4FM", "DMR", "DSTAR",
+];
+
+/// First recognised mode **token** in the comment.
+///
+/// Matches whole tokens, not substrings. The 1.x version used
+/// `comment.contains("CW")`, which read a mode out of "QSL via N1CW", turned
+/// "tnx OM DO5SSB relay" into SSB, and scored "CWops number 123" as CW. A
+/// wrong mode is worse than none: it silently lands the spot in the wrong
+/// DXCC award slot, where nothing ever flags it.
 fn scrape_mode(comment: &str) -> String {
-    const KNOWN: [&str; 10] = [
-        "FT8", "FT4", "CW", "SSB", "RTTY", "PSK31", "JT65", "JT9", "MSK144", "WSPR",
-    ];
-    let upper = comment.to_uppercase();
-    KNOWN
-        .iter()
-        .find(|m| upper.contains(**m))
-        .map(|m| m.to_string())
+    comment
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|t| !t.is_empty())
+        .map(|t| t.to_uppercase())
+        .find(|t| KNOWN_MODES.contains(&t.as_str()))
         .unwrap_or_default()
 }
 
@@ -245,5 +277,72 @@ mod tests {
         assert_eq!(scrape_mode("22 WPM CW CQ"), "CW");
         assert_eq!(scrape_mode("loud ssb signal"), "SSB");
         assert_eq!(scrape_mode("nothing known"), "");
+    }
+
+    #[test]
+    fn mode_scrape_matches_tokens_not_substrings() {
+        // Each of these read as a mode under the 1.x `contains` scan, and a
+        // wrong mode is worse than none — it lands the spot in an award slot
+        // it does not belong to, where nothing ever flags it.
+        assert_eq!(scrape_mode("QSL via N1CW"), "");
+        assert_eq!(scrape_mode("tnx OM DO5SSB relay"), "");
+        assert_eq!(scrape_mode("CWops number 123"), "");
+        assert_eq!(scrape_mode("worked him on FT8W"), "");
+        // Punctuation is a boundary, so a real mode still reads through it.
+        assert_eq!(scrape_mode("CQ,FT8,-12dB"), "FT8");
+        assert_eq!(scrape_mode("up 1 (USB)"), "USB");
+    }
+
+    #[test]
+    fn mode_scrape_knows_more_than_the_1x_ten() {
+        // USB/LSB especially: an ordinary phone spot commented "USB" got no
+        // mode at all from the 1.x list while "SSB" got one.
+        for (comment, want) in [
+            ("14200 USB loud", "USB"),
+            ("LSB 59", "LSB"),
+            ("JS8 -12 dB", "JS8"),
+            ("Q65 -18", "Q65"),
+            ("PSK63 cq", "PSK63"),
+            ("olivia 8/250", "OLIVIA"),
+            ("FM simplex", "FM"),
+            ("sstv now", "SSTV"),
+        ] {
+            assert_eq!(scrape_mode(comment), want, "comment: {comment:?}");
+        }
+    }
+
+    #[test]
+    fn comment_without_a_mode_infers_from_frequency() {
+        // The DB0SUE / N2WQ case: a human spot relayed as free text. Before
+        // this the mode was "" and the classifier scored it as DATA.
+        let p =
+            parse_spot_line("DX de DB0SUE:    14200.0  N2WQ           up 2                1428Z")
+                .unwrap();
+        let s = synthetic_spot("DB0SUE", &p);
+        assert_eq!(s.mode, "SSB", "20m phone segment");
+        assert!(s.mode_inferred, "and it must say so");
+
+        // A comment that names the mode is never overridden by the guess.
+        let p =
+            parse_spot_line("DX de DB0SUE:    14200.0  N2WQ           CW nr 5             1428Z")
+                .unwrap();
+        let s = synthetic_spot("DB0SUE", &p);
+        assert_eq!(s.mode, "CW");
+        assert!(!s.mode_inferred, "reported beats inferred");
+    }
+
+    #[test]
+    fn skimmer_wpm_mode_is_no_longer_discarded() {
+        // wire.rs infers CW from the WPM token; synthetic_spot used to throw
+        // that away and re-scan the comment, which found nothing.
+        let p =
+            parse_spot_line("DX de W3LPL-#:   7020.0  K1ABC          CQ 22 WPM -15 dB    1428Z")
+                .unwrap();
+        let s = synthetic_spot("W3LPL", &p);
+        assert_eq!(s.mode, "CW");
+        assert!(
+            !s.mode_inferred,
+            "the WPM token reported it, we did not guess"
+        );
     }
 }
