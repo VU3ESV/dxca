@@ -300,6 +300,48 @@ verify_serving() {
   say "OK: $URL is serving the dashboard."
 }
 
+# --- is this checkout current? -------------------------------------------
+# install.sh deliberately runs no git command that changes anything: it
+# builds whatever is in the working tree. An installer that pulled would be
+# taking a decision about someone's code — it would fight local edits, trip
+# over a detached HEAD, and cannot work at all from a pi-deploy bundle,
+# which has no repo. Installing an older checkout is also a legitimate thing
+# to do (a rollback, a branch under test), so this is a NOTE and never a
+# stop. What it refuses to allow is the operator believing they installed a
+# fix they did not: re-running install.sh without pulling first rebuilds the
+# old code and reports success, which looks identical to a working update.
+git_currency_note() {
+  command -v git >/dev/null 2>&1 || return 0
+  [ -d "$REPO/.git" ] || return 0
+  UPSTREAM="$(git -C "$REPO" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)"
+  [ -n "$UPSTREAM" ] || return 0
+
+  # Refresh the remote-tracking ref ONLY. This writes inside .git and never
+  # touches the working tree or the checked-out commit — without it the
+  # comparison is against whatever the last fetch saw, which on a clone that
+  # has never been updated is exactly the case we are trying to catch.
+  # GIT_TERMINAL_PROMPT=0 so a repo wanting credentials fails rather than
+  # hanging an unattended install.
+  FETCHED=1
+  GIT_TERMINAL_PROMPT=0 git -C "$REPO" fetch --quiet 2>/dev/null || FETCHED=0
+
+  BEHIND="$(git -C "$REPO" rev-list --count "HEAD..$UPSTREAM" 2>/dev/null || echo 0)"
+  case "$BEHIND" in '' | *[!0-9]*) BEHIND=0 ;; esac
+
+  if [ "$BEHIND" -gt 0 ]; then
+    say ""
+    say "NOTE: this checkout is $BEHIND commit(s) behind $UPSTREAM."
+    say "install.sh builds the working tree as it stands — it does not pull."
+    say "To install the latest instead, stop now and run:"
+    say "  git pull && ./install.sh"
+    say ""
+  elif [ "$FETCHED" -eq 0 ]; then
+    say "NOTE: could not reach $UPSTREAM, so whether this checkout is current"
+    say "is unknown. Building the working tree as it stands."
+  fi
+}
+git_currency_note
+
 case "$PLATFORM" in
   macos)
     require_cargo

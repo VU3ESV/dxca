@@ -240,6 +240,24 @@ restart the systemd service. Either way it finishes by fetching the page and
 telling you whether the new version is actually serving, so a silent no-op
 update is not a thing that can happen.
 
+**`install.sh` does not pull, and says so if you forgot.** It builds the
+working tree exactly as it stands — an installer that pulled would be taking
+a decision about your code, fighting local edits and tripping over a
+detached HEAD. Instead it checks whether your checkout is behind its
+upstream and tells you before spending ten minutes rebuilding the old
+version:
+
+```
+NOTE: this checkout is 7 commit(s) behind origin/main.
+install.sh builds the working tree as it stands — it does not pull.
+To install the latest instead, stop now and run:
+  git pull && ./install.sh
+```
+
+It is a note, never a stop — installing an older checkout is a legitimate
+thing to do. Nothing is printed when you are current, when there is no
+upstream, or when there is no repo at all (a `pi-deploy.sh` bundle).
+
 **Nothing you configured is touched.** Accounts, ClubLog credentials, alert
 preferences, the worked matrix, your cluster nodes and ports all live in
 `config/dxca.toml` and `data/` on the running host, and the installer writes

@@ -878,6 +878,32 @@ and not worth failing an install over.
 Tested against stub `node` binaries at 16 / 18 / 19 / 20 / 21 / 22 / 24 / 26
 — accepted, rejected, and the `--stub-ui` skip all behave.
 
+## install.sh does not pull — but it says when you should have (2026-08-28)
+
+Asked directly: "will it pull latest in the install script?" It will not, and
+should not. `install.sh` runs no git command that changes anything; it builds
+the working tree as it stands. Pulling would be deciding about someone else's
+code — fighting local edits, tripping over a detached HEAD — and it cannot
+work at all from a `pi-deploy.sh` bundle, which has no repo.
+
+The hazard is the other half: re-running the installer *without* pulling
+rebuilds the OLD tree and reports success, which is indistinguishable from a
+working update. That is the same shape as every other bug in this file.
+
+`git_currency_note` therefore refreshes the remote-tracking ref only —
+inside `.git`; the working tree and checked-out commit are untouched — and
+prints how many commits behind upstream the tree is, before the build
+starts rather than after ten minutes of compiling. It is a **NOTE, never a
+stop**: installing an older checkout is a legitimate thing to do (a
+rollback, a branch under test), unlike a missing dashboard.
+
+Silent when the tree is current, when there is no upstream, and when there
+is no `.git`. `GIT_TERMINAL_PROMPT=0` so a repo wanting credentials fails
+rather than hanging an unattended install, and an unreachable remote says
+the currency is *unknown* instead of implying the tree is current. Tested
+across all five shapes: current, five behind, detached HEAD, unreachable
+remote, no repo.
+
 ## install.sh did not install the web GUI (fixed 2026-08-27)
 
 Two separate holes, both ending in the same symptom: the service comes up,
