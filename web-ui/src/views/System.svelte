@@ -90,6 +90,18 @@
       {#if isAdmin}
         <div class="actions">
           <button onclick={refreshLotw} disabled={busy}>Refresh LoTW users list</button>
+          <span class="hint">
+            {#if cfg?.read_only?.lotw_refresh_days}
+              Auto every {cfg.read_only.lotw_refresh_days} day{cfg.read_only.lotw_refresh_days === 1 ? '' : 's'} ·
+            {:else if cfg}
+              Automatic refresh off ·
+            {/if}
+            {#if cfg?.lotw_last_refresh_unix}
+              last downloaded {ago(cfg.lotw_last_refresh_unix)} ago
+            {:else if cfg}
+              never downloaded by this server (seeded from a file)
+            {/if}
+          </span>
         </div>
       {/if}
     </div>
@@ -204,7 +216,8 @@
       <p class="hint file-only">
         File-only settings: web {cfg.read_only.web_bind} · telnet
         {cfg.read_only.telnet_port} · dedupe {cfg.read_only.dedupe_window_secs}s ·
-        ring {cfg.read_only.spot_ring_capacity} · data dir
+        ring {cfg.read_only.spot_ring_capacity} · LoTW refresh
+        {cfg.read_only.lotw_refresh_days}d · data dir
         <code>{cfg.read_only.data_dir}</code> (edit config/dxca.toml + restart).
       </p>
     </div>

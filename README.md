@@ -35,9 +35,11 @@ on screen and, separately, for Telegram. The GUI wears Meridian's design system
 (2026-08-27): one card/pill/table vocabulary across every screen, and
 **light and dark appearances** that follow the OS unless the header's
 toggle pins one. SQLite-backed accounts (argon2 + session
-cookies, first-run setup card) each carry their own ClubLog matrix;
-every spot classifies per user with Telegram alerts and per-callsign
-cooldown. Proven end-to-end in tests against fake ClubLog/Telegram
+cookies, first-run setup card) each carry their own ClubLog matrix,
+re-downloaded on a per-account schedule (daily by default) so a QSO worked
+today stops showing as new tomorrow; the shared LoTW users list refreshes
+server-wide, weekly by default. Every spot classifies per user with
+Telegram alerts and per-callsign cooldown. Proven end-to-end in tests against fake ClubLog/Telegram
 servers and by the live validations along the way (RUMlog click-to-fill,
 honest-yellow flaky node, exact matrix parity with the 1.x app's own
 artifacts). Sources, cluster nodes, and broadcast destinations are

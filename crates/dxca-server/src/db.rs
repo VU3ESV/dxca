@@ -13,15 +13,44 @@ use std::sync::Mutex;
 
 /// Per-user ClubLog settings — the 1.x `ClubLogConfig` fields that matter
 /// server-side, with the alert toggles flattened in.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ClubLogUserConfig {
     pub callsign: String,
     pub email: String,
     pub app_password: String,
     pub api_key: String,
+    /// Automatic re-download interval in hours; **0 = manual only**.
+    /// Per-user because each account pulls its own log with its own
+    /// credentials — unlike the LoTW list, which is one shared file.
+    #[serde(default = "default_refresh_hours")]
+    pub refresh_hours: i64,
     #[serde(flatten)]
     pub alerts: AlertConfigOpt,
+}
+
+/// Daily. A log that only moves when someone remembers the button means
+/// today's QSOs keep alerting as New DXCC tomorrow; ClubLog's own ADIF
+/// export is not something to pull much harder than this.
+fn default_refresh_hours() -> i64 {
+    24
+}
+
+// Hand-written rather than derived: `Default` is what a brand-new account
+// gets, and serde's per-field default is what an OLD stored row gets for a
+// key it predates. Deriving would have made those disagree — 0 (manual) for
+// the new user, 24 for the existing one.
+impl Default for ClubLogUserConfig {
+    fn default() -> Self {
+        ClubLogUserConfig {
+            callsign: String::new(),
+            email: String::new(),
+            app_password: String::new(),
+            api_key: String::new(),
+            refresh_hours: default_refresh_hours(),
+            alerts: AlertConfigOpt::default(),
+        }
+    }
 }
 
 /// AlertConfig with serde defaults matching 1.x for the `New*` half; the
@@ -195,6 +224,10 @@ CREATE TABLE IF NOT EXISTS matrices (
     matrix_json TEXT NOT NULL,
     qso_count INTEGER NOT NULL,
     last_refresh_unix INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
 );
 ";
 
@@ -419,6 +452,44 @@ impl Db {
             )
             .map(|_| ())
             .map_err(db_err)
+    }
+
+    // --- meta: small server-wide bookkeeping ------------------------------
+    // Refresh timestamps live here rather than on a file's mtime, because
+    // `install -m 600` rewrites mtimes on every deploy and would silently
+    // reset the LoTW clock each time.
+
+    pub fn meta_get(&self, key: &str) -> DbResult<Option<String>> {
+        let conn = self.conn.lock().unwrap();
+        conn.query_row("SELECT value FROM meta WHERE key = ?1", params![key], |r| {
+            r.get(0)
+        })
+        .optional()
+        .map_err(db_err)
+    }
+
+    pub fn meta_set(&self, key: &str, value: &str) -> DbResult<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO meta (key, value) VALUES (?1, ?2)
+               ON CONFLICT(key) DO UPDATE SET value = ?2",
+            params![key, value],
+        )
+        .map(|_| ())
+        .map_err(db_err)
+    }
+
+    /// A unix stamp in `meta`, or 0 when never recorded.
+    pub fn meta_unix(&self, key: &str) -> i64 {
+        self.meta_get(key)
+            .ok()
+            .flatten()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0)
+    }
+
+    pub fn meta_set_now(&self, key: &str) -> DbResult<()> {
+        self.meta_set(key, &now_unix().to_string())
     }
 
     /// One user's log provenance: (qso_count, last_refresh_unix). The matrix

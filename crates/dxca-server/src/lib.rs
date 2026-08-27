@@ -8,4 +8,5 @@ pub mod config;
 pub mod db;
 pub mod nodes;
 pub mod pipeline;
+pub mod refresh;
 pub mod users;

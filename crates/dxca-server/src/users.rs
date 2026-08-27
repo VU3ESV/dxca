@@ -96,6 +96,11 @@ impl UserService {
         std::fs::write(&self.lotw_path, &text).map_err(|e| format!("save LoTW list: {e}"))?;
         let count = users.len();
         *self.lotw_users.write().unwrap() = Arc::new(users);
+        // Stamped HERE, not in the scheduler, so a manual "Refresh LoTW
+        // users list" resets the automatic clock too — otherwise pressing
+        // the button would be followed by the scheduler downloading the same
+        // 6 MB again on its next tick.
+        let _ = self.db.meta_set_now(crate::refresh::LOTW_OK_KEY);
         Ok(count)
     }
 

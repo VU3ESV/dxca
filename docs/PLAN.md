@@ -150,6 +150,11 @@ Tailscale problem, not DXCA's.
 - *Each user:* own ClubLog email + app password + API key, refresh
   schedule, alert toggles, own Telegram chat ID + cooldown, own display
   filters.
+  > **Built 2026-08-27:** the "refresh schedule" is `refresh_hours` per
+  > account (0 = manual, default daily), with the shared LoTW list on a
+  > server-wide `lotw_refresh_days` (default weekly). See HANDOVER's
+  > "Automatic ClubLog / LoTW refresh".
+  >
   > **Amended 2026-08-27:** "unconfirmed" is no longer one switch. The
   > ladder is eight independent levels — New DXCC/Slot/Band/Mode plus
   > ? DXCC/Slot/Band/Mode — and the narrowing by band and mode class
