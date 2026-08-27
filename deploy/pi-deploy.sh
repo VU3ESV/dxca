@@ -46,7 +46,7 @@ HOST="${HOST:-vu2cpl@noderedpi4.local}"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO"
 
-echo "Building web UI + aarch64 binary…"
+echo "Building web UI + aarch64 binary..."
 pnpm -C web-ui install && pnpm -C web-ui build
 cargo zigbuild --release -p dxca-server --target aarch64-unknown-linux-gnu.2.36
 
@@ -76,7 +76,13 @@ echo "Staged for $HOST:"
 (cd "$STAGE" && find . -type f | sed 's|^\./|  |' | sort)
 echo
 
-echo "Shipping to $HOST…"
+# `${HOST}` braced and the ellipsis kept ASCII on purpose. Written as
+# `$HOST…` this died with `HOST?: unbound variable` under bash 3.2 / a
+# non-UTF-8 locale: those shells treat the ellipsis's high bytes as name
+# characters, so the variable being looked up was `HOST\xe2\x80\xa6`, not
+# HOST. It ran fine under bash 5 + UTF-8, which is what hid it. No `$VAR`
+# in a runtime string should be followed by a non-ASCII byte.
+echo "Shipping to ${HOST}..."
 ssh "$HOST" 'mkdir -p ~/dxca-deploy'
 rsync -a --delete "$STAGE/" "$HOST:dxca-deploy/"
 # -t so a remote sudo that wants a password can actually ask for it; without

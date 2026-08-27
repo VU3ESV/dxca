@@ -529,6 +529,29 @@ Real fix when there's time: remove the standalone install so rustup's shims
 win (`/usr/local/bin/{cargo,rustc,...}`), or put `~/.cargo/bin` ahead of
 `/usr/local/bin` on PATH.
 
+## Shell gotcha: never put a non-ASCII byte after `$VAR` (2026-08-27)
+
+`echo "Shipping to $HOST…"` died with **`HOST?: unbound variable`** the
+first time pi-deploy.sh was run from Manoj's own terminal. Not the ellipsis
+being unprintable — bash 3.2 (macOS `/bin/bash`) and any non-UTF-8 locale
+treat the ellipsis's high bytes as *identifier* characters, so the variable
+actually looked up was `HOST\xe2\x80\xa6`. Under `set -u` that is fatal, and
+the error prints the mangled name as `HOST?`.
+
+It had run fine every previous time because those runs were bash 5 with a
+UTF-8 locale, which parses it correctly — a latent bug the whole time, not a
+regression.
+
+Rule: **no `$VAR` in a runtime string may be followed by a non-ASCII byte.**
+Brace it (`${HOST}`) and keep echo/say strings ASCII; prose punctuation is
+fine in comments, which never execute. Runtime strings in both scripts are
+now ASCII (bar a few em-dashes with no adjacent variable). Reproduce any
+suspicion with:
+
+```sh
+LC_ALL=C /bin/bash deploy/pi-deploy.sh --no-seed user@host
+```
+
 ## Deploying to a Pi that is NOT this shack's (2026-08-27)
 
 `deploy/pi-deploy.sh --no-seed <user@ip>`. Always, for any host that isn't

@@ -44,7 +44,7 @@ cd "$REPO"
 
 build_web() {
   if command -v pnpm >/dev/null 2>&1; then
-    say "Building web UI (pnpm)…"
+    say "Building web UI (pnpm)..."
     pnpm -C web-ui install && pnpm -C web-ui build
   else
     say "NOTE: pnpm not found — the binary will embed whatever web-ui/dist"
@@ -68,7 +68,7 @@ case "$PLATFORM" in
   macos)
     require_cargo
     build_web
-    say "Building release binary…"
+    say "Building release binary..."
     cargo build --release -p dxca-server
     PLIST="$HOME/Library/LaunchAgents/com.vu2cpl.dxca.plist"
     mkdir -p "$HOME/Library/LaunchAgents"
@@ -93,14 +93,14 @@ case "$PLATFORM" in
     if [ -z "$BIN" ]; then
       require_cargo
       build_web
-      say "Building release binary (native — this takes a while on a Pi)…"
+      say "Building release binary (native — this takes a while on a Pi)..."
       cargo build --release -p dxca-server
       BIN="$REPO/target/release/dxca"
     fi
     # The service runs as whoever invokes this script — no hardcoded user.
     SERVICE_USER="$(id -un)"
     SERVICE_GROUP="$(id -gn)"
-    say "Installing to /opt/dxca (service user: $SERVICE_USER)…"
+    say "Installing to /opt/dxca (service user: $SERVICE_USER)..."
     sudo mkdir -p /opt/dxca/config /opt/dxca/data
     sudo install -m 755 "$BIN" /opt/dxca/dxca
     # Config/data are seeded only if absent — never clobber a live install.
