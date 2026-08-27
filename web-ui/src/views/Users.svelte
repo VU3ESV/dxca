@@ -113,40 +113,43 @@
       <thead><tr><th>Callsign</th><th>Name</th><th>Role</th><th></th></tr></thead>
       <tbody>
         {#each users as u}
-          <tr>
-            {#if editingId === u.id}
-              <td><input class="mono" bind:value={draftCall} autocapitalize="characters" /></td>
-              <td><input bind:value={draftName} /></td>
-              <td>
-                <select bind:value={draftRole}>
-                  <option value="user">user</option>
-                  <option value="admin">admin</option>
-                </select>
+          {#if editingId === u.id}
+            <!-- The edit form spans every column instead of putting inputs
+                 into the cells. The card lives in a `columns: 26rem` track,
+                 and three inline inputs plus two buttons have a min-content
+                 width far wider than that — nowrap cells cannot shrink, so
+                 the table overflowed into the neighbouring column. Spanning
+                 sidesteps the table's intrinsic sizing entirely. -->
+            <tr class="edit-row">
+              <td colspan="4">
+                <div class="settings-form">
+                  <span class="label">Callsign</span>
+                  <input class="mono" bind:value={draftCall} autocapitalize="characters" />
+                  <span class="label">Display name</span>
+                  <input bind:value={draftName} />
+                  <span class="label">Role</span>
+                  <select bind:value={draftRole}>
+                    <option value="user">user</option>
+                    <option value="admin">admin</option>
+                  </select>
+                  <span class="label">New password</span>
+                  <input type="password" bind:value={draftPass} placeholder="leave blank to keep" />
+                </div>
+                <div class="actions">
+                  <button class="primary" onclick={() => save(u)}>Save</button>
+                  <button onclick={cancelEdit}>Cancel</button>
+                </div>
+                {#if rowError}<p class="err">{rowError}</p>{/if}
               </td>
-              <td class="row-actions">
-                <button class="primary" onclick={() => save(u)}>Save</button>
-                <button onclick={cancelEdit}>Cancel</button>
-              </td>
-            {:else}
+            </tr>
+          {:else}
+            <tr>
               <td class="mono call">{u.callsign}{#if u.id === meId}<span class="you">you</span>{/if}</td>
               <td>{u.display_name}</td>
               <td><span class="pill" class:on={u.role === 'admin'}>{u.role}</span></td>
               <td class="row-actions">
                 <button onclick={() => startEdit(u)}>Edit</button>
                 <button class="danger" onclick={() => remove(u)}>Delete</button>
-              </td>
-            {/if}
-          </tr>
-          {#if editingId === u.id}
-            <tr class="edit-extra">
-              <td></td>
-              <td colspan="3">
-                <input
-                  type="password"
-                  bind:value={draftPass}
-                  placeholder="new password (leave blank to keep)"
-                />
-                {#if rowError}<p class="err">{rowError}</p>{/if}
               </td>
             </tr>
           {/if}
@@ -203,10 +206,15 @@
     border-color: var(--err);
   }
 
-  /* The password field gets its own row: it is the one edit with no column
-     of its own, and squeezing it into the role cell made the table jump. */
-  .edit-extra input {
-    width: 100%;
+  /* The spanning edit cell is the one place in the table where content must
+     be allowed to wrap and breathe — the roster rows stay nowrap. */
+  .edit-row td {
+    white-space: normal;
+    padding: 0.75rem 0;
+  }
+
+  .edit-row .actions {
+    margin-top: 0.75rem;
   }
 
   /* Four short labels — the app's 9rem column would leave a trench between

@@ -878,6 +878,35 @@ and not worth failing an install over.
 Tested against stub `node` binaries at 16 / 18 / 19 / 20 / 21 / 22 / 24 / 26
 — accepted, rejected, and the `--stub-ui` skip all behave.
 
+## Users edit row overflowed the card (fixed 2026-08-28)
+
+Reported with screenshots: editing a user at a wide window pushed the Save
+/ Cancel buttons and the password field out of the USERS card and across the
+ADD USER card beside it. Narrow windows were fine, which is the clue.
+
+`.card-grid` is `columns: 26rem` — CSS multi-column, so each card sits in a
+fixed ~416px track. The edit row put three `<input>`s and two buttons into
+table cells, and `td { white-space: nowrap }` means those cells cannot
+shrink: the table's min-content width was far wider than the track, so it
+spilled into the neighbouring column. A narrow viewport collapses to a
+single column as wide as the page, which is why it only showed up wide.
+
+Setting `width: 100%` on the inputs would not have fixed it — an `<input>`
+carries an intrinsic min-content width from its default `size`, and table
+layout honours that. Inline inputs were never going to fit a 26rem track.
+
+The edit form now spans all four columns in one `<td colspan="4">` and uses
+the same `.settings-form` label/field grid as the Add-user card, so it
+sidesteps the table's intrinsic sizing entirely and matches the existing
+visual vocabulary. `.edit-row td` is the one place the table is allowed
+`white-space: normal`; roster rows stay nowrap.
+
+Verified against a real instance rather than by eye: a throwaway server on
+127.0.0.1:7599 with two seeded accounts, driven in the browser at 900,
+1199 and 1500 px — no overflow at any of them — plus a save round-trip
+confirming the restructured form still writes (roster updated, "Updated
+VU2CPL." shown).
+
 ## install.sh does not pull — but it says when you should have (2026-08-28)
 
 Asked directly: "will it pull latest in the install script?" It will not, and
