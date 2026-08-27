@@ -878,6 +878,36 @@ and not worth failing an install over.
 Tested against stub `node` binaries at 16 / 18 / 19 / 20 / 21 / 22 / 24 / 26
 — accepted, rejected, and the `--stub-ui` skip all behave.
 
+## Status bar boxed by category; Sources became a chip row (2026-08-28)
+
+Two reports on the Spots screen, both fixed together because they are the
+same strip of UI.
+
+**The status pills were one long horizontal line**, and every cluster node
+appeared in it **twice** with identical counts — `DB0SUE 110` and
+`DB0SUE 110 10s`. Not two bugs: `process_spot` increments `source_counts`
+for *every* spot, so a cluster node lands in `spots_per_source` as well as
+in `cluster_nodes`, and the flat row rendered both maps end to end. It read
+as duplication because it was.
+
+Now four labelled boxes — **Decoders**, **Cluster nodes**, **Feeds out**,
+**Reference** — sized to their contents and wrapping, the Meridian shape.
+Decoders is the sources that are *not* nodes, so a node's count appears once
+in the box that also carries its state and age. An idle decoder list says
+"nothing decoding" rather than vanishing, because a decoder that has stopped
+feeding is exactly what you want to notice.
+
+**Sources was a `<details>` checkbox dropdown** while every other narrowing
+on the screen was a chip row, so it hid both what was available and what was
+picked. It is the same `ChipGroup` as Alerts / Modes / Bands now: All, then
+one chip per source, empty set meaning everything. The bespoke `toggle()`
+helper, the `.menu` / `summary` / `details` CSS and the `.fsep` separator all
+went with it — the build is warning-free rather than carrying dead selectors.
+
+Verified on a real instance rather than by eye: a throwaway server pointed at
+noderedpi4's own telnet feed on 7575, so real spots populated both maps and
+the duplication case actually occurred.
+
 ## "CQ only" filtered nothing (fixed 2026-08-28)
 
 Reported as "cq only has no effect". Measured on production before touching

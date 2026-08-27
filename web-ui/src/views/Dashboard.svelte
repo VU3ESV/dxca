@@ -140,13 +140,6 @@
     else { sortKey = key; sortDesc = true; }
   }
 
-  function toggle(set: Set<string>, value: string) {
-    const next = new Set(set);
-    if (next.has(value)) next.delete(value);
-    else next.add(value);
-    return next;
-  }
-
   // The sort marker rides the active column only — a caret on every header
   // makes the row look like ten controls instead of one answer.
   const caret = (key: string) =>
@@ -233,36 +226,73 @@
   {/if}
 
   {#if status}
-    <div class="pills">
-      {#each Object.entries(status.spots_per_source ?? {}) as [name, count]}
-        <span class="pill"><span class="status-dot on"></span>{name} <b>{count}</b></span>
-      {/each}
-      {#each Object.entries(status.cluster_nodes ?? {}) as [name, n]}
-        <span class="pill" title={n.state}>
-          <span class="status-dot {nodeDot(n)}"></span>{name}
-          <b>{n.spot_count}</b><span class="muted">{ago(n.last_spot_unix)}</span>
-        </span>
-      {/each}
-      <span class="pill">TCP <b>{status.telnet_clients}</b></span>
-      <span class="pill">UDP→ <b>{status.udp_sent}</b>{#if status.udp_failed}<span class="err">({status.udp_failed} fail)</span>{/if}</span>
-      <span class="pill">cty <b>{status.cty_entities}</b></span>
-      <span class="pill">LoTW <b>{status.lotw_users}</b></span>
+    <!-- Every cluster node also feeds `spots_per_source` (process_spot counts
+         every spot by source name), so listing both maps flat printed each
+         node twice with identical counts. Decoders are therefore the sources
+         that are NOT nodes; a node's count lives in its own box, once. -->
+    {@const nodeNames = new Set(Object.keys(status.cluster_nodes ?? {}))}
+    {@const decoders = Object.entries(status.spots_per_source ?? {}).filter(
+      ([name]) => !nodeNames.has(name),
+    )}
+    <div class="statusbar">
+      <section class="statusbox">
+        <h3>Decoders</h3>
+        <div class="statusitems">
+          {#each decoders as [name, count]}
+            <span class="pill"><span class="status-dot on"></span>{name} <b>{count}</b></span>
+          {:else}
+            <span class="muted empty">nothing decoding</span>
+          {/each}
+        </div>
+      </section>
+
+      <section class="statusbox">
+        <h3>Cluster nodes</h3>
+        <div class="statusitems">
+          {#each Object.entries(status.cluster_nodes ?? {}) as [name, n]}
+            <span class="pill" title={n.state}>
+              <span class="status-dot {nodeDot(n)}"></span>{name}
+              <b>{n.spot_count}</b><span class="muted">{ago(n.last_spot_unix)}</span>
+            </span>
+          {:else}
+            <span class="muted empty">none configured</span>
+          {/each}
+        </div>
+      </section>
+
+      <section class="statusbox">
+        <h3>Feeds out</h3>
+        <div class="statusitems">
+          <span class="pill">TCP <b>{status.telnet_clients}</b></span>
+          <span class="pill"
+            >UDP <b>{status.udp_sent}</b>{#if status.udp_failed}<span class="err"
+                >{status.udp_failed} fail</span
+              >{/if}</span
+          >
+        </div>
+      </section>
+
+      <section class="statusbox">
+        <h3>Reference</h3>
+        <div class="statusitems">
+          <span class="pill">cty <b>{status.cty_entities}</b></span>
+          <span class="pill">LoTW <b>{status.lotw_users}</b></span>
+        </div>
+      </section>
     </div>
   {/if}
 
+  <!-- Sources was a checkbox dropdown while every other narrowing on this
+       screen was a chip row, so it hid both what was available and what was
+       picked. Same ChipGroup as Alerts / Modes / Bands: All, then one chip
+       per source, empty set meaning everything. -->
+  <ChipGroup
+    label="Sources"
+    options={sourceNames.map((n) => ({ key: n, label: n }))}
+    bind:selected={sourceFilter}
+  />
+
   <div class="filters">
-    <details>
-      <summary class="filter-chip" class:on={sourceFilter.size}>
-        Sources {sourceFilter.size ? `(${sourceFilter.size})` : ''}
-      </summary>
-      <div class="menu">
-        {#each sourceNames as name}
-          <label><input type="checkbox" checked={sourceFilter.has(name)}
-            onchange={() => (sourceFilter = toggle(sourceFilter, name))} />{name}</label>
-        {/each}
-      </div>
-    </details>
-    <span class="fsep"></span>
     <label class="flabel"><input type="checkbox" bind:checked={cqOnly} />CQ only</label>
     <label class="flabel"><input type="checkbox" bind:checked={hideDupes} />Hide duplicates</label>
     <span class="count muted">{visible.length} spots</span>
@@ -357,10 +387,48 @@
     gap: 0.75rem;
   }
 
-  .pills {
+  /* Status is four labelled boxes rather than one long pill run: the flat
+     row put decoders, nodes, output counters and reference data on the same
+     footing, so nothing told you which number belonged to which category. */
+  .statusbar {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.4rem;
+    align-items: flex-start;
+    gap: 0.6rem;
+  }
+
+  .statusbox {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card-bg);
+    padding: 0.45rem 0.65rem 0.55rem;
+  }
+
+  /* Natural width, no stretching: a box has exactly as much room as its
+     contents need, so an idle Decoders box does not occupy a third of the
+     bar announcing that nothing is decoding. The row wraps instead. */
+  .statusbox {
+    flex: 0 1 auto;
+  }
+
+  .statusbox h3 {
+    margin: 0 0 0.35rem;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .statusitems {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .empty {
+    font-size: 0.78rem;
   }
 
   /* --- Station card --- */
@@ -466,12 +534,6 @@
     gap: 0.35rem 0.75rem;
   }
 
-  .fsep {
-    width: 1px;
-    height: 1.1rem;
-    background: var(--border);
-  }
-
   .flabel {
     color: var(--muted);
     font-size: 0.8rem;
@@ -482,51 +544,6 @@
     margin-left: auto;
     font-size: 0.8rem;
     font-variant-numeric: tabular-nums;
-  }
-
-  details {
-    position: relative;
-  }
-
-  /* The chip IS the disclosure trigger, so the native marker would sit inside
-     the pill as a second affordance. */
-  summary {
-    list-style: none;
-  }
-
-  summary::-webkit-details-marker {
-    display: none;
-  }
-
-  summary.on {
-    border-color: var(--accent);
-    color: var(--accent);
-    font-weight: 600;
-  }
-
-  .menu {
-    position: absolute;
-    z-index: 10;
-    margin-top: 0.35rem;
-    background: Canvas;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 0.4rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-    min-width: 9rem;
-    box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
-  }
-
-  .menu label {
-    font-size: 0.85rem;
-    padding: 0.15rem 0.3rem;
-    border-radius: 4px;
-  }
-
-  .menu label:hover {
-    background: var(--card-bg);
   }
 
   /* The card holds the scroll rather than the page, so the header rule and
