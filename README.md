@@ -433,6 +433,18 @@ and New Slot alerts** rather than being assumed digital. Note the limitation:
 mode follows the *transmitting* station's band plan, so a Region 1 station
 operating phone low in 40m can be inferred wrongly.
 
+### Alert history
+
+**My Alerts** lists what actually went to your Telegram — newest first, in
+the same row vocabulary as the Spots feed, with the level tint. Before it
+existed the fan-out was invisible: a spot that was flagged, narrowed away by
+your band/mode chips, held by the per-callsign cooldown, or refused by
+Telegram all looked the same from the UI, which is to say silent.
+
+Failed sends are kept and marked, with Telegram's own error on hover — a bad
+chat id otherwise fails quietly forever. History is per account, capped at
+the last 500 alerts, and the list refreshes every 15 seconds.
+
 ### MQTT destinations
 
 Beside the UDP broadcast destinations, the System tab has an admin-only

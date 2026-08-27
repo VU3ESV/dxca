@@ -248,6 +248,28 @@ pub struct Db {
     conn: Mutex<Connection>,
 }
 
+/// How many sent alerts to keep per user. A shack roster alerts a few dozen
+/// times a day, so this is weeks of history and still trivial to query.
+const ALERT_HISTORY_MAX: i64 = 500;
+
+/// One Telegram alert as it was sent — or as it failed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SentAlert {
+    pub time_unix: i64,
+    pub callsign: String,
+    pub frequency_hz: i64,
+    pub mode: String,
+    pub band: String,
+    pub dxcc_name: String,
+    /// The serialized `AlertLevel`, so the UI reuses the same label and
+    /// colour table the spots feed uses.
+    pub level: String,
+    pub source: String,
+    pub delivered: bool,
+    /// Telegram's complaint when `delivered` is false; empty otherwise.
+    pub error: String,
+}
+
 /// `meta` key holding the MQTT destination list as a JSON array.
 const MQTT_DESTINATIONS: &str = "mqtt_destinations";
 
@@ -290,6 +312,22 @@ CREATE TABLE IF NOT EXISTS blacklist (
     callsign TEXT PRIMARY KEY,
     added_unix INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS alerts_sent (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    time_unix INTEGER NOT NULL,
+    callsign TEXT NOT NULL,
+    frequency_hz INTEGER NOT NULL,
+    mode TEXT NOT NULL,
+    band TEXT NOT NULL,
+    dxcc_name TEXT NOT NULL,
+    level TEXT NOT NULL,
+    source TEXT NOT NULL,
+    delivered INTEGER NOT NULL,
+    error TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS alerts_sent_user_time
+    ON alerts_sent (user_id, time_unix DESC);
 ";
 
 fn now_unix() -> i64 {
@@ -497,6 +535,82 @@ impl Db {
             )
             .map_err(db_err)?;
         Ok(())
+    }
+
+    // --- sent alerts ------------------------------------------------------
+    //
+    // A log of what actually went to Telegram, per user. Kept because
+    // "did it alert me?" was otherwise unanswerable: the fan-out is
+    // fire-and-forget on a background thread, so a spot that was flagged,
+    // narrowed out, held by the cooldown or rejected by Telegram all looked
+    // identical from the UI — silence.
+    //
+    // Failures are recorded too, with the error. A Telegram send that was
+    // refused is the single most useful row on that screen and the one a
+    // "sent" log that only stored successes would hide.
+
+    /// Record one alert and prune the user's history to `ALERT_HISTORY_MAX`.
+    pub fn record_sent_alert(&self, user_id: i64, a: &SentAlert) -> DbResult<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO alerts_sent
+               (user_id, time_unix, callsign, frequency_hz, mode, band,
+                dxcc_name, level, source, delivered, error)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![
+                user_id,
+                a.time_unix,
+                a.callsign,
+                a.frequency_hz,
+                a.mode,
+                a.band,
+                a.dxcc_name,
+                a.level,
+                a.source,
+                a.delivered as i64,
+                a.error,
+            ],
+        )
+        .map_err(|e| format!("record alert: {e}"))?;
+        // Bounded per user, not globally: one busy operator must not evict
+        // another's history.
+        conn.execute(
+            "DELETE FROM alerts_sent WHERE user_id = ?1 AND id NOT IN
+               (SELECT id FROM alerts_sent WHERE user_id = ?1
+                ORDER BY id DESC LIMIT ?2)",
+            params![user_id, ALERT_HISTORY_MAX],
+        )
+        .map_err(db_err)?;
+        Ok(())
+    }
+
+    pub fn sent_alerts(&self, user_id: i64, limit: usize) -> DbResult<Vec<SentAlert>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare(
+                "SELECT time_unix, callsign, frequency_hz, mode, band,
+                        dxcc_name, level, source, delivered, error
+                 FROM alerts_sent WHERE user_id = ?1
+                 ORDER BY time_unix DESC, id DESC LIMIT ?2",
+            )
+            .map_err(db_err)?;
+        let rows = stmt
+            .query_map(params![user_id, limit as i64], |r| {
+                Ok(SentAlert {
+                    time_unix: r.get(0)?,
+                    callsign: r.get(1)?,
+                    frequency_hz: r.get(2)?,
+                    mode: r.get(3)?,
+                    band: r.get(4)?,
+                    dxcc_name: r.get(5)?,
+                    level: r.get(6)?,
+                    source: r.get(7)?,
+                    delivered: r.get::<_, i64>(8)? != 0,
+                    error: r.get(9)?,
+                })
+            })
+            .map_err(db_err)?;
+        rows.collect::<Result<_, _>>().map_err(db_err)
     }
 
     // --- MQTT destinations ------------------------------------------------
@@ -880,6 +994,57 @@ mod tests {
         let d = NotifyUserConfig::default();
         assert!(d.wants_level(AlertLevel::NewDxcc));
         assert!(!d.wants_level(AlertLevel::UnconfDxcc));
+    }
+
+    #[test]
+    fn sent_alerts_keep_failures_and_stay_bounded_per_user() {
+        let (db, _p) = temp_db();
+        let a = db.create_user("VU2CPL", "h", "", "admin").unwrap();
+        let b = db.create_user("K1ABC", "h", "", "user").unwrap();
+
+        let alert = |call: &str, delivered: bool, error: &str| SentAlert {
+            time_unix: 1_787_745_000,
+            callsign: call.into(),
+            frequency_hz: 14_074_000,
+            mode: "FT8".into(),
+            band: "20M".into(),
+            dxcc_name: "INDIA".into(),
+            level: "newDXCC".into(),
+            source: "VU2OY".into(),
+            delivered,
+            error: error.into(),
+        };
+
+        db.record_sent_alert(a, &alert("VU2ZZZ", true, "")).unwrap();
+        // A refused send is the row most worth keeping — it is why the
+        // history exists at all.
+        db.record_sent_alert(a, &alert("P5DX", false, "chat not found"))
+            .unwrap();
+        db.record_sent_alert(b, &alert("W1AW", true, "")).unwrap();
+
+        let rows = db.sent_alerts(a, 100).unwrap();
+        assert_eq!(rows.len(), 2, "B's alert is not in A's history");
+        let failed = rows.iter().find(|r| !r.delivered).unwrap();
+        assert_eq!(failed.callsign, "P5DX");
+        assert_eq!(failed.error, "chat not found", "the reason is kept");
+        assert_eq!(db.sent_alerts(b, 100).unwrap().len(), 1);
+
+        // The cap is per user, so a busy operator cannot evict another's
+        // history. Push A past it and B must be untouched.
+        for i in 0..(ALERT_HISTORY_MAX + 20) {
+            db.record_sent_alert(a, &alert(&format!("T{i}"), true, ""))
+                .unwrap();
+        }
+        assert_eq!(
+            db.sent_alerts(a, 10_000).unwrap().len() as i64,
+            ALERT_HISTORY_MAX,
+            "A is pruned to the cap"
+        );
+        assert_eq!(
+            db.sent_alerts(b, 100).unwrap().len(),
+            1,
+            "B's single alert survives A's flood"
+        );
     }
 
     #[test]

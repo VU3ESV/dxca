@@ -55,6 +55,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/cty/refresh", post(cty_refresh))
         .route("/api/users", get(list_users).post(create_user))
         .route("/api/users/{id}", patch(update_user).delete(delete_user))
+        .route("/api/me/alerts", get(my_alerts))
         .route("/api/mqtt", get(get_mqtt).put(put_mqtt))
         .route("/api/blacklist", get(list_blacklist).post(add_blacklist))
         .route(
@@ -558,6 +559,23 @@ async fn list_users(State(app): State<AppState>, headers: HeaderMap) -> Response
     }
     match app.users.db.users() {
         Ok(users) => Json(serde_json::json!({ "users": users })).into_response(),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e),
+    }
+}
+
+/// This account's Telegram alert history, newest first. Per-user by
+/// construction — a session only ever sees its own.
+async fn my_alerts(
+    State(app): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<SpotsQuery>,
+) -> Response {
+    let user = match require_user(&app, &headers) {
+        Ok(u) => u,
+        Err(resp) => return resp,
+    };
+    match app.users.db.sent_alerts(user.id, q.limit.min(500)) {
+        Ok(alerts) => Json(serde_json::json!({ "alerts": alerts })).into_response(),
         Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e),
     }
 }

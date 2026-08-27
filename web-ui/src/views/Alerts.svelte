@@ -7,10 +7,10 @@
   // able to watch the whole band plan on screen while only being pinged for
   // one slice of it. The two controls look alike on purpose; the wording
   // ("ping me") is what says which one you are editing.
-  import { api } from '../lib/api';
+  import { api, hhmm } from '../lib/api';
   import { onMount } from 'svelte';
   import ChipGroup from '../lib/ChipGroup.svelte';
-  import { loadReference, bands, modes, levels } from '../lib/reference.svelte';
+  import { loadReference, bands, modes, levels, levelLabel } from '../lib/reference.svelte';
 
   // Level key → the notify_* field that gates it. The server owns the ladder
   // and its order (AlertLevel::FLAGGABLE); this only maps key → field name.
@@ -43,6 +43,13 @@
   let bandSel = $state<Set<string>>(new Set());
   let modeSel = $state<Set<string>>(new Set());
 
+  // What has actually been sent to this account's Telegram.
+  let sent = $state<any[]>([]);
+  async function loadSent() {
+    const r = await api('GET', '/api/me/alerts?limit=200');
+    if (r.status === 200) sent = r.json.alerts ?? [];
+  }
+
   onMount(async () => {
     await loadReference();
     const r = await api('GET', '/api/config/me/notifications');
@@ -51,6 +58,11 @@
       bandSel = new Set(r.json.notify_bands ?? []);
       modeSel = new Set(r.json.notify_modes ?? []);
     }
+    await loadSent();
+    // Alerts arrive while the page is open; a history that only updated on
+    // reload would be the same invisibility this card exists to fix.
+    const t = setInterval(loadSent, 15000);
+    return () => clearInterval(t);
   });
 
   async function save() {
@@ -122,9 +134,81 @@
     {#if message}<p class="ok">{message}</p>{/if}
     {#if error}<p class="err">{error}</p>{/if}
   </div>
+
+  <!-- What actually went out. Before this the fan-out was invisible: a spot
+       that was flagged, narrowed away, held by the cooldown, or refused by
+       Telegram all looked the same from here — nothing arrived. -->
+  <div class="card">
+    <h2>Alerts sent</h2>
+    <p class="hint sub">
+      The last {sent.length} Telegram alert{sent.length === 1 ? '' : 's'} for this
+      account, newest first. Failed sends are kept and marked — a refused
+      message is the row worth seeing.
+    </p>
+    {#if sent.length === 0}
+      <p class="hint">
+        Nothing sent yet. Alerts appear here once Telegram is switched on and
+        a spot matches a level you have ticked above.
+      </p>
+    {:else}
+      <div class="table-scroll">
+        <table class="sent">
+          <thead>
+            <tr>
+              <th>Time</th><th>DX Call</th><th>kHz</th><th>Mode</th>
+              <th>Band</th><th>DXCC</th><th>Level</th><th>Source</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each sent as a}
+              <tr data-level={a.level}>
+                <td class="mono">{hhmm(a.time_unix)}Z</td>
+                <td class="mono call">{a.callsign}</td>
+                <td class="mono">{(a.frequency_hz / 1000).toFixed(1)}</td>
+                <td class="muted">{a.mode}</td>
+                <td>{a.band}</td>
+                <td>{a.dxcc_name}</td>
+                <td class="alert">{levelLabel(a.level)}</td>
+                <td class="muted">{a.source}</td>
+                <td>
+                  {#if !a.delivered}
+                    <span class="err failed" title={a.error}>failed</span>
+                  {/if}
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    {/if}
+  </div>
 </div>
 
 <style>
+  /* Same row vocabulary as the Spots feed — the level tint via [data-level]
+     and a nowrap dense table — so a sent alert reads as the spot it was. */
+  .table-scroll {
+    overflow-x: auto;
+  }
+
+  .sent {
+    width: 100%;
+    font-size: 0.85rem;
+  }
+
+  .sent .call {
+    font-weight: 600;
+  }
+
+  .sent .alert {
+    font-weight: 600;
+  }
+
+  .failed {
+    font-size: 0.75rem;
+    cursor: help;
+  }
+
   .enable {
     margin-bottom: 0.9rem;
   }

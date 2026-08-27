@@ -425,5 +425,49 @@ async fn two_users_same_stream_different_highlights_and_pings() {
         "cooldown must suppress the repeat"
     );
 
+    // --- the My Alerts history -------------------------------------------
+    // The fan-out is fire-and-forget on a background thread, so before this
+    // existed there was no way to tell a delivered alert from a suppressed
+    // one. It records per user, so A — who was pinged for nothing — must see
+    // an empty list even though B was alerted on the same spot.
+    let (status, _, body) = http(
+        "GET",
+        format!("{base}/api/me/alerts"),
+        Some(cookie_b.clone()),
+        None,
+    )
+    .await;
+    assert_eq!(status, 200);
+    let alerts = body["alerts"].as_array().unwrap();
+    assert_eq!(alerts.len(), 1, "one alert recorded for B: {body}");
+    assert_eq!(alerts[0]["callsign"], "VU2ZZZ");
+    assert_eq!(alerts[0]["level"], "newDXCC");
+    assert_eq!(alerts[0]["delivered"], true);
+    assert_eq!(alerts[0]["error"], "");
+    assert_eq!(alerts[0]["band"], "20M");
+    assert!(
+        alerts[0]["dxcc_name"]
+            .as_str()
+            .is_some_and(|s| !s.is_empty()),
+        "the entity is carried too: {}",
+        alerts[0]
+    );
+
+    let (status, _, body) = http(
+        "GET",
+        format!("{base}/api/me/alerts"),
+        Some(cookie_a.clone()),
+        None,
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert!(
+        body["alerts"].as_array().unwrap().is_empty(),
+        "A was never pinged, so A's history is empty: {body}"
+    );
+
+    let (status, _, _) = http("GET", format!("{base}/api/me/alerts"), None, None).await;
+    assert_eq!(status, 401, "the history needs a session");
+
     let _ = std::fs::remove_dir_all(&data_dir);
 }

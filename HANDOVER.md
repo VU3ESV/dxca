@@ -878,6 +878,39 @@ and not worth failing an install over.
 Tested against stub `node` binaries at 16 / 18 / 19 / 20 / 21 / 22 / 24 / 26
 — accepted, rejected, and the `--stub-ui` skip all behave.
 
+## My Alerts shows what was actually sent (2026-08-28)
+
+Requested as "in alerts tab, alerts sent should be shown like spots list".
+The fan-out is fire-and-forget on a background thread, so from the UI a spot
+that was **flagged**, **narrowed away** by the band/mode chips, **held by the
+cooldown**, or **refused by Telegram** all looked identical: nothing arrived.
+That was unanswerable, and it is what this fixes.
+
+New `alerts_sent` table (per user, `ON DELETE CASCADE`, indexed on
+`user_id, time_unix DESC`) written by `fan_out` **after** the send, with its
+verdict. `GET /api/me/alerts` serves the caller's own; the My Alerts tab
+renders them in the Spots row vocabulary — level tint via `[data-level]`,
+same columns — and re-polls every 15 s, because a history that only updated
+on reload would be the same invisibility again.
+
+**Failures are recorded, with Telegram's own error text**, and shown as a
+`failed` chip whose tooltip is the reason. A "sent" log that stored only
+successes would hide the single most useful row on the page — the shack
+broker analogue is a bad chat id, which otherwise fails in silence forever.
+
+Bounded at `ALERT_HISTORY_MAX = 500` **per user**, pruned on insert, so a
+busy operator cannot evict another account's history. That is asserted, not
+assumed: the unit test floods A past the cap and checks B's single row
+survives.
+
+Test coverage, honestly: `users_alerts.rs` proves the delivered path end to
+end through the real fan-out — one row for B, `newDXCC`, `delivered: true`,
+band and entity carried, **A's history empty** though both users saw the
+same spot, and a 401 without a session. The **failure** path is covered at
+the storage layer (`db.rs`, delivered=false with its error round-tripping)
+rather than end to end, because the fake Telegram in that test always
+answers 200 and the cooldown blocks a second alert for the same call.
+
 ## My ClubLog shows the log's statistics (2026-08-28)
 
 Requested as "My ClubLog after a refresh should show all statistics for that

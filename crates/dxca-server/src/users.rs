@@ -262,11 +262,35 @@ impl UserService {
             let text = alert_html(&c, &call, spot);
             let telegram = self.telegram.clone();
             let (token, chat) = (notify.telegram_bot_token, notify.telegram_chat_id);
+            // Recorded for the My Alerts history — including failures, which
+            // are the rows worth having. Built here where the classification
+            // is still to hand; written after the send, with its verdict.
+            let mut record = crate::db::SentAlert {
+                time_unix: spot.time_unix,
+                callsign: call.clone(),
+                frequency_hz: spot.frequency_hz() as i64,
+                mode: spot.mode.clone(),
+                band: c.band.unwrap_or_default().to_string(),
+                dxcc_name: c.dxcc_name.clone().unwrap_or_default(),
+                level: serde_json::to_value(c.level)
+                    .ok()
+                    .and_then(|v| v.as_str().map(str::to_string))
+                    .unwrap_or_default(),
+                source: spot.source_name.clone(),
+                delivered: true,
+                error: String::new(),
+            };
+            let this = self.clone();
             // Fire-and-forget off the pipeline: a slow Telegram round trip
             // must never stall spot processing.
             tokio::task::spawn_blocking(move || {
                 if let Err(e) = telegram.send(&token, &chat, &text) {
                     eprintln!("dxca: telegram: {e}");
+                    record.delivered = false;
+                    record.error = e;
+                }
+                if let Err(e) = this.db.record_sent_alert(user_id, &record) {
+                    eprintln!("dxca: alert history: {e}");
                 }
             });
         }
