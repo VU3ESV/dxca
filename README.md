@@ -224,6 +224,55 @@ Then, in order of what actually matters:
    2334 (JTDX), 2335 (WSJT-X). Point your logger's telnet cluster at port
    **7575** on this machine.
 
+### Updating
+
+**Same script, every platform.** There is no separate updater — `install.sh`
+is idempotent, and re-running it *is* the update:
+
+```sh
+cd dxca
+git pull
+./install.sh
+```
+
+macOS reloads the launchd agent; Pi and Linux reinstall to `/opt/dxca` and
+restart the systemd service. Either way it finishes by fetching the page and
+telling you whether the new version is actually serving, so a silent no-op
+update is not a thing that can happen.
+
+**Nothing you configured is touched.** Accounts, ClubLog credentials, alert
+preferences, the worked matrix, your cluster nodes and ports all live in
+`config/dxca.toml` and `data/` on the running host, and the installer writes
+those **only when absent**. There is no migration step either: the database
+schema is applied as `CREATE TABLE IF NOT EXISTS`, so an older database just
+keeps working. `git pull` cannot conflict with your settings, because both
+paths are gitignored — nothing you edit is tracked.
+
+Confirm what is actually running, rather than what you think you installed:
+
+```sh
+curl -s http://localhost:7580/api/status | grep -o '"version":"[^"]*"'
+```
+
+**Updating a Pi from your Mac instead.** If the Pi is slow, or you would
+rather not build on it at all, cross-compile here and ship the finished
+binary — the Pi needs no Rust or Node toolchain for this route:
+
+```sh
+deploy/pi-deploy.sh --no-seed user@192.168.1.50
+```
+
+Use the **IP** over a VPN; mDNS `.local` names usually do not resolve across
+a tunnel. Keep `--no-seed` for any Pi that is not your own — and on re-runs,
+not just first installs. Without it, `rsync` copies your `data/dxca.db`
+(ClubLog app passwords, Telegram token, account hashes in plain text) and
+your `config/dxca.toml` (with *your* callsign as the cluster login, which
+makes both stations fight over the same node session) into that host's home
+directory. The installer correctly declines to *install* them, but the guard
+runs after the transfer — the flag is what prevents the copy.
+
+**Windows** has no update path for the same reason it has no install path.
+
 ### If something goes wrong
 
 The installer stops with an explanation rather than half-finishing, so read
