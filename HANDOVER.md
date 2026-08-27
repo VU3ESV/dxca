@@ -1,8 +1,10 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-27 (afternoon) · **Status:** **v2.1.0** IN PRODUCTION on noderedpi4 — the 2.1 wave below — Meridian UI, eight alert levels, Challenge points, automatic refresh. First third-party install is live.
-**Repo:** https://github.com/vu2cpl/dxca (private)
+**Created:** 2026-08-26 · **Last updated:** 2026-08-27 (evening) · **Status:** **v2.1.0** IN PRODUCTION on noderedpi4 — the 2.1 wave below — Meridian UI, eight alert levels, Challenge points, automatic refresh. First third-party install is live.
+**Repo:** https://github.com/vu2cpl/dxca (**public** — verified via
+`gh repo view` 2026-08-27; the doc said "private" until then, and the
+"Open items" release checklist still lists the public flip as pending)
 
 ---
 
@@ -110,6 +112,9 @@ which is now the rule for any host that is not noderedpi4.
   `just run` sequences this correctly.
 - Justfile recipe comments must be a single line — `just --list` shows only
   the last comment line above a recipe.
+- **The workspace needs rustc ≥ 1.88** (a `Cargo.lock` floor, not ours) and
+  distro packages are below it. `install.sh` checks it up front; see "The
+  rustc floor is 1.88" below.
 
 ## Burn-in log (Mac phase, 2026-08-27 — superseded by the Pi cutover above)
 
@@ -691,6 +696,38 @@ Note for triage: `/api/spots` fills `band` / `dxcc_name` / `alert` /
 `is_beacon` **only for an authenticated session** (`annotate_spot`, api.rs)
 — an unauthenticated `curl` shows them null and that is by design, not a
 classification bug.
+
+## The rustc floor is 1.88, and install.sh now enforces it (2026-08-27)
+
+A third-party install on VU2WJ's Pi died at `cargo build` with *"rustc
+1.85.0 is not supported by the following packages"* — twelve `icu_*` /
+`idna_adapter` crates wanting 1.88 or 1.86. None of them are ours:
+
+```
+ureq 2.12.1 -> url 2.5.8 -> idna 1.1.0 -> idna_adapter 1.2.2 -> icu_* 2.3.0
+```
+
+The floor is therefore set by the committed `Cargo.lock`, and no manifest
+in the workspace declares a `rust-version`, so cargo only complained deep
+in dependency resolution — minutes in, after downloading 148 crates.
+
+Two things made this land on a *fresh* box and never here: Debian Trixie's
+`apt install cargo` gives exactly **1.85.0**, and a distro rustc ignores
+`rust-toolchain.toml` (`channel = "stable"`), so it never self-corrects.
+This Mac has been on 1.96.1 throughout.
+
+`install.sh`'s `require_cargo` now checks `rustc --version` against
+`MIN_RUSTC=1.88` before any build, and branches the remedy on whether
+rustup is present — stale toolchain (`rustup update stable`) versus distro
+package (install rustup, then confirm `which rustc` is `~/.cargo/bin`).
+Comparison is major.minor via awk, so `1.99.0-nightly` passes. Verified
+under `/bin/bash` 3.2 against fake toolchains at 1.85.0 / 1.88.0 / 1.96.1 /
+1.99.0-nightly / 2.0.0, plus no-cargo and cargo-without-rustc.
+
+**Bump `MIN_RUSTC` whenever the lockfile's floor moves.** The check is only
+as honest as that constant. Declaring `rust-version` in the workspace
+manifest would make cargo itself say it early — deliberately not done yet,
+since it also constrains anyone vendoring the crates.
 
 ## Local toolchain wart (2026-08-27)
 

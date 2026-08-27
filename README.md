@@ -68,9 +68,16 @@ security. Keep the data directory out of backups you share.
 
 ## Build
 
-Needs Rust (stable, via rustup) and — only for the web UI — Node ≥ 20 with
-pnpm. Plain `cargo build` never requires Node (a stub page is embedded when
-`web-ui/dist` hasn't been built).
+Needs **Rust ≥ 1.88** (stable, via rustup) and — only for the web UI —
+Node ≥ 20 with pnpm. Plain `cargo build` never requires Node (a stub page
+is embedded when `web-ui/dist` hasn't been built).
+
+That 1.88 floor comes from the committed `Cargo.lock` (`ureq` → `url` →
+`idna` → `icu_*`), not from dxca's own code, so it cannot be lowered by
+editing this workspace. Distro packages often sit below it — Debian Trixie
+ships 1.85.0 — and a distro rustc ignores `rust-toolchain.toml`, so install
+rustup rather than `apt install cargo`. `install.sh` checks the version up
+front and says which of the two situations you are in.
 
 ```sh
 cargo build --workspace          # all crates
@@ -85,7 +92,8 @@ A [Justfile](Justfile) wraps the common flows (`just gate`, `just run`,
 ### Install as a service
 
 `./install.sh` sets the current machine up (auto-detects macOS vs
-Raspberry Pi, confirms, never fails silently):
+Raspberry Pi, confirms, never fails silently — a missing or too-old Rust
+is caught before the build starts, not minutes into it):
 
 - **macOS**: builds the release binary and installs a launchd agent
   (`com.vu2cpl.dxca`, survives reboots, log in `~/Library/Logs/dxca.log`).

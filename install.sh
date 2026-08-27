@@ -9,6 +9,9 @@
 #   Pi    : installs the binary + config + data to /opt/dxca and a systemd
 #           service (needs sudo). Uses a prebuilt ./dxca or target/ binary
 #           when present, else builds with cargo.
+#
+# Building needs rustc >= $MIN_RUSTC (checked up front, see require_cargo)
+# and, for the real web UI rather than the stub page, Node >= 20 + pnpm.
 set -euo pipefail
 
 say() { printf '%s\n' "$*"; }
@@ -53,15 +56,69 @@ build_web() {
   fi
 }
 
-require_cargo() {
-  command -v cargo >/dev/null 2>&1 && return 0
-  say "cargo not found. Install Rust first:"
+# Minimum rustc. The floor is set by the committed Cargo.lock, not by our
+# own code: ureq -> url -> idna -> idna_adapter -> icu_* 2.3.0 all require
+# 1.88. Nothing in the manifests declares a rust-version, so without this
+# check the only complaint comes from cargo minutes into dependency
+# resolution — and Debian Trixie's apt rustc is 1.85.0, so a plain
+# `apt install cargo` lands under the floor on a fresh Pi. Bump this when
+# the lockfile's floor moves.
+MIN_RUSTC=1.88
+
+rust_install_hint() {
   if [ "$PLATFORM" = macos ]; then
     say "  brew install rustup && rustup-init          # recommended"
   else
-    say "  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+    say "  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y"
+    say "  source \"\$HOME/.cargo/env\""
   fi
-  die "then re-run this script"
+}
+
+# "rustc 1.85.0 (4d91de4e4 2025-02-17)" -> "1.85.0". The `cut` drops a
+# channel suffix so 1.99.0-nightly still compares as 1.99.
+rustc_version() {
+  command -v rustc >/dev/null 2>&1 || return 1
+  rustc --version 2>/dev/null | awk 'NR==1 {print $2}' | cut -d- -f1
+}
+
+# major.minor only — a patch level is never part of an MSRV floor.
+version_ok() {
+  awk -v have="$1" -v min="$2" 'BEGIN {
+    split(have, h, "."); split(min, m, ".");
+    exit !(h[1] > m[1] || (h[1] == m[1] && h[2] >= m[2]))
+  }'
+}
+
+require_cargo() {
+  if ! command -v cargo >/dev/null 2>&1; then
+    say "cargo not found. Install Rust first:"
+    rust_install_hint
+    die "then re-run this script"
+  fi
+  RUSTC_HAVE="$(rustc_version || true)"
+  if [ -z "$RUSTC_HAVE" ]; then
+    say "cargo is on PATH but 'rustc --version' returned nothing usable."
+    say "A half-installed toolchain builds nothing — repair it first:"
+    rust_install_hint
+    die "then re-run this script"
+  fi
+  if ! version_ok "$RUSTC_HAVE" "$MIN_RUSTC"; then
+    say "rustc $RUSTC_HAVE is too old: this workspace needs $MIN_RUSTC or newer."
+    say "The floor comes from Cargo.lock (ureq -> url -> idna -> icu_*),"
+    say "not from dxca's own code, so it cannot be worked around here."
+    say "Found: $(command -v rustc)"
+    if command -v rustup >/dev/null 2>&1; then
+      say "rustup is installed, so the toolchain is merely stale:"
+      say "  rustup update stable"
+    else
+      say "That is a distro package (Debian Trixie ships 1.85.0) and it will"
+      say "never honour rust-toolchain.toml. Install rustup instead:"
+      rust_install_hint
+      say "Then confirm 'which rustc' is ~/.cargo/bin, not /usr/bin."
+    fi
+    die "then re-run this script"
+  fi
+  say "rustc $RUSTC_HAVE (needs $MIN_RUSTC+) - OK."
 }
 
 case "$PLATFORM" in
