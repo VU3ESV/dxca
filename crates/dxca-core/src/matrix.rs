@@ -114,6 +114,56 @@ impl LogMatrix {
                 .sum(),
         }
     }
+
+    /// Entities worked and confirmed **per band** and **per mode class** —
+    /// the DXCC-by-band table an operator actually plans from, which the
+    /// six totals in [`MatrixStats`] cannot show.
+    ///
+    /// Counts entities, not QSOs: a band's number is how many DXCC entities
+    /// have at least one contact there, which is what the award tracks.
+    /// Empty rows are kept so the gaps are visible — a band with nothing on
+    /// it is the most interesting row on the page.
+    pub fn by_band_and_mode(&self) -> BandModeStats {
+        let count =
+            |has: &dyn Fn(&DxccStatus) -> bool| self.by_dxcc.values().filter(|s| has(s)).count();
+
+        let bands = crate::bands::SELECTABLE_BANDS
+            .iter()
+            .map(|b| SliceCount {
+                key: (*b).to_string(),
+                worked: count(&|s: &DxccStatus| s.bands.contains(*b)),
+                confirmed: count(&|s: &DxccStatus| s.confirmed_bands.contains(*b)),
+            })
+            .collect();
+
+        let modes = crate::modes::CLASSES
+            .iter()
+            .map(|m| SliceCount {
+                key: (*m).to_string(),
+                worked: count(&|s: &DxccStatus| s.modes.contains(*m)),
+                confirmed: count(&|s: &DxccStatus| s.confirmed_modes.contains(*m)),
+            })
+            .collect();
+
+        BandModeStats { bands, modes }
+    }
+}
+
+/// Entities worked/confirmed for one band or one mode class.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SliceCount {
+    pub key: String,
+    pub worked: usize,
+    pub confirmed: usize,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BandModeStats {
+    /// In `bands::SELECTABLE_BANDS` order — 160M first, the operator's
+    /// customary ordering, not whatever a hash map iterated.
+    pub bands: Vec<SliceCount>,
+    /// In `modes::CLASSES` order: CW, PHONE, DATA.
+    pub modes: Vec<SliceCount>,
 }
 
 /// What the Spots screen's station card reports.
@@ -150,6 +200,39 @@ mod tests {
         assert_eq!(s.confirmed_slots, HashSet::from(["20M-CW".into()]));
         assert!(m.worked_calls.contains("vu2abc"));
         assert_eq!(m.total_dxcc_count(), 1);
+    }
+
+    #[test]
+    fn band_and_mode_slices_count_entities_not_qsos() {
+        let mut m = LogMatrix::default();
+        // India on 20M twice, two modes and two calls — one ENTITY on 20M.
+        m.record(324, "20M", "DATA", "VU2ABC", true);
+        m.record(324, "20M", "CW", "VU2XYZ", false);
+        // USA on 20M (confirmed) and on 40M (not).
+        m.record(291, "20M", "CW", "K1ABC", true);
+        m.record(291, "40M", "CW", "K9XYZ", false);
+
+        let s = m.by_band_and_mode();
+        let band = |k: &str| s.bands.iter().find(|b| b.key == k).unwrap().clone();
+        let mode = |k: &str| s.modes.iter().find(|b| b.key == k).unwrap().clone();
+
+        assert_eq!(band("20M").worked, 2, "two entities on 20M, not four QSOs");
+        assert_eq!(band("20M").confirmed, 2);
+        assert_eq!(band("40M").worked, 1);
+        assert_eq!(band("40M").confirmed, 0, "worked but unconfirmed");
+        assert_eq!(band("15M").worked, 0, "an empty band still gets a row");
+
+        assert_eq!(mode("CW").worked, 2);
+        assert_eq!(mode("CW").confirmed, 1, "only the US CW slot is confirmed");
+        assert_eq!(mode("DATA").worked, 1);
+        assert_eq!(mode("PHONE").worked, 0);
+
+        // Order is the operator's, not a hash map's.
+        assert_eq!(s.bands.first().unwrap().key, "160M");
+        assert_eq!(
+            s.modes.iter().map(|m| m.key.as_str()).collect::<Vec<_>>(),
+            vec!["CW", "PHONE", "DATA"]
+        );
     }
 
     #[test]

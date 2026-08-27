@@ -878,6 +878,45 @@ and not worth failing an install over.
 Tested against stub `node` binaries at 16 / 18 / 19 / 20 / 21 / 22 / 24 / 26
 — accepted, rejected, and the `--stub-ui` skip all behave.
 
+## My ClubLog shows the log's statistics (2026-08-28)
+
+Requested as "My ClubLog after a refresh should show all statistics for that
+user". It previously reported a refresh as one sentence — *"Refreshed: 56816
+QSOs, 320 DXCC entities"* — which scrolled away and told you nothing about
+the log itself.
+
+There is now a **Log statistics** card: QSO count, log callsign and refresh
+age; the six award totals (DXCC / Challenge / Slots, worked beside
+confirmed); and, new, **entities per band** and **entities per mode**.
+
+`LogMatrix::by_band_and_mode` slices the same in-memory matrix `stats()`
+already walks, so this costs one pass over the entity map and **no new
+storage or endpoint** — it rides `/api/me/station`, the endpoint the Spots
+station card uses, so the two screens can never disagree about the log.
+
+Deliberate choices:
+
+- **Entities, not QSOs.** A band's figure is how many DXCC entities have at
+  least one contact there, which is what the award counts. Stated on the
+  card, because "20M: 3" is otherwise ambiguous.
+- **Empty rows are kept**, dimmed rather than hidden. A band with nothing on
+  it is the most useful row on the page.
+- Ordering is `SELECTABLE_BANDS` (160M first) and `modes::CLASSES`
+  (CW/PHONE/DATA), not hash-map order.
+- `refresh()` reloads the card, which is the actual ask — a refresh has to
+  become visible as numbers.
+
+**Gotcha that cost a round trip:** Svelte scopes component styles, so
+System.svelte's `.stats` block does **not** reach ClubLog.svelte. The six
+totals rendered stacked one per line until an identical block was added
+locally. Same shape on purpose — the two screens report the same numbers and
+should not look like different things.
+
+Verified by seeding a synthetic matrix straight into the `matrices` table
+(four entities across 80/40/20/15/10M, partially confirmed) and reading the
+rendered table back: 20M 3 worked / 2 confirmed, 40M 2 / 2, 15M 2 / 0, 10M
+1 / 0 — matching the seed exactly.
+
 ## System-tab editors dragged the page sideways (fixed 2026-08-28)
 
 Reported against the new MQTT card. Two faults, one visual and one that

@@ -200,6 +200,18 @@ impl UserService {
         Some(self.matrices.read().unwrap().get(&user_id)?.stats())
     }
 
+    /// Per-band and per-mode entity counts for the My ClubLog statistics
+    /// card. Same in-memory matrix as `stats`, just sliced.
+    pub fn band_mode_stats(&self, user_id: i64) -> Option<dxca_core::matrix::BandModeStats> {
+        Some(
+            self.matrices
+                .read()
+                .unwrap()
+                .get(&user_id)?
+                .by_band_and_mode(),
+        )
+    }
+
     /// Classify one spot for one user (their matrix + alert toggles).
     /// None when the user has no matrix yet.
     pub fn classify(&self, user_id: i64, spot: &Spot) -> Option<Classification> {
