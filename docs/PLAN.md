@@ -1,7 +1,7 @@
 # DXCA 2.0 — Rust + web GUI port plan
 
 **Status:** COMPLETE — all milestones M0–M6 closed 2026-08-26/27;
-**v2.0.0 shipped and in production on noderedpi4** since the 2026-08-27
+**v2.1.0 in production on noderedpi4** (v2.0.0 shipped) since the 2026-08-27
 cutover. `HANDOVER.md` carries the per-milestone record and the post-2.0
 backlog. Drafted 2026-08-26 in the 1.x repo (`docs/DXCA2-RUST-PLAN.md`
 there); this copy is canonical.

@@ -88,7 +88,9 @@ fn status_json(app: &AppState) -> serde_json::Value {
     serde_json::json!({
         "name": "dxca",
         "version": env!("CARGO_PKG_VERSION"),
-        "milestone": "M5 web parity",
+        // Named for the release, not the plan's milestone numbering —
+        // M0-M6 all closed at 2.0.0.
+        "milestone": "2.1 — alerts, awards, auto-refresh",
         "setup_required": user_count == 0,
         "users": user_count,
         "cty_loaded": app.users.resolver_loaded(),

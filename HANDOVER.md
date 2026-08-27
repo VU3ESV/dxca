@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-27 (afternoon) · **Status:** v2.0.0 IN PRODUCTION on noderedpi4, plus the **2.1 wave** below — Meridian UI, eight alert levels, Challenge points, automatic refresh. First third-party install is live.
+**Created:** 2026-08-26 · **Last updated:** 2026-08-27 (afternoon) · **Status:** **v2.1.0** IN PRODUCTION on noderedpi4 — the 2.1 wave below — Meridian UI, eight alert levels, Challenge points, automatic refresh. First third-party install is live.
 **Repo:** https://github.com/vu2cpl/dxca (private)
 
 ---
@@ -454,7 +454,7 @@ proven against the Swift app's own artifacts.**
 
 ## Open items → next session
 
-Nothing operational — **v2.0.0 is fully live**: ClubLog and Telegram are
+Nothing operational — **v2.1.0 is fully live**: ClubLog and Telegram are
 configured and working on the Pi (confirmed by Manoj 2026-08-27), so
 per-user highlighting and alerts run in production.
 
