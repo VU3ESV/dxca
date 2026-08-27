@@ -4,6 +4,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>DXCA</title>
+    <!-- Apply a stored light/dark override before render to avoid a flash.
+         Reads the same slot as lib/theme.svelte.ts — change one, change both. -->
+    <script>
+      try {
+        var m = localStorage.getItem('dxca.theme');
+        if (m === 'light' || m === 'dark') document.documentElement.style.colorScheme = m;
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="app"></div>

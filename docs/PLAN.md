@@ -198,7 +198,14 @@ GET/POST/DELETE /api/users              # admin
 GET  /                                  # embedded Svelte UI
 ```
 
-## 8. Web UI pages (Svelte 5, GitHub-dark theme like the shack dashboard)
+## 8. Web UI pages (Svelte 5)
+
+> **Superseded 2026-08-27:** this section originally specified a
+> GitHub-dark theme "like the shack dashboard". The GUI now wears
+> Meridian's design system instead — built on CSS system colours, so it
+> carries both a light and a dark appearance. The page list below still
+> holds. See HANDOVER's "Web UI look".
+
 
 1. **Login** (and first-run setup).
 2. **Dashboard** — live spots table (sortable columns matching the Mac

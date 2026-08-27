@@ -37,24 +37,29 @@
   }
 </script>
 
-<div class="page">
+<div class="page narrow">
   <div class="card">
     <h2>My alerts — Telegram</h2>
-    <label><input type="checkbox" bind:checked={cfg.telegram_enabled} />Enable Telegram alerts</label>
-    <div class="form-row">
-      <span>Bot token</span>
+    <label class="enable">
+      <input type="checkbox" bind:checked={cfg.telegram_enabled} />Enable Telegram alerts
+    </label>
+    <div class="settings-form">
+      <span class="label">Bot token</span>
       <input type="password" bind:value={cfg.telegram_bot_token} placeholder="from @BotFather" />
+      <span class="label">Chat ID</span>
+      <input bind:value={cfg.telegram_chat_id} />
+      <span class="label">Cooldown (min)</span>
+      <input class="short" type="number" min="5" max="60" bind:value={cfg.cooldown_minutes} />
     </div>
-    <div class="form-row"><span>Chat ID</span><input bind:value={cfg.telegram_chat_id} /></div>
-    <div class="form-row">
-      <span>Cooldown (min)</span>
-      <input type="number" min="5" max="60" bind:value={cfg.cooldown_minutes} />
-    </div>
+
     <h2>Notify on</h2>
-    <label><input type="checkbox" bind:checked={cfg.notify_new_dxcc} />New DXCC</label>
-    <label><input type="checkbox" bind:checked={cfg.notify_new_slot} />New slot</label>
-    <label><input type="checkbox" bind:checked={cfg.notify_new_band} />New band</label>
-    <label><input type="checkbox" bind:checked={cfg.notify_new_mode} />New mode</label>
+    <div class="check-list">
+      <label><input type="checkbox" bind:checked={cfg.notify_new_dxcc} />New DXCC</label>
+      <label><input type="checkbox" bind:checked={cfg.notify_new_slot} />New slot</label>
+      <label><input type="checkbox" bind:checked={cfg.notify_new_band} />New band</label>
+      <label><input type="checkbox" bind:checked={cfg.notify_new_mode} />New mode</label>
+    </div>
+
     <div class="actions">
       <button class="primary" onclick={save} disabled={busy}>Save</button>
       <button onclick={test} disabled={busy}>Send test message</button>
@@ -65,7 +70,18 @@
 </div>
 
 <style>
-  .page { padding: 20px; }
-  .actions { display: flex; gap: 10px; margin-top: 14px; }
-  label { margin: 4px 0; }
+  /* The master switch stands ahead of the fields it governs, so it sits above
+     the label grid rather than inside it. */
+  .enable {
+    margin-bottom: 0.9rem;
+  }
+
+  /* A cooldown is two digits — a full-width field would promise otherwise. */
+  .short {
+    width: 6rem;
+  }
+
+  p {
+    margin: 0.75rem 0 0;
+  }
 </style>
