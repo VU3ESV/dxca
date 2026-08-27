@@ -35,6 +35,10 @@
       udp_sources: cfg.udp_sources,
       cluster_nodes: cfg.cluster_nodes,
       broadcast_destinations: cfg.broadcast_destinations,
+      // Sent every save. The server treats an ABSENT field as "leave as-is"
+      // and an empty string as a deliberate clear, so always sending the
+      // current value keeps this box the source of truth.
+      clublog_api_key: cfg.clublog_api_key ?? '',
     });
     busy = false;
     if (r.status === 200) {
@@ -45,11 +49,22 @@
     }
   }
 
+  async function refreshCty() {
+    busy = true; message = 'Downloading cty.xml from ClubLog...'; error = '';
+    const r = await api('POST', '/api/cty/refresh');
+    busy = false;
+    if (r.status === 200) {
+      message = `cty.xml refreshed: ${r.json.cty_entities} entities.`;
+      loadStatus();
+      loadConfig();
+    } else { message = ''; error = r.json?.error ?? `HTTP ${r.status}`; }
+  }
+
   async function refreshLotw() {
     busy = true; message = 'Downloading LoTW users list…'; error = '';
     const r = await api('POST', '/api/lotw/refresh');
     busy = false;
-    if (r.status === 200) message = `LoTW list refreshed: ${r.json.lotw_users} users.`;
+    if (r.status === 200) { message = `LoTW list refreshed: ${r.json.lotw_users} users.`; loadConfig(); }
     else { message = ''; error = r.json?.error ?? `HTTP ${r.status}`; }
   }
 
@@ -87,24 +102,70 @@
           <dd class="num" class:err={status.udp_failed}>{status.udp_failed}</dd>
         </div>
       </dl>
-      {#if isAdmin}
-        <div class="actions">
-          <button onclick={refreshLotw} disabled={busy}>Refresh LoTW users list</button>
-          <span class="hint">
-            {#if cfg?.read_only?.lotw_refresh_days}
-              Auto every {cfg.read_only.lotw_refresh_days} day{cfg.read_only.lotw_refresh_days === 1 ? '' : 's'} ·
-            {:else if cfg}
-              Automatic refresh off ·
-            {/if}
-            {#if cfg?.lotw_last_refresh_unix}
-              last downloaded {ago(cfg.lotw_last_refresh_unix)} ago
-            {:else if cfg}
-              never downloaded by this server (seeded from a file)
-            {/if}
-          </span>
-        </div>
-      {/if}
     </div>
+
+    <!-- The two SHARED reference datasets. Both are one file backing one
+         in-memory structure that every account reads, so both are admin-only
+         and both refresh server-wide — unlike a ClubLog log, which is per
+         account. They live together because that symmetry is the point. -->
+    {#if isAdmin && cfg}
+      <div class="card">
+        <h2>Reference data — shared by all users</h2>
+
+        <div class="settings-form">
+          <span class="label">ClubLog API key</span>
+          <input
+            type="password"
+            bind:value={cfg.clublog_api_key}
+            placeholder="from clublog.org — one key for the whole server"
+          />
+        </div>
+        <p class="hint note">
+          Fetches <b>cty.xml</b>, the DXCC prefix database every account is
+          classified against — so it belongs to the server, not to an
+          operator. It is <b>not</b> used to download anyone's log; that uses
+          each user's own email and app password in <b>My ClubLog</b>.
+          Saved with <b>Apply &amp; save</b> below.
+        </p>
+
+        <table class="refdata">
+          <tbody>
+            <tr>
+              <td class="what">cty.xml<br /><span class="hint">{status?.cty_entities ?? '—'} entities</span></td>
+              <td class="when hint">
+                {#if cfg.read_only.cty_refresh_days}
+                  auto every {cfg.read_only.cty_refresh_days}d ·
+                {:else}
+                  auto off ·
+                {/if}
+                {#if cfg.cty_last_refresh_unix}
+                  last {ago(cfg.cty_last_refresh_unix)} ago
+                {:else}
+                  never downloaded here
+                {/if}
+              </td>
+              <td><button onclick={refreshCty} disabled={busy || !cfg.clublog_api_key}>Refresh now</button></td>
+            </tr>
+            <tr>
+              <td class="what">LoTW users<br /><span class="hint">{status?.lotw_users ?? '—'} calls</span></td>
+              <td class="when hint">
+                {#if cfg.read_only.lotw_refresh_days}
+                  auto every {cfg.read_only.lotw_refresh_days}d ·
+                {:else}
+                  auto off ·
+                {/if}
+                {#if cfg.lotw_last_refresh_unix}
+                  last {ago(cfg.lotw_last_refresh_unix)} ago
+                {:else}
+                  never downloaded here
+                {/if}
+              </td>
+              <td><button onclick={refreshLotw} disabled={busy}>Refresh now</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    {/if}
 
     <div class="card">
       <h2>DX-cluster nodes — live</h2>
@@ -216,7 +277,8 @@
       <p class="hint file-only">
         File-only settings: web {cfg.read_only.web_bind} · telnet
         {cfg.read_only.telnet_port} · dedupe {cfg.read_only.dedupe_window_secs}s ·
-        ring {cfg.read_only.spot_ring_capacity} · LoTW refresh
+        ring {cfg.read_only.spot_ring_capacity} · cty refresh
+        {cfg.read_only.cty_refresh_days}d · LoTW refresh
         {cfg.read_only.lotw_refresh_days}d · data dir
         <code>{cfg.read_only.data_dir}</code> (edit config/dxca.toml + restart).
       </p>
@@ -298,6 +360,30 @@
 
   .apply {
     margin-top: 0;
+  }
+
+  .note {
+    margin: 0.5rem 0 1rem;
+    line-height: 1.5;
+    max-width: 40rem;
+  }
+
+  /* Two shared datasets, three columns: what, when, act. */
+  .refdata {
+    width: auto;
+  }
+
+  .refdata td {
+    padding: 0.35rem 1.25rem 0.35rem 0;
+    vertical-align: middle;
+  }
+
+  .refdata .what {
+    line-height: 1.35;
+  }
+
+  .refdata .when {
+    white-space: nowrap;
   }
 
   .file-only {

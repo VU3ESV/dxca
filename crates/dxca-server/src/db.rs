@@ -13,13 +13,19 @@ use std::sync::Mutex;
 
 /// Per-user ClubLog settings — the 1.x `ClubLogConfig` fields that matter
 /// server-side, with the alert toggles flattened in.
+///
+/// **No API key here.** It was only ever used to fetch cty.xml, which is one
+/// shared file backing one shared resolver, so it moved to a server-wide
+/// setting (`Db::clublog_api_key`). What remains is genuinely personal: the
+/// credentials that download *this operator's* log. Stored rows may still
+/// carry the old `api_key`; serde ignores it, and `adopt_legacy_api_key`
+/// lifts it to the server setting once at startup.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ClubLogUserConfig {
     pub callsign: String,
     pub email: String,
     pub app_password: String,
-    pub api_key: String,
     /// Automatic re-download interval in hours; **0 = manual only**.
     /// Per-user because each account pulls its own log with its own
     /// credentials — unlike the LoTW list, which is one shared file.
@@ -46,7 +52,6 @@ impl Default for ClubLogUserConfig {
             callsign: String::new(),
             email: String::new(),
             app_password: String::new(),
-            api_key: String::new(),
             refresh_hours: default_refresh_hours(),
             alerts: AlertConfigOpt::default(),
         }
@@ -199,6 +204,12 @@ impl User {
 pub struct Db {
     conn: Mutex<Connection>,
 }
+
+/// `meta` key holding the server-wide ClubLog API key (cty.xml downloads).
+const CLUBLOG_API_KEY: &str = "clublog_api_key";
+/// Marks the one-time lift of a pre-2.1 per-user key. Separate from the key
+/// itself so that clearing the key is not mistaken for "never migrated".
+const CLUBLOG_KEY_ADOPTED: &str = "clublog_api_key_adopted";
 
 const SCHEMA: &str = "
 CREATE TABLE IF NOT EXISTS users (
@@ -492,6 +503,77 @@ impl Db {
         self.meta_set(key, &now_unix().to_string())
     }
 
+    /// The server-wide ClubLog API key (for cty.xml). Stored in the database
+    /// rather than `config/dxca.toml` because that file is installed 0644
+    /// while the database is 0600 — a secret belongs with the other secrets.
+    pub fn clublog_api_key(&self) -> String {
+        self.meta_get(CLUBLOG_API_KEY)
+            .ok()
+            .flatten()
+            .unwrap_or_default()
+    }
+
+    pub fn set_clublog_api_key(&self, key: &str) -> DbResult<()> {
+        self.meta_set(CLUBLOG_API_KEY, key)
+    }
+
+    /// One-time adoption of a per-user key from before the setting moved, so
+    /// an operator who had one in their ClubLog tab keeps working with no
+    /// manual step. Returns the callsign it took the key from, for the log.
+    ///
+    /// Guarded by its own "already ran" flag rather than by "is the server
+    /// key empty?". Those look equivalent and are not: an admin who
+    /// deliberately CLEARS the key leaves it empty, and an emptiness check
+    /// would re-adopt the stale key from the user row on the next restart —
+    /// silently undoing them, forever. The flag is set even when no legacy
+    /// key is found, so the scan happens exactly once per database.
+    pub fn adopt_legacy_api_key(&self) -> DbResult<Option<String>> {
+        if self.meta_get(CLUBLOG_KEY_ADOPTED)?.is_some() {
+            return Ok(None);
+        }
+        self.meta_set(CLUBLOG_KEY_ADOPTED, "1")?;
+        if !self.clublog_api_key().is_empty() {
+            return Ok(None);
+        }
+        for user in self.users()? {
+            // The field is gone from ClubLogUserConfig, so read the raw JSON.
+            let raw: Option<String> = {
+                let conn = self.conn.lock().unwrap();
+                conn.query_row(
+                    "SELECT clublog_json FROM user_configs WHERE user_id = ?1",
+                    params![user.id],
+                    |r| r.get(0),
+                )
+                .optional()
+                .map_err(db_err)?
+            };
+            let Some(raw) = raw else { continue };
+            let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) else {
+                continue;
+            };
+            let key = v.get("api_key").and_then(|k| k.as_str()).unwrap_or("");
+            if !key.is_empty() {
+                self.set_clublog_api_key(key)?;
+                return Ok(Some(user.callsign));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Write a raw clublog_json blob — tests only, to forge a row in the
+    /// shape an older build would have stored.
+    #[cfg(test)]
+    pub fn set_clublog_json_raw(&self, user_id: i64, json: &str) -> DbResult<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO user_configs (user_id, clublog_json) VALUES (?1, ?2)
+               ON CONFLICT(user_id) DO UPDATE SET clublog_json = ?2",
+            params![user_id, json],
+        )
+        .map(|_| ())
+        .map_err(db_err)
+    }
+
     /// One user's log provenance: (qso_count, last_refresh_unix). The matrix
     /// itself is already in memory, so the station card only needs these two.
     pub fn matrix_meta(&self, user_id: i64) -> DbResult<Option<(i64, i64)>> {
@@ -580,6 +662,39 @@ mod tests {
         assert!(!d.wants_level(AlertLevel::UnconfDxcc));
     }
 
+    #[test]
+    fn legacy_per_user_api_key_is_adopted_once() {
+        let (db, _p) = temp_db();
+        let id = db.create_user("VU2CPL", "hash", "Manoj", "admin").unwrap();
+
+        // A row as written BEFORE the key moved: api_key is not a field of
+        // ClubLogUserConfig any more, so write the raw JSON the old build
+        // would have stored.
+        db.set_clublog_json_raw(
+            id,
+            r#"{"callsign":"VU2CPL","email":"a@b.c","app_password":"p","api_key":"LEGACY123"}"#,
+        )
+        .unwrap();
+        assert_eq!(db.clublog_api_key(), "", "server has none to begin with");
+
+        assert_eq!(
+            db.adopt_legacy_api_key().unwrap().as_deref(),
+            Some("VU2CPL")
+        );
+        assert_eq!(db.clublog_api_key(), "LEGACY123");
+
+        // Idempotent: a second run finds the server key set and does nothing.
+        assert_eq!(db.adopt_legacy_api_key().unwrap(), None);
+
+        // A deliberate clear must survive every later startup, even though
+        // the legacy key is still sitting in the user's row. Guarding on
+        // "is the server key empty?" instead of the ran-once flag would
+        // silently re-adopt here and undo the admin, forever.
+        db.set_clublog_api_key("").unwrap();
+        assert_eq!(db.adopt_legacy_api_key().unwrap(), None);
+        assert_eq!(db.clublog_api_key(), "", "the clear stands");
+    }
+
     fn temp_db() -> (Db, std::path::PathBuf) {
         use std::sync::atomic::{AtomicU32, Ordering};
         static N: AtomicU32 = AtomicU32::new(0);
@@ -616,9 +731,12 @@ mod tests {
         let mut cl = db.clublog_config(id).unwrap();
         assert!(cl.alerts.alert_new_dxcc);
         cl.callsign = "VU2CPL".into();
-        cl.api_key = "k".into();
+        cl.email = "op@example.com".into();
         db.set_clublog_config(id, &cl).unwrap();
-        assert_eq!(db.clublog_config(id).unwrap().api_key, "k");
+        let back = db.clublog_config(id).unwrap();
+        assert_eq!(back.callsign, "VU2CPL");
+        assert_eq!(back.email, "op@example.com");
+        assert_eq!(back.refresh_hours, 24, "default survives a round trip");
 
         let mut m = LogMatrix::default();
         m.record(324, "20M", "DATA", "VU2AAA", true);

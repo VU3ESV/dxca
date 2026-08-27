@@ -19,6 +19,12 @@ dedupe_window_secs = 60
 # In-memory spot ring served to the web UI.
 spot_ring_capacity = 5000
 
+# How often to re-download ClubLog's cty.xml (the DXCC prefix database), in
+# days; 0 = manual only. The API key it needs is NOT here — this file is
+# installed world-readable (0644) while data/dxca.db is 0600, so the key is a
+# database setting, managed by an admin in the web UI's System tab.
+cty_refresh_days = 7
+
 # How often to re-download the LoTW users list, in days; 0 = manual only.
 # Server-wide, because the list is one shared ~6 MB file rather than
 # per-account. Each user's own ClubLog log has its own interval, set per

@@ -45,6 +45,10 @@ const LOTW_ATTEMPT_KEY: &str = "lotw_last_attempt_unix";
 /// and the scheduler share one clock — and read here to decide "due".
 pub const LOTW_OK_KEY: &str = "lotw_last_refresh_unix";
 
+const CTY_ATTEMPT_KEY: &str = "cty_last_attempt_unix";
+/// Written by `UserService::refresh_cty` on success, same arrangement.
+pub const CTY_OK_KEY: &str = "cty_last_refresh_unix";
+
 fn clublog_attempt_key(user_id: i64) -> String {
     format!("clublog_last_attempt_unix:{user_id}")
 }
@@ -69,9 +73,9 @@ fn is_due(now: i64, last_ok: i64, last_attempt: i64, interval_secs: i64) -> bool
     now - last_ok >= interval_secs && now - last_attempt >= RETRY_AFTER_SECS
 }
 
-/// Spawn the refresh loop. `lotw_refresh_days` of 0 disables the LoTW half;
-/// each user's `refresh_hours` of 0 disables theirs.
-pub fn spawn(users: Arc<UserService>, lotw_refresh_days: u64) {
+/// Spawn the refresh loop. A `*_days` of 0 disables that shared job; each
+/// user's `refresh_hours` of 0 disables theirs.
+pub fn spawn(users: Arc<UserService>, cty_refresh_days: u64, lotw_refresh_days: u64) {
     tokio::spawn(async move {
         let mut ticker = tokio::time::interval(TICK);
         // The first tick fires immediately; skip it so a restart doesn't
@@ -80,21 +84,50 @@ pub fn spawn(users: Arc<UserService>, lotw_refresh_days: u64) {
         loop {
             ticker.tick().await;
             let users = users.clone();
-            // One job per tick, LoTW taking precedence when both are due:
-            // it is shared by every account, so it is the more valuable of
-            // the two to keep current.
-            let did_lotw = tokio::task::spawn_blocking({
+            // One job per tick, shared resources before per-user ones: cty
+            // and the LoTW list are read by every account, and cty in
+            // particular gates classification — a user log rebuilt against a
+            // stale resolver is worse than one rebuilt an hour later.
+            let did_shared = tokio::task::spawn_blocking({
                 let users = users.clone();
-                move || run_lotw_if_due(&users, lotw_refresh_days)
+                move || {
+                    run_cty_if_due(&users, cty_refresh_days)
+                        || run_lotw_if_due(&users, lotw_refresh_days)
+                }
             })
             .await
             .unwrap_or(false);
-            if did_lotw {
+            if did_shared {
                 continue;
             }
             let _ = tokio::task::spawn_blocking(move || run_one_clublog_if_due(&users)).await;
         }
     });
+}
+
+/// True when a cty.xml download was attempted this tick.
+fn run_cty_if_due(users: &UserService, days: u64) -> bool {
+    let key = users.db.clublog_api_key();
+    if key.is_empty() {
+        // Nothing to do, and nothing to complain about every 15 minutes —
+        // a server with no key simply keeps the cty.xml it was given.
+        return false;
+    }
+    let now = now_unix();
+    if !is_due(
+        now,
+        users.db.meta_unix(CTY_OK_KEY),
+        users.db.meta_unix(CTY_ATTEMPT_KEY),
+        days as i64 * 86_400,
+    ) {
+        return false;
+    }
+    let _ = users.db.meta_set_now(CTY_ATTEMPT_KEY);
+    match users.refresh_cty(&key) {
+        Ok(entities) => println!("dxca: auto-refresh: cty.xml updated, {entities} entities"),
+        Err(e) => eprintln!("dxca: auto-refresh: cty.xml failed: {e}"),
+    }
+    true
 }
 
 /// True when a LoTW download was attempted this tick.

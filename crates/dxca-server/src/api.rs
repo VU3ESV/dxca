@@ -50,6 +50,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/config/global", get(get_global).put(put_global))
         .route("/api/telegram/test", post(telegram_test))
         .route("/api/lotw/refresh", post(lotw_refresh))
+        .route("/api/cty/refresh", post(cty_refresh))
         .route("/api/users", get(list_users).post(create_user))
         .with_state(state)
         .fallback(crate::assets::serve)
@@ -449,8 +450,13 @@ async fn get_global(State(app): State<AppState>, headers: HeaderMap) -> Response
             "dedupe_window_secs": cfg.dedupe_window_secs,
             "spot_ring_capacity": cfg.spot_ring_capacity,
             "data_dir": cfg.data_dir,
+            "cty_refresh_days": cfg.cty_refresh_days,
             "lotw_refresh_days": cfg.lotw_refresh_days,
         },
+        // Server-wide, admin-only, stored in the 0600 database rather than
+        // the 0644 config file.
+        "clublog_api_key": app.users.db.clublog_api_key(),
+        "cty_last_refresh_unix": app.users.db.meta_unix(crate::refresh::CTY_OK_KEY),
         // When the shared LoTW list was last actually downloaded — 0 = never
         // recorded, which is what a list seeded from a file cache looks like.
         "lotw_last_refresh_unix": app.users.db.meta_unix(crate::refresh::LOTW_OK_KEY),
@@ -463,6 +469,11 @@ struct GlobalConfigReq {
     udp_sources: Vec<UdpSource>,
     cluster_nodes: Vec<ClusterNode>,
     broadcast_destinations: Vec<BroadcastDestination>,
+    /// Server-wide ClubLog API key for cty.xml. Absent = leave as-is, so a
+    /// client that never learned about the field cannot blank it; an empty
+    /// string IS a deliberate clear.
+    #[serde(default)]
+    clublog_api_key: Option<String>,
 }
 
 /// Hot-apply + persist the three arrays. Bind failures (port clash)
@@ -516,6 +527,16 @@ async fn put_global(
         }
     }
 
+    // The API key is server state, not pipeline state — persisted to the
+    // database, not to config/dxca.toml (0644). `None` means the client
+    // didn't send the field at all, which must not blank a stored key;
+    // `Some("")` is a deliberate clear.
+    if let Some(key) = &req.clublog_api_key
+        && let Err(e) = app.users.db.set_clublog_api_key(key.trim())
+    {
+        return err(StatusCode::INTERNAL_SERVER_ERROR, e);
+    }
+
     // Apply: sources first (binds can fail → reject), then destinations
     // and nodes (infallible diffs).
     if let Err(e) = app
@@ -567,6 +588,22 @@ async fn telegram_test(State(app): State<AppState>, headers: HeaderMap) -> Respo
 }
 
 /// Refresh the global LoTW users list (admin; the list is server-wide).
+/// Admin-only, like the LoTW one: cty.xml is a server-wide resource backing
+/// one shared resolver, so refreshing it is not a per-user action.
+async fn cty_refresh(State(app): State<AppState>, headers: HeaderMap) -> Response {
+    if let Err(resp) = require_admin(&app, &headers) {
+        return resp;
+    }
+    let service = app.users.clone();
+    let key = app.users.db.clublog_api_key();
+    let result = tokio::task::spawn_blocking(move || service.refresh_cty(&key)).await;
+    match result {
+        Ok(Ok(entities)) => Json(serde_json::json!({ "cty_entities": entities })).into_response(),
+        Ok(Err(e)) => err(StatusCode::BAD_GATEWAY, e),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, format!("join: {e}")),
+    }
+}
+
 async fn lotw_refresh(State(app): State<AppState>, headers: HeaderMap) -> Response {
     if let Err(resp) = require_admin(&app, &headers) {
         return resp;
