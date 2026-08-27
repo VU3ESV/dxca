@@ -439,6 +439,16 @@ Two things to keep straight, because both are easy to get wrong later:
   station worked on 20M in both CW and FT8 is two slots but one Challenge
   point. The card shows both totals, side by side, for exactly that reason.
 
+**Validated against ClubLog itself (2026-08-27):** VU2CPL's log —
+56,815 QSOs, 320 DXCC worked / 319 confirmed, 4339 slots worked / 4075
+confirmed — yields **2397 confirmed Challenge points, exactly what ClubLog
+reports**. That single match covers a lot: the band table, the 60m
+exclusion, the entity×band (not ×mode) rule, and `Record::is_confirmed` —
+including its treatment of ClubLog's own `APP_CLUBLOG_QSO_QSL = Y` flag
+alongside the three standard ADIF QSL fields, which was the part with no
+independent reference. If the Challenge figure ever drifts from ClubLog's,
+suspect `is_confirmed` first.
+
 `bands::CHALLENGE_BANDS` / `is_challenge_band()`, summed in
 `LogMatrix::stats()` into `challenge_worked` / `challenge_confirmed`. The
 award counts the confirmed figure (1000 to claim, endorsements every 500);
