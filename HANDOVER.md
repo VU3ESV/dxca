@@ -17,7 +17,9 @@ before touching anything.** It was drafted in the 1.x repo
 canonical from now on.
 
 Lineage: original concept by Vinod VU3ESV; DX-cluster telnet client
-lifted from `~/projects/meridian` (`crates/meridian-core/src/dxcluster/`).
+lifted from `~/projects/meridian` (`crates/meridian-core/src/dxcluster/`),
+and the web GUI's design system from the same repo's
+`web-ui/default/src/` (app.css + the theme module and switcher).
 **Production runs on noderedpi4 (192.168.1.169) since the 2026-08-27
 cutover**; the 1.x macOS app is the retained fallback (maintenance mode).
 
@@ -214,7 +216,8 @@ WebSocket, verified in the browser against a disposable test instance.**
   `/api/lotw/refresh`, `is_lotw` on every annotated spot),
   `/api/telegram/test`. axum grew the `ws` feature; a registry
   inconsistency forced `futures-util` pinned to 0.3.31 in the lockfile.
-- Web UI (Svelte 5, GitHub-dark): session bootstrap → first-run **setup**
+- Web UI (Svelte 5; GitHub-dark at M5, restyled to Meridian's design
+  system on 2026-08-27 — see "Web UI look" below): session bootstrap → first-run **setup**
   card / **login** card / tabbed main shell. Pages: **Spots** (status
   pills incl. three-state node badges with last-spot age; filters:
   sources, bands, new-only, CQ-only, 60 s hide-duplicates like 1.x
@@ -421,6 +424,54 @@ Remaining before any public release: x86-64-Linux (+ optional Windows)
 release artifacts, a Windows build test, then the repo-public flip +
 vu2cpl.com card with the VU3ESV credit line.
 
+## Web UI look
+
+**2026-08-27 — the GUI was restyled to Meridian's design system.** Visual
+only: same screens, same data, same information architecture, no API
+change. Rust untouched, so only `just web` is the relevant gate (it
+passes; `dist/` is gitignored and rebuilt by `just web` / `just run`).
+
+What replaced what:
+
+- `web-ui/src/app.css` is now a port of Meridian's stylesheet. The old
+  base was hardcoded GitHub-dark (`--bg: #0d1117` …) — one appearance,
+  with hexes re-typed per component. The new one derives every surface
+  from the CSS **system colours** `Canvas` / `CanvasText` via
+  `color-mix()`, so light and dark both come for free.
+- New `web-ui/src/lib/theme.svelte.ts` + `ThemeSwitcher.svelte` (both
+  ported): Auto / Light / Dark in the header, stored under
+  `localStorage['dxca.theme']`, applied by pinning `color-scheme` on
+  `<html>`. `index.html` re-reads that same key **before** first paint to
+  avoid a flash — change one, change both.
+- Shared vocabulary in app.css, used by every screen instead of per-view
+  hexes: `.card`, `.pill`, `.status-dot` (`.on` / `.warn` / `.err` —
+  replaces the old `.dot.green/.yellow/.red`), `.filter-chip`,
+  `.settings-form`, `.hint`, `.actions`, `nav.tabs`, `.popup-menu`.
+- **DXCA's own addition, with no Meridian counterpart:** the *alert
+  ladder* (`--alert-dxcc` / `-slot` / `-band` / `-mode`, each with a
+  matching `-bg` row wash). Same four hues 1.x used, re-expressed with
+  `light-dark()` — the old `rgba()` tints only composited correctly over
+  `#0d1117`. Level colour and row wash come from the one token, so the
+  Alert cell and its tint cannot disagree.
+- Header gained the version beside the wordmark (read off the bootstrap
+  `/api/status` call — no extra request) and the theme toggle.
+
+Licensing: the three ported files are **Apache-2.0**, like
+`dxca-connect/src/dxcluster/`, not MIT. Each carries the note in its own
+header; README's License section lists them. If you add to app.css,
+mark it `DXCA:` at the site.
+
+Verified in the embedded browser across all six screens (Spots, My
+ClubLog, My Alerts, Users, System, and the setup/login card) in **both**
+appearances, against a throwaway static server with stubbed `/api`
+responses — deliberately not against the production Pi, since running a
+second server locally would dial the real cluster nodes with the
+production callsign.
+
+Not done (out of the visual-only scope, would need new endpoints or
+panels): the propagation / host / band-activity cards Meridian's own
+dashboard carries, and any i18n.
+
 Post-2.0 backlog (pick up whenever): per-user telnet feeds (Meridian
 server lift), MQTT status/LWT on `shack/dxca/status` (broker is
 localhost on the Pi!), durable spot history + search, possible Meridian
@@ -431,5 +482,5 @@ decoder ports if the shack grows.
 
 - **CDP** — Commit, Document, Push together on every substantive change.
 - Repo is **private**; goes public only on explicit instruction.
-- Credit VU3ESV (concept) and Meridian (telnet engines) in any user-facing
-  write-up — already in README.
+- Credit VU3ESV (concept) and Meridian (telnet engine + the web GUI's
+  design system) in any user-facing write-up — already in README.

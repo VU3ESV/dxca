@@ -2,6 +2,7 @@
   // App shell: session bootstrap → setup / login / tabbed main UI.
   import { api } from './lib/api';
   import { onMount } from 'svelte';
+  import ThemeSwitcher from './lib/ThemeSwitcher.svelte';
   import Auth from './views/Auth.svelte';
   import Dashboard from './views/Dashboard.svelte';
   import ClubLog from './views/ClubLog.svelte';
@@ -13,9 +14,13 @@
   let view = $state<View>('loading');
   let me = $state<any>(null);
   let tab = $state('spots');
+  // Server version beside the wordmark. Read off the bootstrap status call
+  // that already runs — the header costs no extra request for it.
+  let version = $state('');
 
   async function bootstrap() {
     const status = await api('GET', '/api/status');
+    if (status.json?.version) version = status.json.version;
     if (status.json?.setup_required) {
       view = 'setup';
       return;
@@ -47,22 +52,25 @@
 </script>
 
 {#if view === 'loading'}
-  <p class="dim" style="padding: 24px">Contacting server…</p>
+  <p class="hint" style="padding: 1.5rem 1.25rem">Contacting server…</p>
 {:else if view === 'setup' || view === 'login'}
   <Auth mode={view} onDone={bootstrap} />
 {:else}
   <header>
-    <h1>DXCA</h1>
-    <nav>
+    <h1>DXCA{#if version}&nbsp;<span class="app-version">v{version}</span>{/if}</h1>
+    <nav class="tabs">
       {#each tabs as [id, label]}
         <button class:active={tab === id} onclick={() => (tab = id)}>{label}</button>
       {/each}
     </nav>
-    <span class="who">
-      <span class="mono">{me.callsign}</span>
-      {#if me.role === 'admin'}<span class="dim">admin</span>{/if}
+    <div class="header-right">
+      <span class="profile-display">
+        <span class="call">{me.callsign}</span>
+        {#if me.role === 'admin'}admin{/if}
+      </span>
+      <ThemeSwitcher />
       <button onclick={logout}>Log out</button>
-    </span>
+    </div>
   </header>
   {#if tab === 'spots'}
     <Dashboard />
@@ -76,43 +84,3 @@
     <System isAdmin={me.role === 'admin'} />
   {/if}
 {/if}
-
-<style>
-  header {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    padding: 10px 16px;
-    background: var(--bg-panel);
-    border-bottom: 1px solid var(--border);
-  }
-  h1 {
-    margin: 0;
-    font-size: 17px;
-    color: var(--accent);
-  }
-  nav {
-    display: flex;
-    gap: 4px;
-  }
-  nav button {
-    background: none;
-    border: none;
-    color: var(--fg-dim);
-    padding: 6px 10px;
-    border-radius: 6px;
-  }
-  nav button.active {
-    color: var(--fg);
-    background: #21262d;
-  }
-  nav button:hover {
-    color: var(--fg);
-  }
-  .who {
-    margin-left: auto;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-</style>

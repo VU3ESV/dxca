@@ -15,8 +15,9 @@ alerts over one shared spot stream.
 
 Original concept and reference implementation by Vinod VU3ESV (FT8 Cluster
 Aggregator); rewritten and extended. The DX-cluster telnet client engine
-is derived from the **Meridian** project — joint work by Basil Thomas
-W6BT, Vinod VU3ESV, and Ram VU3RDD (repo private).
+and the web GUI's design system are derived from the **Meridian**
+project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
+(repo private).
 
 ## Status
 
@@ -26,7 +27,10 @@ DX-cluster telnet nodes (Meridian-lifted client with the 1.x
 honest-status graft) feed one pipeline into the telnet server, the RUMlog
 passthrough, and a WebSocket-streamed spots dashboard — status pills,
 live sortable table, source/band/new-only/duplicate filters, per-user
-alert row tints, LoTW markers. SQLite-backed accounts (argon2 + session
+alert row tints, LoTW markers. The GUI wears Meridian's design system
+(2026-08-27): one card/pill/table vocabulary across every screen, and
+**light and dark appearances** that follow the OS unless the header's
+toggle pins one. SQLite-backed accounts (argon2 + session
 cookies, first-run setup card) each carry their own ClubLog matrix;
 every spot classifies per user with Telegram alerts and per-callsign
 cooldown. Proven end-to-end in tests against fake ClubLog/Telegram
@@ -52,7 +56,7 @@ security. Keep the data directory out of backups you share.
 | `crates/dxca-core` | Pure logic: spot model; WSJT-X codec, parsers, matrix, classifier land in M1. No I/O. |
 | `crates/dxca-connect` | I/O engines (M2–M4): DX-cluster telnet, WSJT-X UDP, broadcaster, ClubLog/LoTW/Telegram. |
 | `crates/dxca-server` | Composition root: config, axum web API, embedded UI; auth + SQLite in M4. Binary is `dxca`. |
-| `web-ui/` | Svelte 5 + Vite + TypeScript (pnpm). Built `dist/` is embedded into the binary. |
+| `web-ui/` | Svelte 5 + Vite + TypeScript (pnpm). Built `dist/` is embedded into the binary. `src/app.css` is the design system — every colour is derived from CSS system colours, so the UI follows the OS light/dark and the header's toggle can pin either. |
 | `config/dxca.example.toml` | Global config template — copy to `config/dxca.toml`. |
 
 ## Build
@@ -108,9 +112,14 @@ managed in the web GUI per account, not in the file.
 
 ## License
 
-MIT — see [LICENSE](LICENSE) — except
-`crates/dxca-connect/src/dxcluster/`, which is derived from the Meridian
+MIT — see [LICENSE](LICENSE) — except the files derived from the Meridian
 project (© the Meridian authors: Basil Thomas W6BT, Vinod VU3ESV, Ram
-VU3RDD) and remains under **Apache-2.0** — see
-[LICENSE-APACHE](LICENSE-APACHE). DXCA's modifications to those files
-are marked `// DXCA:`.
+VU3RDD), which remain under **Apache-2.0** — see
+[LICENSE-APACHE](LICENSE-APACHE):
+
+- `crates/dxca-connect/src/dxcluster/` — the DX-cluster telnet client;
+- `web-ui/src/app.css`, `web-ui/src/lib/theme.svelte.ts`, and
+  `web-ui/src/lib/ThemeSwitcher.svelte` — the web GUI's design system.
+
+DXCA's modifications to those files are marked `// DXCA:` (`DXCA:` in the
+stylesheet), and each file carries the note in its own header.

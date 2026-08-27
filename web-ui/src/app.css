@@ -1,20 +1,68 @@
-/* GitHub-dark base, matching the shack dashboard theme (plan §8). */
+/* The DXCA design system — the Meridian look, ported.
+ *
+ * LICENSE: this stylesheet is derived from the Meridian project's
+ * `web-ui/default/src/app.css` — © the Meridian authors (Basil Thomas W6BT,
+ * Vinod VU3ESV, Ram VU3RDD), Apache-2.0 — and remains under Apache-2.0 (see
+ * LICENSE-APACHE at the repo root), unlike the rest of this MIT repo. DXCA's
+ * additions are marked `DXCA:` at the site; the biggest is the alert ladder,
+ * which has no Meridian counterpart.
+ *
+ * The old base was hardcoded GitHub-dark (#0d1117 and friends), which meant
+ * exactly one appearance and a hex literal re-typed in every component. This
+ * is Meridian's approach instead: CSS SYSTEM COLORS (`Canvas` / `CanvasText`)
+ * plus `color-scheme`, with every surface derived from them by `color-mix`.
+ * The whole UI then follows the OS for free, and lib/theme.svelte.ts only has
+ * to pin `color-scheme` on <html> to express an explicit override.
+ *
+ * Nothing here is a per-screen choice. A component may override locally — its
+ * scoped selector carries an extra class, so it always wins — but that has to
+ * be a deliberate exception, not a re-typed default.
+ */
+
 :root {
-  --bg: #0d1117;
-  --bg-panel: #161b22;
-  --bg-hover: #1c2129;
-  --border: #30363d;
-  --fg: #c9d1d9;
-  --fg-dim: #8b949e;
-  --accent: #58a6ff;
-  --green: #3fb950;
-  --yellow: #d29922;
-  --red: #f85149;
-  --orange: #f0883e;
-  --alert-dxcc: rgba(248, 81, 73, 0.16);
-  --alert-slot: rgba(240, 136, 62, 0.14);
-  --alert-band: rgba(88, 166, 255, 0.12);
-  --alert-mode: rgba(210, 153, 34, 0.12);
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, sans-serif;
+
+  --card-bg: color-mix(in srgb, CanvasText 4%, Canvas);
+  --border: color-mix(in srgb, CanvasText 15%, Canvas);
+  --muted: color-mix(in srgb, CanvasText 55%, Canvas);
+  --accent: #2f81f7;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* The SEVERITY palette — MEANING (how bad), never identity. The light
+     column is the familiar GitHub red/amber/green; the dark column lifts each
+     hue off a dark surface, where the light values go muddy. */
+  --err: light-dark(#d1242f, #f5636b);
+  --warn: light-dark(#b97900, #fab219);
+  --ok: light-dark(#1a7f37, #3fb950);
+
+  /* The CARD TYPE SCALE — the four roles every card is built from, declared
+     once so a screen cannot invent a fifth size. The order is deliberate and
+     is NOT a plain descent: a card title is a small-caps LABEL for a group, so
+     it sits *below* the item names inside it — the settings-app idiom. Item
+     names are the primary interactive text and match the app's table size. */
+  --fs-card-title: 0.8rem;
+  --fs-subhead: 0.75rem;
+  --fs-item: 0.9rem;
+  --fs-hint: 0.8rem;
+
+  /* DXCA: the ALERT LADDER — the four "you have not worked this" levels, in
+     descending rarity. Distinct from the severity palette above: nothing here
+     is wrong, these say how much a spot is worth chasing. The hues are the
+     ones 1.x and the 2.0 dark theme already used (red / orange / blue /
+     amber), re-expressed with `light-dark()` so both appearances work — the
+     old `rgba(…)` tints only ever composited correctly over #0d1117.
+
+     Each level is a colour plus a row wash mixed from it, so the Alert cell
+     and its row tint can never disagree about what a level looks like. */
+  --alert-dxcc: var(--err);
+  --alert-slot: light-dark(#bd5b00, #f0883e);
+  --alert-band: var(--accent);
+  --alert-mode: var(--warn);
+  --alert-dxcc-bg: color-mix(in srgb, var(--alert-dxcc) 12%, Canvas);
+  --alert-slot-bg: color-mix(in srgb, var(--alert-slot) 11%, Canvas);
+  --alert-band-bg: color-mix(in srgb, var(--alert-band) 11%, Canvas);
+  --alert-mode-bg: color-mix(in srgb, var(--alert-mode) 10%, Canvas);
 }
 
 * {
@@ -23,40 +71,215 @@
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--fg);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-  font-size: 13px;
+  padding: 0;
+  background: Canvas;
+  color: CanvasText;
 }
 
 code,
 .mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--mono);
 }
 
-button {
-  background: #21262d;
-  color: var(--fg);
-  border: 1px solid var(--border);
+code {
+  font-size: 0.85em;
+}
+
+/* --- Page shell ------------------------------------------------------------
+   The header runs full width; a screen's own content sits in `.page`, which
+   carries the app's one page gutter. Settings-shaped screens add `.narrow` to
+   stay in a readable column. */
+
+.page {
+  padding: 1.5rem 1.25rem;
+}
+
+.narrow {
+  max-width: 56rem;
+}
+
+/* Masonry-style: cards flow into ~26rem columns and pack tightly, so a short
+   card doesn't leave a tall gap next to a long one. */
+.card-grid {
+  columns: 26rem;
+  column-gap: 1.25rem;
+}
+
+.card-grid > .card {
+  break-inside: avoid;
+  margin-bottom: 1.25rem;
+}
+
+.card-grid > .span-all {
+  column-span: all;
+}
+
+h1 {
+  font-size: 1.4rem;
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* Server version beside the wordmark — small, muted, on the same baseline. */
+h1 .app-version {
+  font-size: 0.6rem;
+  font-weight: 400;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+/* The card-heading scale, app-wide. Deliberately smaller than the content it
+   labels: a card heading names a GROUP, and the rows or fields inside it carry
+   the operator's attention — at the body size the label ties with its own
+   content and the hierarchy reads flat. */
+h2 {
+  font-size: var(--fs-card-title);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 0 0 0.75rem;
+}
+
+/* A second heading inside a card (e.g. "Notify on" under the Telegram fields)
+   divides the card, so it stays under the card's own title and gains air. */
+.card h2 + * {
+  margin-top: 0;
+}
+
+.card h2:not(:first-child) {
+  margin-top: 1.25rem;
+}
+
+/* --- Header ----------------------------------------------------------------
+   Transparent, not a panel: the app bar is a rule under the wordmark, so the
+   page reads as one surface rather than a chrome strip over a body. */
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1.25rem 1.25rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.header-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+nav.tabs {
+  display: flex;
+  gap: 0.15rem;
+  flex-wrap: wrap;
+  padding-left: 1.5rem;
+  border-left: 1px solid var(--border);
+}
+
+nav.tabs button {
+  border: none;
+  background: transparent;
+  color: CanvasText;
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.35rem 0.8rem;
   border-radius: 6px;
-  padding: 5px 12px;
-  font-size: 13px;
   cursor: pointer;
 }
 
-button:hover {
-  background: var(--bg-hover);
-  border-color: #8b949e;
+nav.tabs button:hover {
+  background: var(--card-bg);
 }
 
-button.primary {
-  background: #238636;
-  border-color: #2ea043;
-  color: #fff;
+nav.tabs button.active {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
 }
 
-button.primary:hover {
-  background: #2ea043;
+/* The signed-in operator, shown rather than offered — a fact about the
+   session, so it wears the read-only chip shape, not a button's. */
+.profile-display {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card-bg);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.profile-display .call {
+  color: CanvasText;
+  font-family: var(--mono);
+}
+
+/* --- Header popovers -------------------------------------------------------
+   The small header dropdown — a trigger's list of mutually exclusive picks.
+   Shared rather than restyled per widget so the header's menus can't drift. */
+
+.popup-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.5rem);
+  z-index: 20;
+  min-width: 8rem;
+  background: Canvas;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.3rem;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+}
+
+.popup-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: CanvasText;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.popup-item:hover {
+  background: var(--card-bg);
+}
+
+.popup-item.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* --- Controls --------------------------------------------------------------
+   One button shape for the app. Meridian spells this `.mini` and leaves bare
+   buttons unstyled; here the shape IS the bare-button default so no control
+   can end up naked, and `.mini` stays as an explicit alias for markup that
+   wants to name it. Header buttons (tabs, icons, popup items) reset it above,
+   which is the deliberate-local-override case. */
+
+button {
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card-bg);
+  color: CanvasText;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--muted);
 }
 
 button:disabled {
@@ -64,14 +287,49 @@ button:disabled {
   cursor: default;
 }
 
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+button.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 85%, CanvasText);
+  border-color: color-mix(in srgb, var(--accent) 85%, CanvasText);
+}
+
+/* Icon button in the header — no chrome until it's touched. */
+.gear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.gear:hover,
+.gear.menu-open {
+  color: CanvasText;
+  background: var(--card-bg);
+}
+
+.gear.menu-open {
+  border-color: var(--accent);
+}
+
 input,
 select {
-  background: var(--bg);
-  color: var(--fg);
+  background: transparent;
+  color: CanvasText;
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 5px 8px;
-  font-size: 13px;
+  padding: 0.25rem 0.45rem;
+  font: inherit;
+  font-size: 0.85rem;
 }
 
 input:focus,
@@ -80,87 +338,238 @@ select:focus {
   border-color: var(--accent);
 }
 
+input[type='checkbox'] {
+  accent-color: var(--accent);
+}
+
 label {
   display: flex;
   align-items: center;
-  gap: 6px;
-  color: var(--fg);
+  gap: 0.4rem;
+  font-size: var(--fs-item);
 }
 
+/* --- Cards -----------------------------------------------------------------
+   A card is a tinted panel, not a raised one: the 4 % wash off CanvasText
+   separates it from the page in both appearances without a shadow. */
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+
+/* --- Tables ----------------------------------------------------------------
+   Borderless verticals, a muted row rule, a muted header. The old base drew a
+   full grid at GitHub-dark's contrast, which turned a 10-column spot feed into
+   a cage; the rows carry the reading. */
+
 table {
-  border-collapse: collapse;
   width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.28rem 0.9rem 0.28rem 0;
+  white-space: nowrap;
 }
 
 th {
-  text-align: left;
-  color: var(--fg-dim);
-  font-weight: 600;
-  padding: 6px 10px;
+  color: var(--muted);
+  font-weight: 500;
   border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
-  background: var(--bg-panel);
-  cursor: pointer;
-  user-select: none;
-  white-space: nowrap;
 }
 
 td {
-  padding: 4px 10px;
-  border-bottom: 1px solid #21262d;
-  white-space: nowrap;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, Canvas);
 }
 
-tr:hover td {
-  background: var(--bg-hover);
+tr:last-child td {
+  border-bottom: none;
 }
+
+/* Numbers line up column-wise, so a count is comparable down the page. */
+td.mono,
+td.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Shared vocabulary -----------------------------------------------------
+   Classes that appear on more than one screen live here, once. */
 
 .pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.4rem;
+  padding: 0.1rem 0.6rem;
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 2px 10px;
-  font-size: 12px;
-  background: var(--bg-panel);
+  font-size: 0.78rem;
+  background: var(--card-bg);
   white-space: nowrap;
 }
 
-.dot {
-  width: 8px;
-  height: 8px;
+.pill b {
+  font-variant-numeric: tabular-nums;
+}
+
+.pill.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.pill.off {
+  color: var(--muted);
+}
+
+/* A status word inside a pill is part of the pill's line, not a paragraph of
+   its own — it takes the colour from `.ok` / `.err` and the size from here. */
+.pill .ok,
+.pill .err {
+  font-size: inherit;
+}
+
+/* The live-state dot — hollow = off/unknown, green = up, amber =
+   connected-but-unproven, red = down. Worn identically wherever a source,
+   node or destination reports state. */
+.status-dot {
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   display: inline-block;
+  flex: none;
+  border: 1.5px solid var(--muted);
 }
 
-.dot.green { background: var(--green); }
-.dot.yellow { background: var(--yellow); }
-.dot.red { background: var(--red); }
-.dot.dim { background: var(--fg-dim); }
-
-.card {
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 16px 20px;
-  max-width: 560px;
+.status-dot.on {
+  background: var(--ok);
+  border-color: var(--ok);
 }
 
-.card h2 {
-  margin: 0 0 12px;
-  font-size: 15px;
+.status-dot.warn {
+  background: var(--warn);
+  border-color: var(--warn);
 }
 
-.form-row {
-  display: grid;
-  grid-template-columns: 150px 1fr;
-  gap: 10px;
+.status-dot.err {
+  background: var(--err);
+  border-color: var(--err);
+}
+
+/* The pick-a-subset filter chip. Neutral ring = excluded; each screen declares
+   its own `.on` emphasis, which is the deliberate-local-override case. */
+.filter-chip {
+  display: inline-flex;
   align-items: center;
-  margin-bottom: 10px;
+  gap: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.1rem 0.6rem;
+  cursor: pointer;
 }
 
-.dim { color: var(--fg-dim); }
-.err { color: var(--red); }
-.ok { color: var(--green); }
+.filter-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Secondary explanatory text under a heading or beside a field. */
+.hint {
+  color: var(--muted);
+  font-size: var(--fs-hint);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.ok {
+  color: var(--ok);
+  font-size: 0.85rem;
+}
+
+.err {
+  color: var(--err);
+  font-size: 0.85rem;
+}
+
+.error {
+  border: 1px solid var(--err);
+  color: var(--err);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+/* --- The settings surface --------------------------------------------------
+   The label-against-field grid every configuration screen shares. Unlike the
+   vocabulary above this carries its geometry too: those screens deliberately
+   read as one kind of surface, so the grid is the shared fact. */
+
+.settings-form {
+  display: grid;
+  grid-template-columns: 9rem 1fr;
+  gap: 0.7rem 0.75rem;
+  align-items: center;
+}
+
+.settings-form > .label {
+  font-size: var(--fs-item);
+  text-align: right;
+  color: var(--muted);
+}
+
+/* A field is as wide as the value it holds, not as wide as the card: a
+   callsign or an API key stretched across 45rem reads as a mistake. */
+.settings-form > input,
+.settings-form > select {
+  max-width: 24rem;
+}
+
+/* A row of related toggles under a sub-heading. */
+.check-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+@media (max-width: 48rem) {
+  /* Narrow windows: the tab strip takes a full-width row under the wordmark —
+     beside it there is only room for one button per line. The divider rule
+     tied the strip to the wordmark on the shared row; on its own row it has
+     nothing to divide from. */
+  header {
+    flex-wrap: wrap;
+    row-gap: 0.4rem;
+  }
+
+  nav.tabs {
+    order: 1;
+    flex-basis: 100%;
+    padding-left: 0;
+    border-left: none;
+  }
+
+  .settings-form {
+    grid-template-columns: 1fr;
+    gap: 0.3rem;
+  }
+
+  .settings-form > .label {
+    text-align: left;
+  }
+}
