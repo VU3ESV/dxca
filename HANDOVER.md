@@ -529,6 +529,42 @@ Real fix when there's time: remove the standalone install so rustup's shims
 win (`/usr/local/bin/{cargo,rustc,...}`), or put `~/.cargo/bin` ahead of
 `/usr/local/bin` on PATH.
 
+## Deploying to a Pi that is NOT this shack's (2026-08-27)
+
+`deploy/pi-deploy.sh --no-seed <user@ip>`. Always, for any host that isn't
+noderedpi4.
+
+Default (seeded) mode ships `config/dxca.toml` and `data/{cty.xml,
+lotw-users.txt,dxca.db}` alongside the binary, installed by install.sh
+*only when absent*. On a box that already has its own files that guard makes
+it a no-op — which is why it is safe for our own redeploys and dangerous
+everywhere else, because a **fresh** host has nothing to guard against:
+
+- `data/dxca.db` holds ClubLog app passwords, API keys and the Telegram bot
+  token **in plain text** (by design, README §Secrets) plus account password
+  hashes. Seeding it onto someone else's Pi hands all of that over.
+- `config/dxca.toml` holds the cluster nodes with `login_call = "VU2CPL"`.
+  Two hosts on the same node with the same callsign make DXSpider kick the
+  duplicate, so both ends flap.
+
+`--no-seed` ships only the binary, `deploy/dxca.service` and `install.sh`
+(not even the vu2cpl-named macOS plist). The remote box self-bootstraps: the
+first-run setup card creates *their* admin account, and cty.xml / the LoTW
+list download on demand. Either way the script now prints a **manifest** of
+what is about to leave the machine before it rsyncs — read it.
+
+Remote-host preflight, because the binary is cross-compiled for aarch64 +
+glibc ≥ 2.36:
+
+```sh
+ssh user@ip 'uname -m; ldd --version | head -1; . /etc/os-release && echo $PRETTY_NAME; sudo -n true && echo SUDO_NOPASSWD || echo SUDO_NEEDS_PASSWORD'
+```
+
+Wants `aarch64`, glibc 2.36+, Bookworm. 32-bit Pi OS or Bullseye needs a
+different target triple. Over a VPN use the **IP** — `.local` mDNS names
+generally don't resolve across the tunnel. The final install step now runs
+under `ssh -t` so a host without NOPASSWD sudo can actually prompt.
+
 ## Deploy gotcha (fixed 2026-08-27)
 
 `install.sh` ended with `systemctl enable --now dxca`. `--now` starts an
