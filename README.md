@@ -76,8 +76,13 @@ just that it finished.
 | | Why | Minimum |
 |---|---|---|
 | Rust (via **rustup**) | builds the server | **1.88** |
-| Node + **pnpm** | builds the dashboard | Node **20** |
+| Node + **pnpm** | builds the dashboard | Node **18, 20, or 22+** |
 | git | to clone this repo | any |
+
+Node is not a plain minimum: vite and the Svelte plugin both declare
+`^18 || ^20 || >=22`, so the odd-numbered non-LTS releases **19 and 21 are
+rejected** even though they are newer than 18. Install an LTS — 22 is a safe
+choice. `install.sh` checks this before it builds anything.
 
 **Install Rust with rustup, not your distro's package manager.** Debian
 Trixie's `apt install cargo` gives 1.85, which is below the floor this
@@ -228,6 +233,7 @@ what it printed. The common ones:
 |---|---|
 | `rustc 1.85.0 is too old` | distro Rust; install rustup as above |
 | `pnpm not found` | step 3 was skipped — it prints the exact command for your machine |
+| `Node 21.x cannot build the dashboard` | a non-LTS Node; install 22 |
 | `never answered` | it built and started but is not serving; the message names the log command |
 | `serving the PLACEHOLDER page` | the running binary was built without the dashboard |
 | `nodejs : Conflicts: npm` | you asked apt for `npm` next to a NodeSource Node — drop `npm` |
@@ -258,9 +264,10 @@ station's cluster login.
 
 ## Build
 
-Needs **Rust ≥ 1.88** (stable, via rustup) and — only for the web UI —
-Node ≥ 20 with pnpm. Plain `cargo build` never requires Node (a stub page
-is embedded when `web-ui/dist` hasn't been built).
+Needs **Rust ≥ 1.88** (stable, via rustup) and — only for the web UI — pnpm
+with a Node in `^18 || ^20 || >=22` (vite's and the Svelte plugin's declared
+engines; 19 and 21 are excluded). Plain `cargo build` never requires Node
+at all (a stub page is embedded when `web-ui/dist` hasn't been built).
 
 That 1.88 floor comes from the committed `Cargo.lock` (`ureq` → `url` →
 `idna` → `icu_*`), not from dxca's own code, so it cannot be lowered by

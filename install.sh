@@ -17,9 +17,10 @@
 #               is a hard stop: the web GUI is part of what "install"
 #               means here.
 #
-# Needs rustc >= MIN_RUSTC (checked up front, see require_cargo) and, for
-# the dashboard, Node >= 20 + pnpm. In a source tree the binary is ALWAYS
-# rebuilt, so a re-run after installing pnpm really does pick the
+# Needs rustc >= MIN_RUSTC and, for the dashboard, pnpm plus a Node inside
+# NODE_ENGINES (^18 || ^20 || >=22 — not a plain minimum). Both are checked
+# before any build starts. In a source tree the binary is ALWAYS rebuilt, so
+# a re-run after installing a missing toolchain really does pick the
 # dashboard up — the embed happens at compile time.
 set -euo pipefail
 
@@ -72,9 +73,55 @@ cd "$REPO"
 # serves is build.rs's placeholder page. For `cargo build` that is the right
 # trade (no Node required, Meridian rule); for an INSTALLER it is a silent
 # failure, so this stops unless --stub-ui says the placeholder is wanted.
+# What the web toolchain actually accepts, taken from the `engines` field of
+# both vite 6 and @sveltejs/vite-plugin-svelte 5. Deliberately NOT a simple
+# floor: the odd-numbered non-LTS releases 19 and 21 are excluded even though
+# they are newer than 18, so ">= 18" would wave them through and ">= 20"
+# would reject a working 18. Re-read those engines fields before changing it.
+NODE_ENGINES="^18 || ^20 || >=22"
+
+# 0 = go ahead and build the dashboard. 1 = --stub-ui was given and Node
+# cannot build it, so skip. Otherwise dies.
+node_gate() {
+  NODE_V="$(node --version 2>/dev/null | sed 's/^v//')"
+  NODE_MAJOR="${NODE_V%%.*}"
+  if [ -z "$NODE_MAJOR" ]; then
+    # pnpm is itself a Node program, so this is close to impossible; not
+    # worth failing an install over a version string we could not read.
+    say "NOTE: pnpm is present but 'node --version' gave nothing — skipping"
+    say "the Node version check."
+    return 0
+  fi
+  if awk -v m="$NODE_MAJOR" 'BEGIN { exit !(m + 0 == 18 || m + 0 == 20 || m + 0 >= 22) }'; then
+    return 0
+  fi
+  if [ "$STUB_UI" -eq 1 ]; then
+    say "NOTE: Node $NODE_V is outside $NODE_ENGINES and --stub-ui is set —"
+    say "embedding the placeholder page instead of building the dashboard."
+    return 1
+  fi
+  say "Node $NODE_V cannot build the dashboard: vite and"
+  say "@sveltejs/vite-plugin-svelte both require $NODE_ENGINES."
+  say "That excludes 19 and 21 — the odd-numbered non-LTS releases — even"
+  say "though they are newer than 18, so this is not a plain minimum."
+  say ""
+  say "Install an LTS Node (22 is a safe choice):"
+  if [ "$PLATFORM" = macos ]; then
+    say "  brew install node@22 && brew link --overwrite node@22"
+  else
+    say "  curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -"
+    say "  sudo apt install -y nodejs"
+  fi
+  say ""
+  die "then re-run, or pass --stub-ui to skip the dashboard build"
+}
+
 build_web() {
   if command -v pnpm >/dev/null 2>&1; then
-    say "Building web UI (pnpm)..."
+    if ! node_gate; then
+      return 0
+    fi
+    say "Building web UI (pnpm, Node ${NODE_V:-unknown})..."
     pnpm -C web-ui install && pnpm -C web-ui build
     return 0
   fi
@@ -99,10 +146,10 @@ build_web() {
     say "Node ships corepack, so:"
     say "  sudo corepack enable pnpm"
   elif [ "$PLATFORM" = macos ]; then
-    say "Install Node >= 20 and pnpm:"
+    say "Install an LTS Node ($NODE_ENGINES) and pnpm:"
     say "  brew install node pnpm"
   else
-    say "Install Node >= 20, then pnpm with the npm it brings:"
+    say "Install an LTS Node ($NODE_ENGINES), then pnpm with the npm it brings:"
     say "  sudo apt install -y nodejs      # NOT 'npm' — nodejs provides it,"
     say "                                  # and NodeSource's conflicts with it"
     say "  sudo npm install -g pnpm"

@@ -762,10 +762,24 @@ Tested against fixture servers: real dashboard passes, placeholder fails,
 placeholder + `--stub-ui` passes, nothing listening fails with the right
 log command for the platform. `web_url` verified across all five bind forms.
 
-**Known gap, deliberate:** there is still no Node *version* check, only a
-`command -v pnpm` test — asymmetric with the rustc gate. Vite 6 wants Node
-`^18 || ^20 || >=22`; Bookworm ships 18.19 and Trixie 20.19, so it is
-unlikely to bite, and a bad Node fails loudly inside `pnpm build` anyway.
+**Follow-up, same day — the Node version check landed too**, closing the
+asymmetry with the rustc gate. `node_gate` runs before `pnpm install`.
+
+The rule is **not a plain floor**, which is the whole trap: vite 6 and
+`@sveltejs/vite-plugin-svelte` 5 both declare `engines.node` as
+`^18 || ^20 || >=22`, so the odd-numbered non-LTS releases **19 and 21 are
+excluded even though they are newer than 18**. `>= 18` would wave them
+through; `>= 20` would reject a working 18. `NODE_ENGINES` records the
+string and the comment says to re-read those two `engines` fields before
+touching it — they are the source of truth, not us.
+
+`--stub-ui` skips the dashboard build rather than dying, same as for a
+missing pnpm. A `node --version` that returns nothing is a note, not a
+failure: pnpm is itself a Node program, so that state is near-impossible
+and not worth failing an install over.
+
+Tested against stub `node` binaries at 16 / 18 / 19 / 20 / 21 / 22 / 24 / 26
+— accepted, rejected, and the `--stub-ui` skip all behave.
 
 ## install.sh did not install the web GUI (fixed 2026-08-27)
 
