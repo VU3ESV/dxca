@@ -424,6 +424,22 @@ Remaining before any public release: x86-64-Linux (+ optional Windows)
 release artifacts, a Windows build test, then the repo-public flip +
 vu2cpl.com card with the VU3ESV credit line.
 
+## Deploy gotcha (fixed 2026-08-27)
+
+`install.sh` ended with `systemctl enable --now dxca`. `--now` starts an
+*inactive* unit and does nothing to an active one, so re-running the
+installer over the live service **installed a new binary but kept the old
+process running** — `sudo install` replaces the file, and the running
+process holds the old inode. That is why the 2026-08-27 (late) installer
+re-run read as "service undisturbed": it was, including the part that
+should have been disturbed. Caught when deploying the UI restyle: the
+process had started 03:17 while `/opt/dxca/dxca` was stamped 03:43.
+
+Now `enable` + an unconditional `restart`. If you ever see the dashboard
+not matching the code you just shipped, check
+`systemctl show dxca -p MainPID,ActiveEnterTimestamp` against
+`ls -l /opt/dxca/dxca` first.
+
 ## Web UI look
 
 **2026-08-27 — the GUI was restyled to Meridian's design system.** Visual

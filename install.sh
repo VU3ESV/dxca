@@ -116,7 +116,13 @@ case "$PLATFORM" in
     sed "s|__USER__|$SERVICE_USER|g" "$REPO/deploy/dxca.service" \
       | sudo tee /etc/systemd/system/dxca.service >/dev/null
     sudo systemctl daemon-reload
-    sudo systemctl enable --now dxca
+    sudo systemctl enable dxca
+    # `enable --now` starts an inactive unit but does NOTHING to an active
+    # one, so re-installing over a running service left the OLD process
+    # holding the replaced binary's inode — the new build silently never
+    # ran. Restart unconditionally: this script has just written the binary
+    # it is meant to be running.
+    sudo systemctl restart dxca
     say "Installed systemd service 'dxca' (status: systemctl status dxca)."
     say "Web UI: http://$(hostname -I 2>/dev/null | awk '{print $1}'):7580/"
     ;;
