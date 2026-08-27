@@ -39,6 +39,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/login", post(login))
         .route("/api/logout", post(logout))
         .route("/api/me", get(me))
+        .route("/api/me/station", get(station))
+        .route("/api/reference", get(reference))
         .route("/api/config/me/clublog", get(get_clublog).put(put_clublog))
         .route(
             "/api/config/me/notifications",
@@ -325,6 +327,46 @@ async fn me(State(app): State<AppState>, headers: HeaderMap) -> Response {
         Ok(user) => Json(serde_json::json!(user)).into_response(),
         Err(resp) => resp,
     }
+}
+
+/// The Spots screen's station card: who is logged in, the callsign their log
+/// is for, and the award totals. `stats` is null until they refresh ClubLog
+/// — the card then says "no log loaded" instead of showing four zeroes,
+/// which would read as a station that has worked nothing.
+async fn station(State(app): State<AppState>, headers: HeaderMap) -> Response {
+    let user = match require_user(&app, &headers) {
+        Ok(u) => u,
+        Err(resp) => return resp,
+    };
+    let cl = app.users.db.clublog_config(user.id).ok();
+    let meta = app.users.db.matrix_meta(user.id).ok().flatten();
+    Json(serde_json::json!({
+        "callsign": user.callsign,
+        "display_name": user.display_name,
+        // The log's own callsign may differ from the login (a /P or club
+        // log), so the card names the one the matrix was built from.
+        "log_callsign": cl.as_ref().map(|c| c.callsign.clone()).filter(|c| !c.is_empty()),
+        "stats": app.users.stats(user.id),
+        "qso_count": meta.map(|m| m.0),
+        "last_refresh_unix": meta.map(|m| m.1),
+    }))
+    .into_response()
+}
+
+/// The vocabularies the UI builds its filter controls from — served rather
+/// than hardcoded in Svelte so the band list, the mode buckets and the level
+/// ladder cannot drift from what the classifier actually emits.
+async fn reference() -> Response {
+    let levels: Vec<serde_json::Value> = dxca_core::classify::AlertLevel::FLAGGABLE
+        .iter()
+        .map(|l| serde_json::json!({ "key": l.key(), "label": l.label() }))
+        .collect();
+    Json(serde_json::json!({
+        "bands": dxca_core::bands::SELECTABLE_BANDS,
+        "modes": dxca_core::modes::CLASSES,
+        "levels": levels,
+    }))
+    .into_response()
 }
 
 async fn list_users(State(app): State<AppState>, headers: HeaderMap) -> Response {

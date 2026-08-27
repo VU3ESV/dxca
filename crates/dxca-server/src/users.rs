@@ -164,6 +164,13 @@ impl UserService {
         Ok((qso_count, dxcc_count))
     }
 
+    /// Award totals for one user's station card. `None` until they have a
+    /// matrix — a user who has never refreshed ClubLog has nothing to count,
+    /// which the card shows as "no log" rather than as four zeroes.
+    pub fn stats(&self, user_id: i64) -> Option<dxca_core::matrix::MatrixStats> {
+        Some(self.matrices.read().unwrap().get(&user_id)?.stats())
+    }
+
     /// Classify one spot for one user (their matrix + alert toggles).
     /// None when the user has no matrix yet.
     pub fn classify(&self, user_id: i64, spot: &Spot) -> Option<Classification> {
@@ -196,14 +203,13 @@ impl UserService {
             let Some(c) = self.classify(user_id, spot) else {
                 continue;
             };
-            let wanted = match c.level {
-                AlertLevel::NewDxcc => notify.notify_new_dxcc,
-                AlertLevel::NewSlot => notify.notify_new_slot,
-                AlertLevel::NewBand => notify.notify_new_band,
-                AlertLevel::NewMode => notify.notify_new_mode,
-                AlertLevel::Worked | AlertLevel::None => false,
-            };
-            if !wanted {
+            if !notify.wants_level(c.level) {
+                continue;
+            }
+            // Band / mode-class narrowing is Telegram's alone — the Spots
+            // screen keeps its own, so the operator can watch everything and
+            // still be pinged for only CW on 20M.
+            if !notify.passes_band_mode(c.band, dxca_core::modes::canonical(&spot.mode)) {
                 continue;
             }
             let Some(call) = spot.dx_callsign() else {
@@ -247,11 +253,19 @@ impl UserService {
 
 /// The 1.x Telegram message: emoji level label, HTML-escaped, source line.
 fn alert_html(c: &Classification, call: &str, spot: &Spot) -> String {
+    // The `?` half reuses its New counterpart's hue as a hollow circle: same
+    // axis (DXCC/band/mode/slot), lesser catch — worked already, still not
+    // confirmed. Colour says WHICH axis, filled-vs-hollow says how badly you
+    // need it.
     let label = match c.level {
         AlertLevel::NewDxcc => "🔴 NEW DXCC",
         AlertLevel::NewSlot => "🟠 New Slot",
         AlertLevel::NewBand => "🔵 New Band",
         AlertLevel::NewMode => "🟡 New Mode",
+        AlertLevel::UnconfDxcc => "⭕ ? DXCC (unconfirmed)",
+        AlertLevel::UnconfSlot => "🟧 ? Slot (unconfirmed)",
+        AlertLevel::UnconfBand => "🔷 ? Band (unconfirmed)",
+        AlertLevel::UnconfMode => "🟨 ? Mode (unconfirmed)",
         _ => "Alert",
     };
     let dxcc = c.dxcc_name.clone().unwrap_or_default();
