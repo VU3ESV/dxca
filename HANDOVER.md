@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-27 · **Status:** v2.0.0 IN PRODUCTION on noderedpi4 — cutover complete, all milestones closed
+**Created:** 2026-08-26 · **Last updated:** 2026-08-27 (afternoon) · **Status:** v2.0.0 IN PRODUCTION on noderedpi4, plus the **2.1 wave** below — Meridian UI, eight alert levels, Challenge points, automatic refresh. First third-party install is live.
 **Repo:** https://github.com/vu2cpl/dxca (private)
 
 ---
@@ -22,6 +22,48 @@ and the web GUI's design system from the same repo's
 `web-ui/default/src/` (app.css + the theme module and switcher).
 **Production runs on noderedpi4 (192.168.1.169) since the 2026-08-27
 cutover**; the 1.x macOS app is the retained fallback (maintenance mode).
+
+## Session 2026-08-27 (afternoon) — the "2.1 wave"
+
+Read this first: it is the index to everything that changed after the
+cutover. Each item has its own section further down with the reasoning; the
+M0–M6 progress logs below are history, not current state.
+
+**Features**
+
+| what | where |
+|---|---|
+| Web GUI restyled to Meridian's design system, light + dark | "Web UI look" |
+| Eight alert levels (New ×4 + `?` ×4), band/mode narrowing on display and Telegram independently | "Alert levels 2.1" |
+| Station card: DXCC / Challenge / Slots, worked vs confirmed | "DXCC Challenge points" |
+| Automatic ClubLog (per-user, daily) + LoTW (server-wide, weekly) re-download | "Automatic ClubLog / LoTW refresh" |
+
+**Bugs found and fixed** — all three had been live and silent:
+
+| bug | symptom | section |
+|---|---|---|
+| DXSpider `\x07` bells defeated the spot parser | db0sue.de proved **Live** and dropped 100% of its spots | "DXSpider bells ate every spot" |
+| `systemctl enable --now` never restarts an *active* unit | production ran a **binary older than the one installed** | "Deploy gotcha" |
+| `$HOST…` — non-ASCII byte after a variable | `HOST?: unbound variable` under bash 3.2 / C locale | "Shell gotcha" |
+
+**Verified in production, not just built**
+
+- Challenge total **2397 confirmed = exactly what ClubLog reports** for
+  VU2CPL (56,815 QSOs, 320/319 DXCC, 4339/4075 slots, 2435 Challenge
+  worked). That one match also validates `is_confirmed` and the band table.
+- LoTW auto-refresh **fired on its first tick, 13:07**: attempt stamp
+  13:07:31, success 13:07:35, file rewritten, 234,734 users live in
+  `/api/status`. Next due 2026-09-03.
+- Node roster on the Pi is now **VU2OY, N2WQ-2, UberSDR CWskim, Meridian,
+  DB0SUE** — five Live. VE7CC was removed by Manoj (deliberate); DB0SUE
+  added while chasing the bell bug.
+
+**First third-party install (2026-08-27)** — `adersh@192.168.1.151`, a
+remote Pi over VPN, Debian 13 (trixie), deployed with
+`deploy/pi-deploy.sh --no-seed`. It self-bootstrapped: its own admin
+account via the setup card, its own cty/LoTW downloads. **Nothing of this
+station's went to it** — see "Deploying to a Pi that is NOT this shack's",
+which is now the rule for any host that is not noderedpi4.
 
 ## M0 groundwork
 
@@ -418,11 +460,34 @@ per-user highlighting and alerts run in production.
 2026-08-27 (late): the deploy tooling was **generalized for third-party
 installs** — dxca.service is a template (`__USER__` → the invoking user),
 install.sh chowns to the invoker, and a fresh install self-bootstraps
-(setup card, cty/LoTW download on demand). Validated by re-running the
-installer on the production Pi (identical result, service undisturbed).
+(setup card, cty/LoTW download on demand).
+
+> **Correction, same day:** that generalization was recorded as "validated
+> by re-running the installer on the production Pi (identical result,
+> service undisturbed)". The service being undisturbed was the
+> `enable --now` bug, not a pass — the installer had replaced the binary
+> and left the old process running. Genuinely validated now, twice: the
+> restart fix on noderedpi4, and a real third-party install on
+> adersh@192.168.1.151.
+
 Remaining before any public release: x86-64-Linux (+ optional Windows)
 release artifacts, a Windows build test, then the repo-public flip +
 vu2cpl.com card with the VU3ESV credit line.
+
+**Open, small:**
+
+- The local toolchain wart — `/usr/local/bin/cargo` shadows the rustup
+  shims, so `just gate`'s lint step and all doctests fail for environmental
+  reasons. Workaround recorded below; the fix is to remove the standalone
+  Rust install or reorder PATH.
+- The Spots screen's display narrowing is per-browser (`localStorage`), not
+  per-account. PLAN's "own display filters" is only half done; server-side
+  persistence was deliberately deferred to avoid a second setting to
+  reconcile with My Alerts.
+- `udp_sent` on the Pi sat at 0 for a while after a restart and the RUMlog
+  destination is `192.168.10.226` while the shack LAN is `192.168.1.x`.
+  It recovered (437 and climbing), so this is a "look again if
+  click-to-fill misbehaves", not a known fault.
 
 ## DXCC Challenge points (2026-08-27)
 
@@ -641,6 +706,27 @@ everywhere else, because a **fresh** host has nothing to guard against:
 - `config/dxca.toml` holds the cluster nodes with `login_call = "VU2CPL"`.
   Two hosts on the same node with the same callsign make DXSpider kick the
   duplicate, so both ends flap.
+
+**Keep `--no-seed` on RE-deploys too**, not just the first install. It is
+tempting to drop it once the remote box has its own config and database,
+since install.sh then skips both — but that guard runs *after* the
+transfer. `rsync` copies the whole staging directory to `~/dxca-deploy/` on
+the remote host first, so without the flag this station's `dxca.db` ends up
+sitting in someone else's home directory even though the installer
+correctly declines to install it. The flag prevents the **copy**, which is
+the part that matters.
+
+What a re-deploy does and does not keep, on any host:
+
+| | |
+|---|---|
+| `/opt/dxca/config/dxca.toml` | **kept** (written only if absent) |
+| `/opt/dxca/data/*` — db, cty, LoTW | **kept** (same guard) |
+| `/opt/dxca/dxca` | replaced — the point of the exercise |
+| `/etc/systemd/system/dxca.service` | **overwritten unconditionally** from the template — any hand-editing of the unit is lost |
+
+New schema and config keys need no manual step: the `meta` table is
+`CREATE TABLE IF NOT EXISTS`, and every added key is `serde(default)`.
 
 `--no-seed` ships only the binary, `deploy/dxca.service` and `install.sh`
 (not even the vu2cpl-named macOS plist). The remote box self-bootstraps: the
