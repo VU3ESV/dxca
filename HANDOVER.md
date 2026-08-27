@@ -37,6 +37,7 @@ M0–M6 progress logs below are history, not current state.
 | Eight alert levels (New ×4 + `?` ×4), band/mode narrowing on display and Telegram independently | "Alert levels 2.1" |
 | Station card: DXCC / Challenge / Slots, worked vs confirmed | "DXCC Challenge points" |
 | Automatic ClubLog (per-user, daily) + LoTW (server-wide, weekly) re-download | "Automatic ClubLog / LoTW refresh" |
+| ClubLog API key moved from per-user to a server setting; cty.xml now admin-only and auto-refreshed | "The ClubLog API key is a SERVER setting" |
 
 **Bugs found and fixed** — all three had been live and silent:
 
@@ -520,6 +521,50 @@ award counts the confirmed figure (1000 to claim, endorsements every 500);
 worked is carried alongside because the gap is the QSL chase. The unit test
 `challenge_counts_entity_bands_not_slots` pins the 60m exclusion and the
 one-point-per-band rule together.
+
+## The ClubLog API key is a SERVER setting (2026-08-27)
+
+It used to sit in each user's ClubLog config. It never belonged there: the
+key is only ever used for `cty.php`, which fetches **cty.xml** — one file
+backing one shared `DxccResolver` that every account is classified against.
+It is not, and never was, involved in downloading anyone's log; that uses
+the operator's own email + app password.
+
+Now symmetrical with the LoTW list, which had the same shape all along:
+
+| | cty.xml | LoTW users |
+|---|---|---|
+| scope | server-wide | server-wide |
+| credential | `Db::clublog_api_key` | none needed |
+| refresh | admin only, `POST /api/cty/refresh` | admin only |
+| schedule | `cty_refresh_days` (default 7) | `lotw_refresh_days` (default 7) |
+
+**The key is in the DATABASE, not `config/dxca.toml`.** install.sh writes
+the config file 0644 and `data/dxca.db` 0600 — putting a credential in the
+TOML would have moved it somewhere *more* readable. Only the cadence, which
+is not secret, is a file setting.
+
+**`adopt_legacy_api_key`** lifts a pre-2.1 per-user key to the server
+setting, once, at startup — so upgrading needs no manual step. It is guarded
+by its own **ran-once flag**, not by "is the server key empty?". Those look
+equivalent and are not: an admin who deliberately *clears* the key leaves it
+empty, and an emptiness check would re-adopt the stale key from the user's
+row on the next restart, silently undoing them forever. Test:
+`legacy_per_user_api_key_is_adopted_once`.
+
+A server with no key simply keeps the cty.xml it has; the scheduler stays
+quiet rather than logging a failure every 15 minutes.
+
+**Open question (worth deciding before any public release):** the key is an
+*application* credential, not a user one, so DXCA could ship a default. Two
+caveats. Technically, an embedded key cannot be kept secret — the binary
+must carry its own decryption key, and dxca passes it as a URL query
+parameter, so tcpdump on the operator's own machine reveals it without
+touching the binary. Treat any shipped key as public; don't build encryption
+theatre. Practically, ask ClubLog (G7VJR) first: rate limits are per key, and
+abuse by one installation would revoke it for all. If they decline, AD1C's
+`cty.dat` needs no key but has no dated prefix windows or exact-call
+exceptions, which `cty.rs` actively uses — a real downgrade.
 
 ## Automatic ClubLog / LoTW refresh (2026-08-27)
 
