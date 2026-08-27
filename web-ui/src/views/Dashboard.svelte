@@ -191,7 +191,15 @@
             <dd><b>{station.stats.dxcc_worked}</b><span class="sep">/</span><span class="conf">{station.stats.dxcc_confirmed}</span></dd>
             <dd class="cap">worked / confirmed</dd>
           </div>
-          <div>
+          <!-- Challenge sits next to DXCC, not next to Slots: it is an award
+               total like DXCC is, and putting it beside the band×mode slot
+               count is what makes people read the two as the same thing. -->
+          <div title="DXCC Challenge: one point per entity per band over 160-6m (60m excluded, WARC included). Mode-agnostic. 1000 confirmed points to claim.">
+            <dt>Challenge</dt>
+            <dd><b>{station.stats.challenge_worked}</b><span class="sep">/</span><span class="conf">{station.stats.challenge_confirmed}</span></dd>
+            <dd class="cap">worked / confirmed</dd>
+          </div>
+          <div title="Band x mode combinations. Distinct from Challenge points, which ignore mode and exclude 60m.">
             <dt>Slots</dt>
             <dd><b>{station.stats.slots_worked}</b><span class="sep">/</span><span class="conf">{station.stats.slots_confirmed}</span></dd>
             <dd class="cap">worked / confirmed</dd>
