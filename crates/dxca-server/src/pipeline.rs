@@ -7,6 +7,7 @@
 
 use crate::config::{Config, UdpSource};
 use dxca_connect::broadcast::{DestinationConfig, SpotPayload, UdpBroadcaster};
+use dxca_connect::mqtt::{MqttDestinationConfig, MqttPublisher, MqttSpot};
 use dxca_connect::telnet::ClusterServer;
 use dxca_connect::wsjtx_udp::SourceDatagram;
 use dxca_core::wsjtx::{self, Message};
@@ -41,6 +42,9 @@ pub struct PipelineState {
     /// line. `apply_blacklist` swaps it when an admin edits the list, the
     /// same hot-apply shape as sources and destinations.
     blacklist: RwLock<std::collections::HashSet<String>>,
+    /// MQTT publishers, swapped wholesale on edit like the broadcaster —
+    /// replacing the struct is what tears the old connections down.
+    mqtt: RwLock<Arc<MqttPublisher>>,
 }
 
 impl PipelineState {
@@ -51,6 +55,17 @@ impl PipelineState {
 
     pub fn broadcaster(&self) -> Arc<UdpBroadcaster> {
         self.broadcaster.read().unwrap().clone()
+    }
+
+    pub fn mqtt(&self) -> Arc<MqttPublisher> {
+        self.mqtt.read().unwrap().clone()
+    }
+
+    /// Hot-apply MQTT destinations. A fresh publisher replaces the old one;
+    /// dropping it closes the previous connections and their event-loop
+    /// threads, so an edited broker address really is the one in use.
+    pub fn apply_mqtt(&self, dests: Vec<MqttDestinationConfig>) {
+        *self.mqtt.write().unwrap() = Arc::new(MqttPublisher::new(dests));
     }
 
     pub fn apply_blacklist(&self, calls: impl IntoIterator<Item = String>) {
@@ -177,6 +192,7 @@ pub async fn start(
         // until then, so a spot arriving in that window is never wrongly
         // dropped.
         blacklist: RwLock::new(std::collections::HashSet::new()),
+        mqtt: RwLock::new(Arc::new(MqttPublisher::new(Vec::new()))),
     });
 
     let (tx, rx) = mpsc::channel::<PipelineInput>(1024);
@@ -336,6 +352,24 @@ fn process_spot(
             snr_db: spot.snr_db,
             mode: &spot.mode,
             time_ms: (spot.time_unix.rem_euclid(86_400) * 1000) as u32,
+        },
+        passes,
+    );
+
+    // MQTT gets the same spot and honours the same dedupe verdict, so a
+    // panadapter overlay and a logger see one consistent feed.
+    state.mqtt().publish_spot(
+        &MqttSpot {
+            cluster_line: &line,
+            source_name: &spot.source_name,
+            callsign: dx_call.as_deref(),
+            frequency_hz: spot.frequency_hz(),
+            snr_db: spot.snr_db,
+            mode: &spot.mode,
+            mode_inferred: spot.mode_inferred,
+            comment: &spot.comment,
+            is_cq: spot.is_cq,
+            time_unix: spot.time_unix,
         },
         passes,
     );

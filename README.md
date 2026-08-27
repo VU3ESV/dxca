@@ -433,6 +433,37 @@ and New Slot alerts** rather than being assumed digital. Note the limitation:
 mode follows the *transmitting* station's band plan, so a Region 1 station
 operating phone low in 40m can be inferred wrongly.
 
+### MQTT destinations
+
+Beside the UDP broadcast destinations, the System tab has an admin-only
+**MQTT destinations** editor — broker host, port, username, password, base
+topic and client ID — for feeding a panadapter overlay (FlexRadio, Aether)
+or anything else that speaks MQTT.
+
+Each spot is published **twice**, to sibling topics under the base (default
+`shack/dxca/spots`, matching the shack's `shack/<service>/…` convention):
+
+| topic | payload |
+|---|---|
+| `<base>/json` | `{"callsign":"K1JT","frequency_hz":14074000,"band":"20M","mode":"FT8","snr_db":-10,"comment":"FT8 -10 dB","is_cq":true,…}` |
+| `<base>/cluster` | `DX de DXCA:  14074.0  K1JT  FT8 -10 dB  1428Z` |
+
+The JSON is for anything that wants structure — a Node-RED flow reshaping it
+for a panadapter — and the cluster line for anything that already parses the
+DX-Spider format. Band is derived from the frequency, so a consumer never has
+to. Publishing both costs one extra small message and locks nobody out.
+
+Destinations honour the same `sources` allowlist and `unfiltered` flag as the
+UDP ones, so MQTT and your logger see one consistent feed. QoS 0: a spot feed
+is a live stream, and dropping one when the queue backs up beats stalling the
+pipeline on a slow broker.
+
+Two limits worth knowing: **plain MQTT only** (port 1883, optional
+username/password — TLS on 8883 would need rumqttc's rustls feature turned
+back on in the workspace manifest), and the broker password is stored in
+`data/dxca.db` (0600), **never** in `config/dxca.toml`, which is installed
+world-readable — the same reasoning that moved the ClubLog API key.
+
 ### Blacklisted calls
 
 The admin-only **Blacklist** tab holds one server-wide list of callsigns to

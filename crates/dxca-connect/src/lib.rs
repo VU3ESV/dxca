@@ -20,6 +20,7 @@ pub mod broadcast;
 pub mod clublog;
 pub mod dxcluster;
 pub mod lotw;
+pub mod mqtt;
 pub mod telegram;
 pub mod telnet;
 pub mod wsjtx_udp;

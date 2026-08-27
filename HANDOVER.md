@@ -878,6 +878,59 @@ and not worth failing an install over.
 Tested against stub `node` binaries at 16 / 18 / 19 / 20 / 21 / 22 / 24 / 26
 — accepted, rejected, and the `--stub-ui` skip all behave.
 
+## MQTT destinations (2026-08-28)
+
+Requested as "add an MQTT send option to destinations like FlexRadio or
+Aether to display on the panadapter; setup should include broker, port,
+auth". Manoj chose **both payloads** (JSON and cluster line, sibling topics)
+and **one configurable base topic**, default `shack/dxca/spots` per the
+shack's `shack/<service>/…` convention.
+
+**A sibling of `broadcast.rs`, not a variant of it.** A UDP destination is a
+datagram to an address; an MQTT destination is a connection with
+credentials, keepalive and reconnect. Folding them into one struct would
+have meant a dummy IP on every MQTT row and a dummy topic on every UDP one,
+so `crates/dxca-connect/src/mqtt.rs` is its own module and MQTT rows are
+their own list.
+
+**Stored in the database, not `config/dxca.toml`.** The broker password is a
+secret and that file is installed 0644 while `data/dxca.db` is 0600 —
+exactly the reasoning that moved the ClubLog API key. Kept as one JSON blob
+under the `mqtt_destinations` meta key: a short list edited as a whole.
+Consequence: the MQTT editor in the System tab has its **own** Apply & save
+button, because it does not go through `/api/config/global`.
+
+**Dependency added: `rumqttc` 0.25, `default-features = false`** — that drops
+TLS, websocket and proxy, none of which the shack broker uses. Turning
+`use-rustls` back on is the change to make if a broker ever needs 8883. The
+1.88 rustc floor did not move.
+
+Notes:
+
+- `try_publish`, not `publish`, and QoS 0: a spot feed is a live stream, so
+  dropping when the outbound queue is full is right and blocking the
+  pipeline on a slow broker is not. Drops are counted per destination.
+- The rumqttc event loop **must** be driven or nothing is ever sent — one
+  named thread per destination drains `connection.iter()`. Errors there are
+  the reconnect path, not a reason to stop.
+- `apply_mqtt` replaces the whole publisher, so dropping it closes the old
+  connections and their threads: an edited broker address really is the one
+  in use.
+- Band is derived in the payload rather than carried — every consumer wants
+  it and only the frequency is authoritative. Off-band frequencies publish
+  `"band": null` rather than guessing.
+- The same `sources` allowlist and `unfiltered` flag as UDP, and the same
+  dedupe verdict, so MQTT and the logger see one consistent feed.
+
+`tests/mqtt_publish.rs` stands up a **minimal MQTT 3.1.1 broker** — CONNECT
+/ CONNACK, QoS-0 PUBLISH, PINGREQ, and nothing else — points a destination
+at it through the HTTP API, pushes a spot through the real pipeline, and
+reads what actually arrived on the socket: username and password on the
+wire, both topics, the JSON's derived band, the cluster line, the
+trailing-slash guard (`spots/` must not yield `spots//json`), and that
+disabling a row stops publishing. Asserting on a config round-trip and
+trusting the library would have proved none of that.
+
 ## Blacklist tab (2026-08-28)
 
 Requested as "add a tab for blacklisted calls". Three decisions, all Manoj's:

@@ -8,6 +8,8 @@ use crate::db::{ClubLogUserConfig, NotifyUserConfig, User};
 use crate::nodes::NodeManager;
 use crate::pipeline::{PipelineInput, PipelineState};
 use crate::users::UserService;
+use dxca_connect::mqtt::MqttDestinationConfig;
+
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
@@ -53,6 +55,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/cty/refresh", post(cty_refresh))
         .route("/api/users", get(list_users).post(create_user))
         .route("/api/users/{id}", patch(update_user).delete(delete_user))
+        .route("/api/mqtt", get(get_mqtt).put(put_mqtt))
         .route("/api/blacklist", get(list_blacklist).post(add_blacklist))
         .route(
             "/api/blacklist/{callsign}",
@@ -551,6 +554,111 @@ async fn list_users(State(app): State<AppState>, headers: HeaderMap) -> Response
     }
     match app.users.db.users() {
         Ok(users) => Json(serde_json::json!({ "users": users })).into_response(),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e),
+    }
+}
+
+// --- MQTT destinations ---------------------------------------------------
+//
+// Admin-gated, stored in the database (0600) rather than config/dxca.toml
+// (0644) because of the broker password. `PUT` replaces the whole list —
+// the same shape as the global config editor, and simpler than per-row
+// verbs for a list this short.
+
+/// Turn stored rows into live publisher configs, skipping disabled ones.
+fn mqtt_live_configs(dests: &[crate::db::MqttDestination]) -> Vec<MqttDestinationConfig> {
+    dests
+        .iter()
+        .filter(|d| d.enabled && !d.host.trim().is_empty())
+        .map(|d| MqttDestinationConfig {
+            name: d.name.clone(),
+            host: d.host.clone(),
+            port: d.port,
+            username: d.username.clone(),
+            password: d.password.clone(),
+            topic: d.topic.clone(),
+            client_id: d.client_id.clone(),
+            allowed_sources: d.sources.iter().cloned().collect(),
+            unfiltered: d.unfiltered,
+        })
+        .collect()
+}
+
+/// Reconnect the pipeline's publishers from the stored list.
+pub fn load_mqtt(app: &AppState) -> Result<usize, String> {
+    let dests = app.users.db.mqtt_destinations()?;
+    let live = mqtt_live_configs(&dests);
+    let n = live.len();
+    app.pipeline.apply_mqtt(live);
+    Ok(n)
+}
+
+async fn get_mqtt(State(app): State<AppState>, headers: HeaderMap) -> Response {
+    if let Err(resp) = require_admin(&app, &headers) {
+        return resp;
+    }
+    match app.users.db.mqtt_destinations() {
+        Ok(dests) => {
+            let counters = app.pipeline.mqtt().counters();
+            Json(serde_json::json!({
+                "destinations": dests,
+                "sent": counters.total_sent(),
+                "failed": counters.total_failed(),
+                "connected": counters.configured,
+            }))
+            .into_response()
+        }
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e),
+    }
+}
+
+#[derive(Deserialize)]
+struct MqttReq {
+    destinations: Vec<crate::db::MqttDestination>,
+}
+
+async fn put_mqtt(
+    State(app): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<MqttReq>,
+) -> Response {
+    if let Err(resp) = require_admin(&app, &headers) {
+        return resp;
+    }
+    // Validate before storing anything: a half-applied list would leave the
+    // running publishers disagreeing with the database.
+    let mut seen = std::collections::HashSet::new();
+    for d in &req.destinations {
+        if d.name.trim().is_empty() {
+            return err(StatusCode::BAD_REQUEST, "every destination needs a name");
+        }
+        if !seen.insert(d.name.trim().to_lowercase()) {
+            return err(
+                StatusCode::BAD_REQUEST,
+                format!("duplicate destination name '{}'", d.name),
+            );
+        }
+        if d.enabled && d.host.trim().is_empty() {
+            return err(
+                StatusCode::BAD_REQUEST,
+                format!("'{}' is enabled but has no broker host", d.name),
+            );
+        }
+        if d.topic.trim().is_empty() {
+            return err(
+                StatusCode::BAD_REQUEST,
+                format!("'{}' needs a base topic", d.name),
+            );
+        }
+    }
+    if let Err(e) = app.users.db.set_mqtt_destinations(&req.destinations) {
+        return err(StatusCode::INTERNAL_SERVER_ERROR, e);
+    }
+    match load_mqtt(&app) {
+        Ok(n) => Json(serde_json::json!({
+            "destinations": req.destinations, "connected": n,
+        }))
+        .into_response(),
         Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e),
     }
 }

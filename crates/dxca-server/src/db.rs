@@ -111,6 +111,49 @@ impl From<&AlertConfigOpt> for AlertConfig {
     }
 }
 
+/// One MQTT destination: where to publish spots for a panadapter overlay.
+///
+/// Server-wide, admin-edited, and stored in the database rather than
+/// `config/dxca.toml` — see `Db::mqtt_destinations` for why.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct MqttDestination {
+    pub name: String,
+    pub host: String,
+    pub port: u16,
+    /// Empty = connect anonymously. The shack broker has required
+    /// credentials since 2026-08-21.
+    pub username: String,
+    pub password: String,
+    /// Base topic; `/json` and `/cluster` are appended by the publisher.
+    pub topic: String,
+    pub client_id: String,
+    /// Source-name allowlist; empty = every source.
+    pub sources: Vec<String>,
+    /// Publish every spot, ignoring the dedupe verdict.
+    pub unfiltered: bool,
+    pub enabled: bool,
+}
+
+impl Default for MqttDestination {
+    fn default() -> Self {
+        MqttDestination {
+            name: String::new(),
+            host: String::new(),
+            // The shack broker's plain port. TLS (8883) would need rumqttc's
+            // rustls feature turning back on — see the workspace manifest.
+            port: 1883,
+            username: String::new(),
+            password: String::new(),
+            topic: "shack/dxca/spots".into(),
+            client_id: "dxca".into(),
+            sources: Vec::new(),
+            unfiltered: false,
+            enabled: true,
+        }
+    }
+}
+
 /// Per-user notification settings — the 1.x `NotificationConfig` minus the
 /// macOS system notifications (headless server).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -204,6 +247,9 @@ impl User {
 pub struct Db {
     conn: Mutex<Connection>,
 }
+
+/// `meta` key holding the MQTT destination list as a JSON array.
+const MQTT_DESTINATIONS: &str = "mqtt_destinations";
 
 /// `meta` key holding the server-wide ClubLog API key (cty.xml downloads).
 const CLUBLOG_API_KEY: &str = "clublog_api_key";
@@ -451,6 +497,28 @@ impl Db {
             )
             .map_err(db_err)?;
         Ok(())
+    }
+
+    // --- MQTT destinations ------------------------------------------------
+    //
+    // Stored here, NOT in config/dxca.toml, because a broker password is a
+    // secret and that file is installed 0644 while this database is 0600 —
+    // exactly the reasoning that moved the ClubLog API key. Kept as one JSON
+    // blob in `meta`: it is a short list edited as a whole, like the alert
+    // configs, and a table would buy nothing.
+
+    pub fn mqtt_destinations(&self) -> DbResult<Vec<MqttDestination>> {
+        let raw = self.meta_get(MQTT_DESTINATIONS)?.unwrap_or_default();
+        if raw.trim().is_empty() {
+            return Ok(Vec::new());
+        }
+        serde_json::from_str(&raw).map_err(|e| format!("parse mqtt destinations: {e}"))
+    }
+
+    pub fn set_mqtt_destinations(&self, dests: &[MqttDestination]) -> DbResult<()> {
+        let json = serde_json::to_string(dests)
+            .map_err(|e| format!("serialize mqtt destinations: {e}"))?;
+        self.meta_set(MQTT_DESTINATIONS, &json)
     }
 
     // --- blacklist --------------------------------------------------------

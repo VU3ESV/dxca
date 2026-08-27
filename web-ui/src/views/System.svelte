@@ -25,6 +25,7 @@
   onMount(() => {
     loadStatus();
     loadConfig();
+    loadMqtt();
     const t = setInterval(loadStatus, 5000);
     return () => clearInterval(t);
   });
@@ -81,6 +82,54 @@
       { name: '', ip: '127.0.0.1', port: 2237, format: 'passthrough', sources: [], unfiltered: false, enabled: true },
     ]);
   const drop = (list: any[], i: number) => list.filter((_, idx) => idx !== i);
+
+  // MQTT destinations have their own endpoint, not /api/config/global: they
+  // carry a broker password and so live in the 0600 database rather than in
+  // config/dxca.toml, which is installed world-readable.
+  let mqtt = $state<any[]>([]);
+  let mqttStats = $state<any>(null);
+  let mqttMessage = $state('');
+  let mqttError = $state('');
+  let mqttBusy = $state(false);
+
+  async function loadMqtt() {
+    if (!isAdmin) return;
+    const r = await api('GET', '/api/mqtt');
+    if (r.status === 200) {
+      mqtt = r.json.destinations ?? [];
+      mqttStats = r.json;
+    }
+  }
+
+  async function saveMqtt() {
+    mqttBusy = true; mqttMessage = ''; mqttError = '';
+    const r = await api('PUT', '/api/mqtt', { destinations: mqtt });
+    if (r.status === 200) {
+      mqtt = r.json.destinations;
+      mqttMessage = `Saved — ${r.json.connected} destination(s) connecting.`;
+      await loadMqtt();
+    } else {
+      mqttError = r.json?.error ?? `HTTP ${r.status}`;
+    }
+    mqttBusy = false;
+  }
+
+  const addMqtt = () =>
+    (mqtt = [
+      ...mqtt,
+      {
+        name: '',
+        host: '192.168.1.169',
+        port: 1883,
+        username: '',
+        password: '',
+        topic: 'shack/dxca/spots',
+        client_id: 'dxca',
+        sources: [],
+        unfiltered: false,
+        enabled: true,
+      },
+    ]);
 </script>
 
 <div class="page stack">
@@ -262,6 +311,63 @@
         </tbody>
       </table>
       <div class="actions"><button onclick={addDest}>+ Add destination</button></div>
+    </div>
+
+    <!-- Saved and applied on its own button, not the config one: these rows
+         are stored in the database rather than config/dxca.toml, because a
+         broker password does not belong in a 0644 file. -->
+    <div class="card">
+      <h2>MQTT destinations</h2>
+      <table class="editor">
+        <thead>
+          <tr>
+            <th>Name</th><th>Broker</th><th>Port</th><th>User</th><th>Password</th>
+            <th>Base topic</th><th>Client ID</th><th>Sources (CSV, empty = all)</th>
+            <th>Unf</th><th>On</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each mqtt as d, i}
+            <tr>
+              <td><input bind:value={d.name} /></td>
+              <td><input bind:value={d.host} class="host" /></td>
+              <td><input type="number" bind:value={d.port} class="port" /></td>
+              <td><input bind:value={d.username} class="port" /></td>
+              <td><input type="password" bind:value={d.password} class="port" /></td>
+              <td><input bind:value={d.topic} class="host" /></td>
+              <td><input bind:value={d.client_id} class="port" /></td>
+              <td>
+                <input
+                  class="csv"
+                  value={d.sources.join(', ')}
+                  onchange={(e: any) =>
+                    (d.sources = e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean))}
+                />
+              </td>
+              <td><input type="checkbox" bind:checked={d.unfiltered} title="Unfiltered: bypass dedupe" /></td>
+              <td><input type="checkbox" bind:checked={d.enabled} /></td>
+              <td><button class="drop" title="Remove" onclick={() => (mqtt = drop(mqtt, i))}>✕</button></td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+      <div class="actions">
+        <button onclick={addMqtt}>+ Add MQTT destination</button>
+        <button class="primary" onclick={saveMqtt} disabled={mqttBusy}>Apply &amp; save</button>
+        {#if mqttStats}
+          <span class="hint">published {mqttStats.sent ?? 0}, failed {mqttStats.failed ?? 0}</span>
+        {/if}
+      </div>
+      <p class="hint">
+        Each spot is published twice, to sibling topics under the base:
+        <code>&lt;topic&gt;/json</code> carries the structured spot (callsign,
+        frequency, band, mode, SNR, comment) and <code>&lt;topic&gt;/cluster</code>
+        carries the plain DX-cluster line. Plain MQTT on 1883 with optional
+        username/password — TLS is not built in. Credentials are stored in
+        <code>data/dxca.db</code> (0600), never in <code>config/dxca.toml</code>.
+      </p>
+      {#if mqttMessage}<p class="ok">{mqttMessage}</p>{/if}
+      {#if mqttError}<p class="err">{mqttError}</p>{/if}
     </div>
 
     <div class="card">

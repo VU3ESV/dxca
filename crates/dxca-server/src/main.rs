@@ -89,6 +89,14 @@ async fn main() {
         config_path: Path::new(config::DEFAULT_PATH).to_path_buf(),
         input_tx: input_tx.clone(),
     };
+    // MQTT destinations live in the database (they carry a broker password),
+    // so they connect here rather than from the TOML config.
+    match api::load_mqtt(&app_state) {
+        Ok(0) => {}
+        Ok(n) => println!("dxca: MQTT destinations connected ({n})"),
+        Err(e) => eprintln!("dxca: MQTT load failed, nothing is published: {e}"),
+    }
+
     // The pipeline drops blacklisted calls from its own live set, so the
     // stored list has to reach it before the first spot does.
     match api::load_blacklist(&app_state) {
