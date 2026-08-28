@@ -17,6 +17,10 @@
   /// Deliberately not persisted: a forgotten search that survives a reload
   /// looks exactly like a broken feed.
   let search = $state('');
+  /// Hide skimmer spots. A skimmer's `-#` marker is stripped off the
+  /// callsign, so without the server's flag `W3LPL` and `W3LPL-#` are
+  /// indistinguishable here — and they are not the same kind of spot.
+  let manualOnly = $state(false);
   let cqOnly = $state(false);
   let hideDupes = $state(true);
   let sourceFilter = $state<Set<string>>(new Set());
@@ -112,6 +116,7 @@
         const hay = `${s.dx_call ?? ''} ${s.spotter ?? ''}`.toUpperCase();
         if (!hay.includes(searchTerm)) return false;
       }
+      if (manualOnly && s.is_skimmer) return false;
       if (cqOnly && !s.is_cq) return false;
       if (sourceFilter.size && !sourceFilter.has(s.source_name)) return false;
       if (bandFilter.size && (!s.band || !bandFilter.has(s.band))) return false;
@@ -329,6 +334,11 @@
     {#if searchTerm}
       <button class="clear" onclick={() => (search = '')} title="Clear the search">clear</button>
     {/if}
+    <label
+      class="flabel"
+      title="Hide spots made by skimmers (callsigns that arrived with the -# marker), leaving the ones a human typed."
+      ><input type="checkbox" bind:checked={manualOnly} />Manual only</label
+    >
     <label class="flabel"><input type="checkbox" bind:checked={cqOnly} />CQ only</label>
     <label class="flabel"><input type="checkbox" bind:checked={hideDupes} />Hide duplicates</label>
     <span class="count muted">{visible.length} spots</span>
@@ -369,8 +379,15 @@
             >
               <td class="mono">{hhmm(s.time_unix)}Z</td>
               <td>{s.source_name}</td>
-              <td class="mono spotter" title={s.spotter ? `Spotted by ${s.spotter}, relayed by ${s.source_name}` : 'Decoded here'}>
-                {s.spotter ?? '—'}
+              <td
+                class="mono spotter"
+                title={s.spotter
+                  ? `Spotted by ${s.spotter}${s.is_skimmer ? ' (skimmer)' : ''}, relayed by ${s.source_name}`
+                  : 'Decoded here'}
+              >
+                {s.spotter ?? '—'}{#if s.is_skimmer}<span class="skim" title="Skimmer"
+                  >#</span
+                >{/if}
               </td>
               <td class="mono call">
                 {s.dx_call ?? '—'}{#if s.is_lotw}<span class="lotw" title="LoTW user">●</span>{/if}
@@ -619,6 +636,15 @@
      the DX call is what the eye should land on first. */
   .spotter {
     color: var(--muted);
+  }
+
+  /* The `-#` the parser strips, put back as a marker rather than in the
+     callsign — the call stays readable and greppable, the machine-ness
+     stays visible. */
+  .skim {
+    margin-left: 0.15rem;
+    opacity: 0.65;
+    font-weight: 600;
   }
 
   .flabel {

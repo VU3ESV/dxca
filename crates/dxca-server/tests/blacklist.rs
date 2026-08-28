@@ -71,6 +71,7 @@ fn spot(call: &str) -> Spot {
         dial_frequency_hz: 14_074_000,
         source_name: "TEST".into(),
         spotter: None,
+        is_skimmer: false,
     }
 }
 

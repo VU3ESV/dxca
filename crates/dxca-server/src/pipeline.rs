@@ -277,6 +277,7 @@ async fn run_pipeline(
                     // Decoded here: the local receiver is the spotter, and
                     // `source_name` already says which decoder heard it.
                     spotter: None,
+                    is_skimmer: false,
                 };
                 process_spot(&state, &mut dedupe, spot, dedupe_window_secs, ring_capacity);
             }

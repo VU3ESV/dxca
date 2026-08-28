@@ -327,6 +327,10 @@ fn synthetic_spot(node_name: &str, p: &ParsedSpot) -> Spot {
         // The parser had this all along; it used to be discarded here, which
         // is why a relayed spot showed only the node that carried it.
         spotter: (!p.spotter.is_empty()).then(|| p.spotter.clone()),
+        // Used for `is_cq` above and then discarded until 2026-08-28, which
+        // left the UI unable to tell a skimmer catch from a hand-typed spot
+        // — especially once the `-#` marker had been stripped off the call.
+        is_skimmer: p.spotter_is_skimmer,
     }
 }
 
@@ -386,6 +390,29 @@ mod tests {
             Some("VU2XYZ"),
             "the station that heard it"
         );
+    }
+
+    /// Stripping the `-#` makes the spotter readable but destroys the one
+    /// thing that said "machine". The flag is what an operator hunting real
+    /// contacts filters on, so it has to survive alongside the clean call.
+    #[test]
+    fn a_skimmer_stays_identifiable_after_its_marker_is_stripped() {
+        let p = parse_spot_line(
+            "DX de W3LPL-#:   14025.3  W9XYZ          12 dB  22 WPM  CQ         1423Z",
+        )
+        .unwrap();
+        let s = synthetic_spot("N2WQ-2", &p);
+        assert_eq!(s.spotter.as_deref(), Some("W3LPL"), "readable call");
+        assert!(s.is_skimmer, "but still known to be a machine");
+
+        // The same operator spotting by hand is NOT a skimmer spot.
+        let p = parse_spot_line(
+            "DX de W3LPL:     14025.3  W9XYZ          CQ                        1423Z",
+        )
+        .unwrap();
+        let s = synthetic_spot("N2WQ-2", &p);
+        assert_eq!(s.spotter.as_deref(), Some("W3LPL"), "same callsign");
+        assert!(!s.is_skimmer, "different kind of spot");
     }
 
     /// A skimmer's `-#` suffix is stripped by the parser, so the spotter is

@@ -491,6 +491,34 @@ last *published* release, because tags can outrun releases.
 
 ## Open items → next session
 
+**Built, NOT deployed (2026-08-28): skimmer identification + "Manual only".**
+Both Pis are on v2.5.0; this is unreleased.
+
+Asked for as "how do I skip skimmers?" The answer through the telnet
+passthrough is *you can't, deliberately*: `accept/rbn` / `reject/rbn` are
+node-side filters, and DXCA shares one session per node with every account
+and with the spot pipeline, so setting one would narrow everyone's feed and
+persist on the node account. That refusal is correct — but it left the need
+unmet, and the data was already being thrown away.
+
+`ParsedSpot::spotter_is_skimmer` existed and was used only to decide
+`is_cq`, then discarded — the same bug class as the spotter itself.
+`Spot::is_skimmer` now carries it. **The marker matters because the parser
+strips the `-#` to keep callsigns readable**, so without the flag `W3LPL`
+(the operator) and `W3LPL-#` (his skimmer) are identical on screen. The
+Spots table shows a `#` after the spotter and a **Manual only** tickbox
+hides them.
+
+Verified in a browser against a fake node emitting the *same callsign both
+ways*: 6 spots → 3 with the box ticked, W3LPL's hand-typed spot surviving
+while W3LPL's skimmer spot was filtered.
+
+**Not done, and the obvious next step:** the same narrowing for Telegram.
+`NotifyUserConfig` already has band/mode narrowing; a `notify_manual_only`
+flag would slot in beside it, so alerts can be human-spots-only without
+touching the Spots screen.
+
+
 **SHIPPED as v2.5.0 (2026-08-28): "current entities only" for award
 totals, and a Telegram format change.** **Live on both Pis** — noderedpi4 (9 nodes) and
 `adersh@192.168.1.151` (4 nodes, account and reference data intact).

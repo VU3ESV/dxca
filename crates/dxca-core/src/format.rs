@@ -75,7 +75,8 @@ mod tests {
             off_air: false,
             dial_frequency_hz: 14_074_000,
             source_name: "MSHV 2333".into(),
-            spotter: None, // space must be stripped
+            spotter: None,
+            is_skimmer: false, // space must be stripped
         };
         let line = format(&s);
         assert_eq!(
@@ -104,6 +105,7 @@ mod tests {
             dial_frequency_hz: 7_047_500,
             source_name: "JTDX".into(),
             spotter: None,
+            is_skimmer: false,
         };
         assert!(format(&s).contains("UNKNOWN"));
     }

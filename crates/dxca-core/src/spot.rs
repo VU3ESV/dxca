@@ -67,6 +67,16 @@ pub struct Spot {
     /// spot two hops away.
     #[serde(default)]
     pub spotter: Option<String>,
+    /// The spotter was a **skimmer** — its callsign carried the `-#` marker
+    /// the parser strips off [`Spot::spotter`].
+    ///
+    /// Kept because stripping the marker otherwise destroys the
+    /// distinction: `W3LPL` and `W3LPL-#` are the same operator's station
+    /// but not the same kind of spot, and an operator hunting real contacts
+    /// wants the hand-typed ones. Always `false` for locally decoded spots,
+    /// which have no spotter at all.
+    #[serde(default)]
+    pub is_skimmer: bool,
 }
 
 impl Spot {
@@ -214,6 +224,7 @@ mod tests {
             dial_frequency_hz: 14_074_000,
             source_name: "JTDX".into(),
             spotter: None,
+            is_skimmer: false,
         }
     }
 

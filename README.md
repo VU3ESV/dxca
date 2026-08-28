@@ -501,6 +501,18 @@ heard.
 The search box above the table filters on **either** — type a DX callsign to
 follow one station, or a spotter to see everything one skimmer is hearing.
 
+A skimmer spot is marked with a small `#` after the spotter, and **Manual
+only** hides them. The marker matters because the parser strips the `-#`
+off the callsign to keep it readable: without it, `W3LPL` the operator and
+`W3LPL-#` the skimmer would be indistinguishable on screen, though they are
+not the same kind of spot at all.
+
+Note this is a **display** filter, not a node-side one. DXCA holds a single
+cluster session per node, shared by every account and by the spot pipeline,
+so a `reject/rbn` sent to the node would narrow everyone's feed and persist
+on the node account — which is why the telnet passthrough refuses those
+commands and this exists instead.
+
 **My Alerts** records the spotter alongside the source for every alert, so
 the history answers the same question after the fact. Alerts sent before
 this shipped show `—`: the column was added to existing databases on

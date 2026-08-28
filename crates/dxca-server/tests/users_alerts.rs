@@ -170,6 +170,7 @@ fn test_spot() -> Spot {
         dial_frequency_hz: 14_074_000,
         source_name: "JTDX".into(),
         spotter: None,
+        is_skimmer: false,
     }
 }
 

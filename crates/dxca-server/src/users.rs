@@ -431,6 +431,7 @@ mod alert_message_tests {
             dial_frequency_hz: 14_074_000,
             source_name: source.into(),
             spotter: spotter.map(str::to_string),
+            is_skimmer: false,
         }
     }
 
