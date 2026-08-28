@@ -475,24 +475,14 @@ proven against the Swift app's own artifacts.**
 
 ## Open items → next session
 
-**TODO (2026-08-28) — delete two world-readable database copies from
-`adersh@192.168.1.151:/tmp`.** Verifying the v2.4.0 migration meant copying
-his `dxca.db` off the Pi, which needs a `chmod 644` to be readable by scp.
-Those copies are still there:
-
-```
-ssh adersh@192.168.1.151 'sudo rm -f /tmp/a-before.db /tmp/a-after.db'
-```
-
-**They contain his ClubLog app password, Telegram bot token and account
-password hash in plain text** (see README §Secrets — the live database is
-0600 for exactly this reason, and these copies are not). The VPN went down
-before the cleanup, which is the whole lesson: the copy and the deletion
-belong in the *same* command, not in two steps separated by a network that
-can vanish. The equivalents on noderedpi4 have been removed.
-
-Low urgency — it is his own machine and `/tmp` clears on reboot — but do it
-on the next VPN session rather than waiting for a reboot to launder it.
+*(Resolved 2026-08-28: the two world-readable database copies left in
+`adersh@192.168.1.151:/tmp` during the v2.4.0 migration check were deleted
+as soon as the VPN came back; his box now has nothing of mine in `/tmp`,
+and the intended `dxca.db.pre-v2.4.0` backup remains at 0600. The lesson
+stands and is worth keeping: **copying a database off a box and deleting
+the copy belong in one command**, not two steps separated by a network that
+can vanish — a `chmod 644` on a file holding ClubLog passwords and Telegram
+tokens should never outlive the scp that needed it.)*
 
 
 **DEPLOYED as v2.4.0 (2026-08-28): spotter attribution + spots search.**
