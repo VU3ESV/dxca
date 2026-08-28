@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.3.1 on noderedpi4** — interactive telnet with read-only cluster-command passthrough, `telnet_interactive = true`, verified live (anonymous sessions unaffected, login prompts, bad password refused). **`adersh@192.168.1.151` is on v2.2.2** with the feature absent; it needs no rush, since the default is off anyway. A **GitHub release for v2.3.0 has NOT been published** — the tag is pushed, the Windows bundle is not built. Earlier the same day: v2.2.1 (Telegram transport retry, both Pis) and v2.2.2 (My Alerts level tint, both Pis, released).
+**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.4.0 on noderedpi4** — spotter attribution (Source = the feed that carried it, Spotter = the station that heard it), a spots search box over call/spotter, both carried into Telegram alerts and the My Alerts history, and the **first schema migration** this database has had. Verified live: 63 of 73 spots carry a spotter (W3LPL relaying EA3EDU, DB0SUE relaying IU7DLD), local MSHV decodes correctly carry none, and the migration kept all 91 existing alert rows. `telnet_interactive = true` from v2.3.x still live. **`adersh@192.168.1.151` is on v2.2.2** — five releases behind, and this is the one where the database changes shape, so give it the same pre-deploy backup. **GitHub releases for v2.3.0, v2.3.1 and v2.4.0 are all unpublished** — tags pushed, no release pages, no Windows bundles.
 **Repo:** https://github.com/vu2cpl/dxca (**public** — verified via
 `gh repo view` 2026-08-27; the doc said "private" until then, and the
 "Open items" release checklist still lists the public flip as pending)
@@ -475,7 +475,10 @@ proven against the Swift app's own artifacts.**
 
 ## Open items → next session
 
-**Built, NOT deployed (2026-08-28): spotter attribution + spots search.**
+**DEPLOYED as v2.4.0 (2026-08-28): spotter attribution + spots search.**
+Live on noderedpi4 and verified against the real feed, not only tests: 63 of
+73 spots carried a spotter, the migration preserved all 91 alert rows, and
+`dxca.db.pre-v2.4.0` sits beside the database on the Pi as a rollback.
 Three of four requests from Manoj; the fourth ("local spots not showing
 modes") is **unresolved and still his to reproduce** — the live API shows
 MSHV spots carrying `mode:"FT8", mode_inferred:false`, so the symptom did
