@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.1.1** IN PRODUCTION on **both** Pis — noderedpi4 (redeployed 02:46 IST) and the third-party `adersh@192.168.1.151` (02:58 IST), byte-identical builds, each verified by the installer's own serving check. Beyond the 2.1 wave below, 2.1.1 carries: spot-mode inference (Region 3, *marked* as inferred) and the end of the silent-DATA default; a working CQ-only filter; account edit/delete; a server-wide call **blacklist**; **MQTT publish** for panadapter overlays; **My ClubLog statistics** (per-band / per-mode entity breakdowns); an **alerts-sent history** including failures; a boxed status bar and chip-row Sources filter; and an installer that checks rustc and Node up front, always rebuilds in a source tree, warns when the checkout is behind, and verifies the result is genuinely serving. Note the tag `v2.1.1` predates most of that — the version string did not move again, so compare **binary hashes**, not `/api/status`, when checking whether a host is current. VU2WJ's Pi is the one install NOT updated.
+**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.2.0** tagged and released (adds Windows). The **Pis still run the 2.1.1-era build** — noderedpi4 (redeployed 02:46 IST) and the third-party `adersh@192.168.1.151` (02:58 IST), byte-identical builds, each verified by the installer's own serving check — so **both are one release behind and due a redeploy**. Beyond the 2.1 wave below, 2.1.1 carries: spot-mode inference (Region 3, *marked* as inferred) and the end of the silent-DATA default; a working CQ-only filter; account edit/delete; a server-wide call **blacklist**; **MQTT publish** for panadapter overlays; **My ClubLog statistics** (per-band / per-mode entity breakdowns); an **alerts-sent history** including failures; a boxed status bar and chip-row Sources filter; and an installer that checks rustc and Node up front, always rebuilds in a source tree, warns when the checkout is behind, and verifies the result is genuinely serving. **Resolved in v2.2.0:** the `v2.1.1` tag predated most of that list, so for a while `/api/status` could not distinguish a current host from a stale one and binary hashes were the only honest check. 2.2.0 bumps the version string onto a tag that actually contains the work — including Windows support — so `/api/status` is trustworthy again. VU2WJ's Pi is the one install NOT updated.
 **Repo:** https://github.com/vu2cpl/dxca (**public** — verified via
 `gh repo view` 2026-08-27; the doc said "private" until then, and the
 "Open items" release checklist still lists the public flip as pending)
@@ -835,6 +835,22 @@ end, including the dead-cookie assertion after an admin deletes themselves.
 Not done: no audit trail of who changed what, and no confirmation step
 beyond the browser `confirm()`. Both were judged out of proportion to a
 shack-scale roster of two or three accounts.
+
+## v2.2.0 (2026-08-28)
+
+**Windows.** dxca builds, installs and runs on Windows for the first time —
+no source changes required. Ships as `dxca-2.2.0-windows-x64.zip`: a
+self-contained `.exe`, an installer that registers a boot-triggered LOCAL
+SYSTEM task and optionally opens the firewall, an uninstaller, and the
+disclaimers. Full detail, the four batch/Windows traps it encodes, and the
+list of what remains unverified are in the Windows section above.
+
+Also in this release, previously carried by commits after the `v2.1.1` tag
+and therefore never in a tagged build: MQTT spot publishing for panadapter
+overlays, the server-wide call blacklist, alerts-sent history including
+failures, ClubLog log statistics, the boxed status bar and chip-row Sources
+filter, and the installer's behind-the-remote warning. The version string
+now matches a tag containing all of it.
 
 ## v2.1.1 (2026-08-28)
 

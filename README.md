@@ -25,8 +25,10 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
-**v2.1.1** (2026-08-28): dxca is the
-live shack aggregator with a real web GUI. Decoder UDP sources and five
+**v2.2.0** (2026-08-28): dxca is the
+live shack aggregator with a real web GUI, and — new in 2.2.0 — **runs on
+Windows**, with a prebuilt `.exe` and installer as a release asset (read
+[Windows](#windows) first; it is the least proven of the four platforms). Decoder UDP sources and five
 DX-cluster telnet nodes (Meridian-lifted client with the 1.x
 honest-status graft) feed one pipeline into the telnet server, the RUMlog
 passthrough, and a WebSocket-streamed spots dashboard — station card with
