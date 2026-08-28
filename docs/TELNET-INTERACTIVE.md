@@ -328,11 +328,35 @@ in production by someone getting an alert for a QSO from last Tuesday.
    `BYE` is honoured only once authenticated, so a logger that happens to
    transmit it is not hung up on.
 
-   **Still open, inherited by milestone 3:** the password is echoed by the
-   operator's own terminal. Suppressing it needs telnet `IAC WILL ECHO`
-   negotiation, which this server does not do (it strips inbound IAC and
-   never negotiates). Worth doing before anyone types a password over this
-   regularly.
+   **Still open:** the password is echoed by the operator's own terminal.
+   Suppressing it needs telnet `IAC WILL ECHO` negotiation, which this
+   server does not do (it strips inbound IAC and never negotiates). Since
+   v2.3.1 the prompt at least *says* the password will be visible, rather
+   than letting it be a surprise.
+
+   **Field bug, fixed in v2.3.1 — "it didn't ask for password".** The
+   protocol was working: driving a real telnet client through a pty showed
+   the prompt arriving. Three things made it unusable anyway, and all three
+   are the kind of defect a passing test suite will never find.
+
+   1. **Nothing on the wire said `LOGIN` existed.** The banner was one line
+      about a DX cluster server. An operator connected, watched spots
+      scroll, and reasonably concluded nothing had been asked of them. A
+      second banner line now says how to log in — only when the gate is on,
+      so a plain install's banner is byte-for-byte unchanged.
+   2. **The prompt was buried.** `Password: ` deliberately carries no
+      newline, because the cursor must stay put for the answer — so on a
+      live feed the next spot glued itself to the prompt and scrolled it
+      away. The feed is now held **for that one session** while a password
+      is outstanding, and resumes immediately after. A few seconds of spots
+      are missed; being able to log in is worth more.
+   3. **The echo surprise** was left undocumented on screen. Now stated at
+      the prompt.
+
+   The lesson worth keeping: every automated test read the socket, where
+   the prompt was plainly present. Nothing tested what a person staring at
+   a scrolling terminal would actually see, and that is where the feature
+   was broken.
 3. ~~**Read-only passthrough.**~~ **DONE 2026-08-28.** An authenticated
    session picks a node and issues read-only queries; replies come back to
    it alone. `commands.rs` canonicalizes and tiers, `telnetcmd.rs` holds the

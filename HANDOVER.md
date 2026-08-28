@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.3.0 on noderedpi4** — interactive telnet with read-only cluster-command passthrough, `telnet_interactive = true`, verified live (anonymous sessions unaffected, login prompts, bad password refused). **`adersh@192.168.1.151` is on v2.2.2** with the feature absent; it needs no rush, since the default is off anyway. A **GitHub release for v2.3.0 has NOT been published** — the tag is pushed, the Windows bundle is not built. Earlier the same day: v2.2.1 (Telegram transport retry, both Pis) and v2.2.2 (My Alerts level tint, both Pis, released).
+**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.3.1 on noderedpi4** — interactive telnet with read-only cluster-command passthrough, `telnet_interactive = true`, verified live (anonymous sessions unaffected, login prompts, bad password refused). **`adersh@192.168.1.151` is on v2.2.2** with the feature absent; it needs no rush, since the default is off anyway. A **GitHub release for v2.3.0 has NOT been published** — the tag is pushed, the Windows bundle is not built. Earlier the same day: v2.2.1 (Telegram transport retry, both Pis) and v2.2.2 (My Alerts level tint, both Pis, released).
 **Repo:** https://github.com/vu2cpl/dxca (**public** — verified via
 `gh repo view` 2026-08-27; the doc said "private" until then, and the
 "Open items" release checklist still lists the public flip as pending)
@@ -478,7 +478,7 @@ proven against the Swift app's own artifacts.**
 **Milestones 1–3 BUILT (2026-08-28), 4 (spotting) deliberately not:
 interactive telnet with cluster-command passthrough** —
 [`docs/TELNET-INTERACTIVE.md`](docs/TELNET-INTERACTIVE.md). **Live on
-noderedpi4 since 2026-08-28** as v2.3.0 with `telnet_interactive = true`;
+noderedpi4 since 2026-08-28** as v2.3.1 with `telnet_interactive = true`;
 **still off on `adersh@192.168.1.151`**, which remains on 2.2.2.
 
 **Verified against the production server, not just fakes:** an anonymous
@@ -487,6 +487,15 @@ got **zero** non-spot bytes back while three real spots flowed through it —
 so RUMlog is genuinely unaffected — and RUMlog itself reconnected on its own
 after the restart (`telnet_clients: 1`). `LOGIN VU2CPL` prompts for a
 password, and a wrong one is refused without revealing which half was wrong.
+
+**v2.3.1 fixed the first field bug: "it didn't ask for password".** The
+protocol was fine — a real telnet client driven through a pty got the
+prompt — but nothing in the banner said `LOGIN` existed, and the
+newline-less `Password: ` prompt got a spot glued to it and scrolled away.
+Banner now advertises the verb; the spot feed pauses for that one session
+while a password is outstanding. **The lesson: every test read the socket,
+where the prompt was plainly there. Nothing tested what a human watching a
+scrolling terminal sees.**
 
 **What is still unproven: a logged-in `SH/DX` against a real node.** That
 needs Manoj's account password, so it was left for him. Worth doing with the
