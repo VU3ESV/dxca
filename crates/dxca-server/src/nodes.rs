@@ -10,7 +10,7 @@ use dxca_core::Spot;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use tokio::sync::mpsc;
+use tokio::sync::{broadcast, mpsc};
 
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct NodeStatus {
@@ -26,11 +26,25 @@ pub struct NodeStatus {
     pub attempt: u32,
 }
 
+/// A non-spot line from one node's session, published for consumers that
+/// need the node's own words rather than its spots — the command router
+/// (`docs/TELNET-INTERACTIVE.md`) being the first. Spots keep their existing
+/// path into the pipeline and are deliberately absent here.
+#[derive(Clone, Debug)]
+pub struct NodeLine {
+    pub node: String,
+    pub event: ClientEvent,
+}
+
 pub struct NodeManager {
     statuses: Arc<Mutex<HashMap<String, NodeStatus>>>,
     /// name → (config fingerprint, running client). Interior mutability so
     /// the M5 hot-apply works through the shared Arc.
     clients: Mutex<HashMap<String, (String, ClusterClient)>>,
+    /// Fan-out of non-spot node events. Lagging subscribers lose the oldest
+    /// lines rather than stalling the node thread — a slow telnet client
+    /// must never back-pressure spot ingestion.
+    lines: broadcast::Sender<NodeLine>,
 }
 
 impl Default for NodeManager {
@@ -48,14 +62,40 @@ fn fingerprint(cfg: &ClientConfig) -> String {
 
 impl NodeManager {
     pub fn new() -> Self {
+        let (lines, _) = broadcast::channel(256);
         NodeManager {
             statuses: Arc::new(Mutex::new(HashMap::new())),
             clients: Mutex::new(HashMap::new()),
+            lines,
         }
     }
 
     pub fn statuses(&self) -> HashMap<String, NodeStatus> {
         self.statuses.lock().unwrap().clone()
+    }
+
+    /// Subscribe to non-spot node lines (prompts, announcements, WWV, and
+    /// anything else the node says). Nothing consumes this in production
+    /// yet — it is the feed the command router will read.
+    pub fn subscribe_lines(&self) -> broadcast::Receiver<NodeLine> {
+        self.lines.subscribe()
+    }
+
+    /// Write a raw command line to one node's session.
+    ///
+    /// `false` means the node is not configured. A `true` only means the
+    /// line was handed to the client: it is dropped there if the session is
+    /// not logged in yet (`ClusterClient::send_line` gates on `ready()`),
+    /// which is why callers must check the node is live first rather than
+    /// treating this as delivery confirmation.
+    pub fn send_line(&self, node: &str, line: &str) -> bool {
+        match self.clients.lock().unwrap().get(node) {
+            Some((_, client)) => {
+                client.send_line(line);
+                true
+            }
+            None => false,
+        }
     }
 
     /// Hot-apply a node list: diff by name + config fingerprint. Removed or
@@ -125,6 +165,7 @@ impl NodeManager {
         );
 
         let statuses = self.statuses.clone();
+        let lines = self.lines.clone();
         std::thread::Builder::new()
             .name(format!("dxca-node-{name}"))
             .spawn(move || {
@@ -164,10 +205,28 @@ impl NodeManager {
                                 st.last_spot_unix = Some(now_unix());
                                 spot_to_send = Some(synthetic_spot(&name, spot));
                             }
+                            // Not status-bearing, but not worthless either:
+                            // these are the node's own words, and a command
+                            // reply is made of them. Published below.
                             ClientEvent::Wwv(_)
                             | ClientEvent::Announce(_)
-                            | ClientEvent::Line(_) => {}
+                            | ClientEvent::Line(_)
+                            | ClientEvent::Prompt(_) => {}
                         }
+                    }
+                    // Publish the node's own words. `send` errs only when
+                    // nobody is subscribed, which is the normal case today.
+                    if matches!(
+                        event,
+                        ClientEvent::Wwv(_)
+                            | ClientEvent::Announce(_)
+                            | ClientEvent::Line(_)
+                            | ClientEvent::Prompt(_)
+                    ) {
+                        let _ = lines.send(NodeLine {
+                            node: name.clone(),
+                            event: event.clone(),
+                        });
                     }
                     if let Some(spot) = spot_to_send
                         && tx.blocking_send(PipelineInput::Cluster(spot)).is_err()

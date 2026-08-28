@@ -152,6 +152,13 @@ pub enum ClientEvent {
     Announce(String),
     /// Any other non-empty line (raw passthrough).
     Line(String),
+    // DXCA: the node's prompt, surfaced rather than kept internal. It still
+    // paces the init script upstream; it is emitted too because it is the
+    // one reliable command-completion marker the protocol gives us, and the
+    // command router (docs/TELNET-INTERACTIVE.md §3.3) closes a response
+    // window on it. Carries the raw line — nodes vary and a caller may want
+    // to show it.
+    Prompt(String),
     /// Connection lost; the supervisor is backing off toward a reconnect.
     Disconnected {
         reason: String,

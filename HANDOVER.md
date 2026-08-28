@@ -475,14 +475,26 @@ proven against the Swift app's own artifacts.**
 
 ## Open items → next session
 
-**Designed, not built (2026-08-28): interactive telnet with cluster-command
-passthrough** — [`docs/TELNET-INTERACTIVE.md`](docs/TELNET-INTERACTIVE.md).
+**Milestone 1 BUILT (2026-08-28), 2–4 still designed only: interactive
+telnet with cluster-command passthrough** —
+[`docs/TELNET-INTERACTIVE.md`](docs/TELNET-INTERACTIVE.md). M1 shipped the
+router (`cmdrouter.rs`: per-node queue, response window, quiet + hard
+timers — a pure state machine taking `now_ms` and returning actions, so it
+tests without sockets or a clock) plus `NodeManager::send_line()` and
+`subscribe_lines()`, and the event loop now publishes node lines instead of
+discarding them. 13 new tests, 119 passing workspace-wide. **Nothing is
+user-facing** — no telnet session, no auth, nothing subscribes in
+production. Building on it means starting at milestone 2 (the login gate).
+One thing to know before touching it: `ClientEvent::Prompt` is new, because
+the prompt used to be swallowed inside the client and the router had no
+completion marker; it is marked `// DXCA:` in the Apache-2.0 Meridian module
+like every other graft there. The router's `on_event` returns a `consumed`
+flag, and **a consumed event must not flow onward** — that is what keeps
+`sh/dx` output out of the spot pipeline.
 Manoj wants to issue cluster commands through DXCA to the upstream nodes.
-Half of it already exists unused: `ClusterClient::send_line` and
-`submit_spot` are built and the node handles are addressable by name; what
-is missing is that node replies are discarded in an empty match arm
-(`nodes.rs:167`), telnet input is discarded (`telnet.rs:87`), and there is
-no login. The doc's load-bearing points, if you read nothing else: the
+What remains missing after M1: telnet input is still discarded
+(`telnet.rs:87`), there is no login, and no command canonicalization or
+allowlist exists. The doc's load-bearing points, if you read nothing else: the
 **login gate ships with the feature, not after** (7575 binds `0.0.0.0` with
 no auth, and every node logs in as the shack callsign, so passthrough
 without auth means the LAN can spot as VU2CPL); response correlation is

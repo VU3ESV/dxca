@@ -278,10 +278,13 @@ impl ClientSession {
                     self.mark_proven(events); // DXCA
                     events.push(ClientEvent::Announce(line.to_string()));
                 }
-                // Prompts are internal: they pace the init script.
+                // Prompts pace the init script — and DXCA also forwards
+                // them, because a prompt is the command-completion marker
+                // the response router keys on.
                 LineClass::Prompt => {
                     self.mark_proven(events); // DXCA
                     self.advance_init(now);
+                    events.push(ClientEvent::Prompt(line.to_string())); // DXCA
                 }
                 LineClass::Other => events.push(ClientEvent::Line(line.to_string())),
             },

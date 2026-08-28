@@ -1,6 +1,8 @@
 # Interactive telnet — cluster command passthrough
 
-**Status:** design, not built · **Drafted:** 2026-08-28 · **Phase:** 2 (post-2.0)
+**Status:** **milestone 1 built** (router + plumbing, nothing user-facing);
+milestones 2–4 designed, not built · **Drafted:** 2026-08-28 · **Phase:** 2
+(post-2.0)
 
 Today DXCA's telnet server is a one-way loudspeaker: it shouts spots at
 whoever connects and ignores everything they say. This document designs the
@@ -26,9 +28,12 @@ More than you would expect. The outbound half is built and simply unused.
 | Gate on "session actually logged in" | **Built** | session `send_line` returns `false` unless `ready()` ([client.rs:329](../crates/dxca-connect/src/dxcluster/client.rs)) |
 | Node handles kept live and addressable by name | **Built** | `NodeManager.clients: HashMap<String, (fingerprint, ClusterClient)>` |
 | Node replies parsed and classified | **Built** | `ClientEvent::{Line, Announce, Wwv}` |
-| Node replies *delivered anywhere* | **Missing** | dropped in an empty match arm ([nodes.rs:167](../crates/dxca-server/src/nodes.rs)) |
+| Node replies *delivered anywhere* | **Built** (M1) | `NodeManager::subscribe_lines()` |
+| Node prompt as a completion marker | **Built** (M1) | `ClientEvent::Prompt` |
+| Per-node command queue + response window | **Built** (M1) | `cmdrouter.rs` |
 | Telnet client input read | **Missing** | discarded ([telnet.rs:87](../crates/dxca-connect/src/telnet.rs)) |
 | Telnet login | **Missing** | no auth of any kind; binds `0.0.0.0:7575` |
+| Command canonicalization + allowlist | **Missing** | §4 — the M3 gate |
 
 So the work is: stop throwing replies away, start reading input, add a login,
 and solve the one genuinely hard problem — deciding whose reply is whose.
@@ -261,8 +266,30 @@ in production by someone getting an alert for a QSO from last Tuesday.
 
 ## 7. Milestones
 
-1. **Plumbing, no auth.** Route node replies to a single hard-coded session;
-   prove the queue and terminator logic with tests. Nothing user-facing.
+1. ~~**Plumbing, no auth.**~~ **DONE 2026-08-28.** `cmdrouter.rs` implements
+   the queue, the response window and the timers as a pure state machine —
+   no sockets, no clock, every entry point taking `now_ms` and returning
+   actions, so all of it is testable by feeding it events (10 unit tests).
+   `NodeManager` gained `send_line(node, line)` and `subscribe_lines()`, and
+   its event loop now publishes the node's own words instead of discarding
+   them. Three integration tests prove the round trip against a fake
+   DXSpider node. Nothing user-facing changed: no telnet session, no auth,
+   and nothing in production subscribes to the new feed yet.
+
+   **One design change this forced.** `LineClass::Prompt` was classified but
+   never escaped the client — it paced the init script and stopped there —
+   so the router had no completion marker to key on. Added
+   `ClientEvent::Prompt(String)`, emitted alongside the existing internal
+   handling. The variant is marked `// DXCA:` in the Apache-2.0 Meridian
+   module per that file's convention, and it has its own integration test
+   because the whole correlation design turns on the event existing.
+
+   **Also settled while building:** the router returns a `consumed` flag
+   with its actions, and a consumed event must not flow onward. That is the
+   mechanism enforcing the `SH/DX`-must-not-reach-the-pipeline rule from
+   §5 — historical spots go to the requester and stop there. It is asserted
+   in `sh_dx_results_are_captured_and_never_reach_the_pipeline`, using the
+   real spot parser rather than a synthetic value.
 2. **Login gate.** Callsign+password against the accounts table; unauthenticated
    sessions keep the read-only feed. *No passthrough yet.*
 3. **Read-only passthrough.** `SH/*` and friends, with the allowlist and the
