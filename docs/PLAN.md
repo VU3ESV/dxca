@@ -274,11 +274,15 @@ GET  /                                  # embedded Svelte UI
   docs + user manual refresh. *Exit: v2.0.0 tagged; DXCA 1.x (this repo)
   enters maintenance mode with a pointer to the successor.*
 
-Phase-2 backlog (post-2.0): per-user telnet feed filtering (§5),
-**interactive telnet with cluster-command passthrough — designed in
-[`TELNET-INTERACTIVE.md`](TELNET-INTERACTIVE.md), and the login gate it
-specifies must land with it, not after**, MQTT status, durable SQLite spot
-history + search UI, Meridian integration (§6).
+Phase-2 backlog (post-2.0): per-user telnet feed filtering (§5), MQTT
+status, durable SQLite spot history + search UI, Meridian integration (§6).
+
+**Interactive telnet with cluster-command passthrough — DONE in v2.3.0/
+v2.3.1** (milestones 1–3 of
+[`TELNET-INTERACTIVE.md`](TELNET-INTERACTIVE.md)): per-node command router,
+opt-in login gate, read-only passthrough behind `telnet_interactive`
+(default off). Milestone 4 (spotting) is specified and deliberately not
+built — it is the only step that transmits.
 
 ## 11. Open decisions (settle in M0)
 

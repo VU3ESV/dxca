@@ -25,10 +25,10 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
-**v2.2.0** (2026-08-28): dxca is the
-live shack aggregator with a real web GUI, and — new in 2.2.0 — **runs on
+**v2.4.0** (2026-08-28): dxca is the
+live shack aggregator with a real web GUI, and **runs on
 Windows**, with a prebuilt `.exe` and installer as a release asset (read
-[Windows](#windows) first; it is the least proven of the four platforms). Decoder UDP sources and five
+[Windows](#windows) first; it is the least proven of the four platforms). Decoder UDP sources and
 DX-cluster telnet nodes (Meridian-lifted client with the 1.x
 honest-status graft) feed one pipeline into the telnet server, the RUMlog
 passthrough, and a WebSocket-streamed spots dashboard — station card with
@@ -56,8 +56,20 @@ artifacts). Sources, cluster nodes, and broadcast destinations are
 edited in the System tab and hot-apply — listeners rebind, nodes redial,
 destinations re-point, and `config/dxca.toml` is rewritten so restarts
 agree. Ships as a launchd agent (macOS) or systemd service (Pi);
-**in production on the shack's Raspberry Pi since 2026-08-27**. The full
-design and milestone plan: [docs/PLAN.md](docs/PLAN.md). The 1.x macOS
+**in production on the shack's Raspberry Pi since 2026-08-27**, and on a
+second, unrelated station's Pi since 2026-08-27.
+
+New since 2.2: every spot names **both** the feed that carried it and the
+station that actually spotted it ([Who spotted it](#who-spotted-it)),
+carried through to Telegram and the alert history; a **search box** over
+callsign and spotter; and an optional **interactive telnet** mode where an
+operator logs in and passes read-only cluster commands through to one node
+([Telnet login](#telnet-login-optional-off-by-default)) — off by default,
+and invisible to loggers either way. Telegram sends now retry once when
+they fail in transit. From 2.4.0 the database migrates itself on open, so
+an upgrade needs no manual step.
+
+The full design and milestone plan: [docs/PLAN.md](docs/PLAN.md). The 1.x macOS
 app (final release v1.8.4) is the retained fallback.
 
 Secrets note (plan §5): per-user ClubLog app passwords and Telegram
