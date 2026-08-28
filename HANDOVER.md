@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.5.0 on noderedpi4** — spotter attribution (Source = the feed that carried it, Spotter = the station that heard it), a spots search box over call/spotter, both carried into Telegram alerts and the My Alerts history, and the **first schema migration** this database has had. Verified live: 63 of 73 spots carry a spotter (W3LPL relaying EA3EDU, DB0SUE relaying IU7DLD), local MSHV decodes correctly carry none, and the migration kept all 91 existing alert rows. `telnet_interactive = true` from v2.3.x still live. **`adersh@192.168.1.151` is on v2.4.0 and one release behind** (deployed the same evening, `--no-seed`, backed up first): all 102 of his alert rows survived the migration, his account, cty and LoTW data intact, four nodes back Live, and 30 of 30 spots carrying a spotter. `telnet_interactive` stays **false** there — the feature has never been enabled on his box. **GitHub releases for v2.3.0, v2.3.1 and v2.4.0 are all unpublished** — tags pushed, no release pages, no Windows bundles.
+**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.5.0 on both Pis** — spotter attribution (Source = the feed that carried it, Spotter = the station that heard it), a spots search box over call/spotter, both carried into Telegram alerts and the My Alerts history, and the **first schema migration** this database has had. Verified live: 63 of 73 spots carry a spotter (W3LPL relaying EA3EDU, DB0SUE relaying IU7DLD), local MSHV decodes correctly carry none, and the migration kept all 91 existing alert rows. `telnet_interactive = true` from v2.3.x still live. **`adersh@192.168.1.151` is also on v2.5.0** (deployed the same evening, `--no-seed`, backed up first): all 102 of his alert rows survived the migration, his account, cty and LoTW data intact, four nodes back Live, and 30 of 30 spots carrying a spotter. `telnet_interactive` stays **false** there — the feature has never been enabled on his box. **GitHub releases for v2.3.0, v2.3.1 and v2.4.0 are all unpublished** — tags pushed, no release pages, no Windows bundles.
 **Repo:** https://github.com/vu2cpl/dxca (**public** — verified via
 `gh repo view` 2026-08-27; the doc said "private" until then, and the
 "Open items" release checklist still lists the public flip as pending)
@@ -473,6 +473,12 @@ proven against the Swift app's own artifacts.**
   1094/1094 datagrams on :2237 byte-identical to a source datagram
   (M2's spec baseline). Extractor: `scripts/extract_vectors.py`.
 
+*Field confirmation of the v2.4.0 spotter work (2026-08-28): Adersh's
+alert history grew from 102 rows at v2.4.0 to 109 by the v2.5.0 deploy, and
+**all 7 new rows carry a spotter** while the 102 older ones are correctly
+empty. The migration's back-fill boundary is exactly where it should be, and
+the recording path works in production, not only in tests.*
+
 ## Release convention (2026-08-28, standing)
 
 **A tag is not a release.** Every tagged version gets a published GitHub
@@ -486,8 +492,8 @@ last *published* release, because tags can outrun releases.
 ## Open items → next session
 
 **SHIPPED as v2.5.0 (2026-08-28): "current entities only" for award
-totals, and a Telegram format change.** Live on noderedpi4 (9 nodes, cty
-402); **`adersh@192.168.1.151` still on v2.4.0** — waiting on the VPN.
+totals, and a Telegram format change.** **Live on both Pis** — noderedpi4 (9 nodes) and
+`adersh@192.168.1.151` (4 nodes, account and reference data intact).
 [Released](https://github.com/vu2cpl/dxca/releases/tag/v2.5.0) with the
 Windows zip, per the new standing rule above. No schema change since
 v2.4.0, so upgrading is a binary swap.
