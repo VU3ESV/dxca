@@ -462,6 +462,11 @@ proven against the Swift app's own artifacts.**
 
 ## Open items → next session
 
+**TODO (2026-08-28): the Telegram transport-retry is committed but not
+deployed.** Ship it with the next tagged release via `pi-deploy.sh` (both
+Pis) — see "Telegram sends retry once on transport errors" below for why an
+untagged deploy is off the table.
+
 **TODO (2026-08-28): MQTT publishes, but nothing shows on the panadapter.**
 Manoj configured the `Shack` destination against `192.168.1.169:1883` as
 `svc` and reports the publish counter climbing — so DXCA's half is
@@ -1026,6 +1031,46 @@ same spot, and a 401 without a session. The **failure** path is covered at
 the storage layer (`db.rs`, delivered=false with its error round-tripping)
 rather than end to end, because the fake Telegram in that test always
 answers 200 and the cooldown blocks a second alert for the same call.
+
+## Telegram sends retry once on transport errors (2026-08-28)
+
+Prompted by a field report: Adersh's screenshot of his My Alerts page with
+red `failed` chips, "why failed?". The `alerts_sent.error` column on his Pi
+(`adersh@192.168.1.151`, over the VPN) answered it — 8 of 41 alerts failed
+overnight (~03:00–06:20 IST), all with one of two errors, both transport:
+
+- `tls connection init failed: Resource temporarily unavailable (os error 11)`
+  — the TLS handshake to `api.telegram.org` timed out mid-setup;
+- `Network Error: timed out reading response` — connected, but no reply
+  within the sender's 10 s limit.
+
+Not a config problem: token and chat id are fine (those would fail as HTTP
+4xx from Telegram), successes interleaved with the failures, and at test
+time his Pi reached `api.telegram.org` in ~0.8 s consistently (IPv6,
+~280 ms RTT). Classic night-time congestion blips on a residential uplink —
+and with the old single-attempt sender, each blip was a lost alert.
+
+**Fix:** `Telegram::send` now makes **one retry after 2 s, on transport
+errors only**. An HTTP rejection (bad token, unknown chat) still returns
+immediately — Telegram would only refuse it again, and retrying those would
+double-send nothing while masking real misconfiguration. Both call sites
+(`fan_out`, the test button) already run `send` under `spawn_blocking`, so
+the pause cannot stall the pipeline. When the retry also fails, the recorded
+error says so: `… (retried; first attempt: …)` — the My Alerts tooltip then
+shows both verdicts. `retry_delay` is a public field (default 2 s) zeroed in
+tests.
+
+Tests (`telegram.rs`): a local TCP stub whose per-request closure either
+answers or drops the connection. `transport_error_is_retried_once` — first
+connection dropped, second answered 200, exactly 2 hits.
+`http_rejection_is_not_retried` — always 400, exactly 1 hit. Stub gotcha
+worth keeping: the stub must read the **full request body before replying**,
+else the client's body write fails and a 400 test reads as a transport error
+(that false start cost one red test run).
+
+**Deploy status: committed, NOT yet on either Pi.** Per the v2.2.0 lesson,
+deploy it under the next tag so `/api/status` stays honest — don't push an
+untagged binary.
 
 ## My ClubLog shows the log's statistics (2026-08-28)
 

@@ -46,7 +46,10 @@ cookies, first-run setup card) each carry their own ClubLog matrix,
 re-downloaded on a per-account schedule (daily by default) so a QSO worked
 today stops showing as new tomorrow; the shared LoTW users list refreshes
 server-wide, weekly by default. Every spot classifies per user with
-Telegram alerts and per-callsign cooldown. Proven end-to-end in tests against fake ClubLog/Telegram
+Telegram alerts and per-callsign cooldown; a send that fails in transit
+(handshake or response timeout) is retried once, and every send — including
+failures, with Telegram's own error text — lands in the My Alerts history.
+Proven end-to-end in tests against fake ClubLog/Telegram
 servers and by the live validations along the way (RUMlog click-to-fill,
 honest-yellow flaky node, exact matrix parity with the 1.x app's own
 artifacts). Sources, cluster nodes, and broadcast destinations are
