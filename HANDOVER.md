@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.2.1** tagged and **DEPLOYED to both Pis** (2026-08-28 morning, second wave of the day): the Telegram transport-error retry, prompted by ~20% overnight alert failures on the adersh install. **Both Pis verified by `/api/status` reporting 2.2.1**, services active (noderedpi4's read had to wait for the VPN disconnect — the tunnel to Adersh's LAN shadows the shack's own `192.168.1.0/24`, see Known gotchas). **GitHub release published** with the Windows zip: https://github.com/vu2cpl/dxca/releases/tag/v2.2.1. Previous status: **v2.2.0** tagged, released (adds Windows) and in production on both Pis — noderedpi4 and the third-party `adersh@192.168.1.151` (`--no-seed`), both redeployed 2026-08-28 ~07:55 IST via `pi-deploy.sh`, each verified by the installer's own serving check and confirmed by `/api/status` reporting 2.2.0 with accounts, cty and LoTW data intact. Since 2.2.0 the version string is trustworthy again, so `/api/status` is the currency check. VU2WJ's Pi remains the one install not updated. Beyond the 2.1 wave below, 2.1.1 carried: spot-mode inference (Region 3, *marked* as inferred) and the end of the silent-DATA default; a working CQ-only filter; account edit/delete; a server-wide call **blacklist**; **MQTT publish** for panadapter overlays; **My ClubLog statistics** (per-band / per-mode entity breakdowns); an **alerts-sent history** including failures; a boxed status bar and chip-row Sources filter; and an installer that checks rustc and Node up front, always rebuilds in a source tree, warns when the checkout is behind, and verifies the result is genuinely serving. **Resolved in v2.2.0:** the `v2.1.1` tag predated most of that list, so for a while `/api/status` could not distinguish a current host from a stale one and binary hashes were the only honest check. 2.2.0 bumps the version string onto a tag that actually contains the work — including Windows support — so `/api/status` is trustworthy again. VU2WJ's Pi is the one install NOT updated.
+**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.2.2** tagged and [released](https://github.com/vu2cpl/dxca/releases/tag/v2.2.2) with the Windows zip — the My Alerts level tint. **noderedpi4 is on 2.2.2** (`/api/status` verified, service active). **`adersh@192.168.1.151` is still on 2.2.1 — its 2.2.2 deploy is OUTSTANDING**, blocked only on the VPN being up (it was down when 2.2.2 shipped; the tunnel and the shack LAN cannot both be reachable — see Known gotchas). Run `deploy/pi-deploy.sh --no-seed adersh@192.168.1.151` once connected. Nothing is broken there: 2.2.1 carries the Telegram retry that actually mattered to him, and 2.2.2 is cosmetic. Earlier the same morning, **v2.2.1** went to both Pis: the Telegram transport-error retry, prompted by ~20% overnight alert failures on the adersh install. Previous status: **v2.2.0** tagged, released (adds Windows) and in production on both Pis — noderedpi4 and the third-party `adersh@192.168.1.151` (`--no-seed`), both redeployed 2026-08-28 ~07:55 IST via `pi-deploy.sh`, each verified by the installer's own serving check and confirmed by `/api/status` reporting 2.2.0 with accounts, cty and LoTW data intact. Since 2.2.0 the version string is trustworthy again, so `/api/status` is the currency check. VU2WJ's Pi remains the one install not updated. Beyond the 2.1 wave below, 2.1.1 carried: spot-mode inference (Region 3, *marked* as inferred) and the end of the silent-DATA default; a working CQ-only filter; account edit/delete; a server-wide call **blacklist**; **MQTT publish** for panadapter overlays; **My ClubLog statistics** (per-band / per-mode entity breakdowns); an **alerts-sent history** including failures; a boxed status bar and chip-row Sources filter; and an installer that checks rustc and Node up front, always rebuilds in a source tree, warns when the checkout is behind, and verifies the result is genuinely serving. **Resolved in v2.2.0:** the `v2.1.1` tag predated most of that list, so for a while `/api/status` could not distinguish a current host from a stale one and binary hashes were the only honest check. 2.2.0 bumps the version string onto a tag that actually contains the work — including Windows support — so `/api/status` is trustworthy again. VU2WJ's Pi is the one install NOT updated.
 **Repo:** https://github.com/vu2cpl/dxca (**public** — verified via
 `gh repo view` 2026-08-27; the doc said "private" until then, and the
 "Open items" release checklist still lists the public flip as pending)
@@ -470,6 +470,19 @@ proven against the Swift app's own artifacts.**
   (M2's spec baseline). Extractor: `scripts/extract_vectors.py`.
 
 ## Open items → next session
+
+**TODO (2026-08-28): ship v2.2.2 to `adersh@192.168.1.151`.** It is the one
+host behind — noderedpi4 and the GitHub release are done. Bring the VPN up
+and run:
+
+```
+deploy/pi-deploy.sh --no-seed adersh@192.168.1.151
+```
+
+then confirm `http://192.168.1.151:7580/api/status` reports 2.2.2. Not
+urgent — 2.2.2 is the My Alerts tint only, and his 2.2.1 already has the
+Telegram retry. **Remember the subnet clash:** with the VPN up the shack
+Pi becomes unreachable, so do his box in one pass and reconnect after.
 
 *(Resolved 2026-08-28, same morning: the v2.2.1 loose ends are closed —
 noderedpi4 confirmed 2.2.1 via `/api/status` after the VPN came down, and
