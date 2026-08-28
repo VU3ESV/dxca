@@ -36,8 +36,29 @@ pub struct NodeLine {
     pub event: ClientEvent,
 }
 
+/// Given first refusal on every node event, before it reaches the spot
+/// pipeline.
+///
+/// This exists for one rule: a `SHOW/DX` reply arrives as `DX de …` lines
+/// that parse as perfectly good spots but are **historical**, often hours
+/// old. Letting them through would re-announce them to every logger and
+/// fire Telegram alerts for last week's QSOs. The command router claims
+/// them while one of its response windows is open, and returning `true`
+/// here is what keeps them out.
+///
+/// Called on the node's event thread, so implementations must not block.
+pub trait NodeEventFilter: Send + Sync {
+    /// `true` = consumed; the event must go no further.
+    fn intercept(&self, node: &str, event: &ClientEvent) -> bool;
+}
+
 pub struct NodeManager {
     statuses: Arc<Mutex<HashMap<String, NodeStatus>>>,
+    /// Set once, before nodes start. A `OnceLock` rather than a constructor
+    /// argument because the filter needs the manager (to write commands to
+    /// nodes) and the manager needs the filter — the cycle has to be closed
+    /// after both exist.
+    filter: Arc<std::sync::OnceLock<Arc<dyn NodeEventFilter>>>,
     /// name → (config fingerprint, running client). Interior mutability so
     /// the M5 hot-apply works through the shared Arc.
     clients: Mutex<HashMap<String, (String, ClusterClient)>>,
@@ -67,7 +88,15 @@ impl NodeManager {
             statuses: Arc::new(Mutex::new(HashMap::new())),
             clients: Mutex::new(HashMap::new()),
             lines,
+            filter: Arc::new(std::sync::OnceLock::new()),
         }
+    }
+
+    /// Install the event filter. Call before starting nodes; a second call
+    /// is ignored, which keeps the "set once" contract honest rather than
+    /// silently swapping the filter out from under a running node thread.
+    pub fn set_event_filter(&self, filter: Arc<dyn NodeEventFilter>) {
+        let _ = self.filter.set(filter);
     }
 
     pub fn statuses(&self) -> HashMap<String, NodeStatus> {
@@ -166,12 +195,23 @@ impl NodeManager {
 
         let statuses = self.statuses.clone();
         let lines = self.lines.clone();
+        let filter = self.filter.clone();
         std::thread::Builder::new()
             .name(format!("dxca-node-{name}"))
             .spawn(move || {
                 // The client's event channel closes when the supervisor
                 // stops; the thread ends with it.
                 while let Ok(event) = events.recv() {
+                    // First refusal to the command router. A claimed event
+                    // belongs to somebody's `SHOW/DX` reply and must not be
+                    // treated as live traffic — status counters included,
+                    // or a history query would inflate the node's spot
+                    // count and its "last spot" clock.
+                    if let Some(f) = filter.get()
+                        && f.intercept(&name, &event)
+                    {
+                        continue;
+                    }
                     let mut spot_to_send = None;
                     {
                         let mut map = statuses.lock().unwrap();

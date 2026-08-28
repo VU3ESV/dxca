@@ -17,10 +17,13 @@ telnet_port = 7575
 # Loggers are unaffected either way: a session that never sends LOGIN keeps
 # the plain spot feed and its input is ignored, exactly as before.
 #
-# Off by default on purpose. Cluster commands are NOT passed through yet, so
-# today this only unlocks logging in — but the port is unauthenticated and
-# every cluster node session logs in with `login_call` below, so the setting
-# stays opt-in rather than arriving switched on in an upgrade.
+# Once logged in, an operator can pass READ-ONLY cluster commands (SH/DX,
+# SH/WWV, ...) to one node at a time, chosen with SET/NODE. Spotting, node
+# filters and anything touching the node account are refused.
+#
+# Off by default on purpose: the port is unauthenticated, and every cluster
+# node session logs in with `login_call` below, so this stays opt-in rather
+# than arriving switched on in an upgrade.
 #
 # Telnet is plaintext: the password crosses the LAN in the clear. Fine for a
 # shack LAN, not for anything reachable from outside it.

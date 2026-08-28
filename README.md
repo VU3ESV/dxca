@@ -470,11 +470,31 @@ way** — a session that never sends `LOGIN` gets the plain spot feed and has
 its input ignored, exactly as before, so RUMlog, Logger32 and N1MM+ need no
 change.
 
-Logging in currently unlocks nothing beyond `BYE`: passing cluster commands
-through to the upstream nodes is designed but not built, in
-[`docs/TELNET-INTERACTIVE.md`](docs/TELNET-INTERACTIVE.md). The setting is
-opt-in anyway, because port 7575 is otherwise unauthenticated and every
-cluster-node session logs in with your callsign.
+Once logged in, you can pass **read-only cluster commands** to one upstream
+node at a time:
+
+```
+LOGIN VU2CPL
+Password: ********
+SH/NODES              list the nodes; * marks yours
+SET/NODE DB0SUE       aim your commands at one
+SH/DX 10              forwarded; the reply comes back to you alone
+SH/WWV                solar data, likewise
+BYE                   log out (the spot feed keeps running)
+```
+
+Commands are **canonicalized, then allowlisted** — `sh/dx` is expanded to
+`SHOW/DX` and only then judged, because DXSpider lets any command be
+abbreviated and a blocklist could never enumerate every spelling. Anything
+that is not a known read-only query is refused with the reason: spotting,
+node-side filters (DXCA shares one node session with every user, so a filter
+would narrow *everyone's* spots), and anything touching the node account.
+
+Query results never enter the spot feed. A `SHOW/DX` reply looks exactly
+like live spots but is hours old, so while a query is outstanding its
+node's output goes to the operator who asked and to nobody else.
+
+Design and rationale: [`docs/TELNET-INTERACTIVE.md`](docs/TELNET-INTERACTIVE.md).
 
 Telnet is plaintext: the password crosses the LAN in the clear, and your own
 terminal echoes it as you type. Fine for a shack LAN, not for a port

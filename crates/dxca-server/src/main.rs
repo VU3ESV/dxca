@@ -12,6 +12,7 @@ use dxca_connect::telnet::InteractiveConfig;
 use dxca_server::api::{self, AppState};
 use dxca_server::db::Db;
 use dxca_server::nodes::NodeManager;
+use dxca_server::telnetcmd::TelnetCommands;
 use dxca_server::users::UserService;
 use dxca_server::{config, pipeline};
 use std::path::Path;
@@ -38,8 +39,21 @@ async fn main() {
         }
     };
 
-    let interactive = cfg.telnet_interactive.then(|| InteractiveConfig {
-        auth: Arc::new(dxca_server::auth::DbAuthenticator::new(db.clone())),
+    // DX-cluster node clients: honest-status supervised connections. Built
+    // before the pipeline because the telnet server's command passthrough
+    // writes to these nodes, and the listener binds inside pipeline::start.
+    let manager = Arc::new(NodeManager::new());
+
+    let interactive = cfg.telnet_interactive.then(|| {
+        let commands = TelnetCommands::start(manager.clone());
+        // Closes the cycle: the sink writes to nodes, and the nodes hand
+        // every event to the sink first. Must happen before any node
+        // starts, or a `SHOW/DX` reply could reach the spot pipeline.
+        manager.set_event_filter(commands.clone());
+        InteractiveConfig {
+            auth: Arc::new(dxca_server::auth::DbAuthenticator::new(db.clone())),
+            commands: Some(commands),
+        }
     });
     let (pipeline_state, input_tx) = match pipeline::start(&cfg, interactive).await {
         Ok(started) => started,
@@ -49,8 +63,6 @@ async fn main() {
         }
     };
 
-    // DX-cluster node clients (M3): honest-status supervised connections.
-    let manager = NodeManager::new();
     manager.apply(&cfg.cluster_nodes, &input_tx);
     let telegram = match &cfg.telegram_base_override {
         Some(base) => Telegram::with_base(base),
@@ -89,7 +101,7 @@ async fn main() {
 
     let app_state = AppState {
         pipeline: pipeline_state,
-        nodes: Arc::new(manager),
+        nodes: manager.clone(),
         users,
         config: Arc::new(std::sync::Mutex::new(cfg.clone())),
         config_path: Path::new(config::DEFAULT_PATH).to_path_buf(),

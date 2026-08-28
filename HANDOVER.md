@@ -475,9 +475,29 @@ proven against the Swift app's own artifacts.**
 
 ## Open items → next session
 
-**Milestones 1–2 BUILT (2026-08-28), 3–4 still designed only: interactive
-telnet with cluster-command passthrough** —
-[`docs/TELNET-INTERACTIVE.md`](docs/TELNET-INTERACTIVE.md).
+**Milestones 1–3 BUILT (2026-08-28), 4 (spotting) deliberately not:
+interactive telnet with cluster-command passthrough** —
+[`docs/TELNET-INTERACTIVE.md`](docs/TELNET-INTERACTIVE.md). **Working, but
+never yet run against a real DX-cluster node** — only fake ones in tests,
+and `telnet_interactive` is off on both Pis. First real use should be a
+`SH/DX` against DB0SUE with the Spots screen open beside it.
+
+**M3** is the passthrough itself. `commands.rs` canonicalizes an abbreviated
+verb against a table of ~120 DXSpider commands and allows only the read-only
+tier; `telnetcmd.rs` holds per-session state (current node, reply channel)
+and joins policy → router → nodes; `NodeEventFilter` gives the router first
+refusal on every node event. Three things worth knowing before touching it:
+**the node is sent the canonical form** (`sh/dx 5` goes out as `SHOW/DX 5`),
+because judging one string and running another is a hole, not a nicety;
+**interception happens before the status counters**, so a history query does
+not inflate a node's spot count; and **the design's original rule about
+spots was wrong** — the doc said `ClientEvent::Spot` should always reach the
+pipeline, but a `SHOW/DX` reply *is* spots, hours old, so while a window is
+open every event from that node belongs to the requester. That reversal is
+the single most important thing in the feature, and
+`sh_dx_history_reaches_the_asker_and_nothing_else` was verified by
+deliberately breaking it (remove `set_event_filter` and it fails with the
+leaked callsigns listed).
 
 **M2** added the login gate: `LOGIN <callsign>` → `Password:` → argon2
 against the accounts table (via `spawn_blocking`; verifying on the async
@@ -509,9 +529,9 @@ like every other graft there. The router's `on_event` returns a `consumed`
 flag, and **a consumed event must not flow onward** — that is what keeps
 `sh/dx` output out of the spot pipeline.
 Manoj wants to issue cluster commands through DXCA to the upstream nodes.
-What remains after M2: command canonicalization and the allowlist (§4), and
-wiring an authenticated session to the router. The doc's load-bearing
-points, if you read nothing else: the
+What remains after M3: only spotting (M4), which is refused by tier and
+should stay that way until someone actually wants it — it is the one step
+that transmits. The doc's load-bearing points, if you read nothing else: the
 **login gate ships with the feature, not after** (7575 binds `0.0.0.0` with
 no auth, and every node logs in as the shack callsign, so passthrough
 without auth means the LAN can spot as VU2CPL); response correlation is

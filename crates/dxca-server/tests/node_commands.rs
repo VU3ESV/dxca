@@ -231,6 +231,7 @@ async fn telnet_login_uses_the_real_accounts_table() {
         0,
         Some(InteractiveConfig {
             auth: Arc::new(DbAuthenticator::new(db.clone())),
+            commands: None,
         }),
     )
     .await

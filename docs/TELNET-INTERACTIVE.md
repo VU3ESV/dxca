@@ -1,16 +1,17 @@
 # Interactive telnet — cluster command passthrough
 
-**Status:** **milestones 1–2 built** — the router, the node plumbing, and an
-opt-in login gate (`telnet_interactive`, default off). **No command
-passthrough yet**, which is milestone 3 and the point of the exercise ·
-**Drafted:** 2026-08-28 · **Phase:** 2 (post-2.0)
+**Status:** **milestones 1–3 built** — read-only cluster commands pass
+through to a chosen node, behind `telnet_interactive` (default off).
+Milestone 4 (spotting) is designed, not built, and stopping here is a
+perfectly good place to stop · **Drafted:** 2026-08-28 · **Phase:** 2
+(post-2.0)
 
-Today DXCA's telnet server is a one-way loudspeaker: it shouts spots at
-whoever connects and ignores everything they say. This document designs the
-upgrade to a real interactive session — a logger or a plain `telnet` client
-connects, issues cluster commands (`sh/dx`, `sh/wwv`, `dx`, filters), and the
-commands reach the upstream DX-cluster nodes DXCA is already connected to,
-with the replies routed back to the operator who asked.
+DXCA's telnet server used to be a one-way loudspeaker: it shouted spots at
+whoever connected and ignored everything they said. This document designed
+the upgrade to a real interactive session — a `telnet` client logs in, issues
+cluster commands, and they reach the upstream nodes DXCA is already connected
+to, with the replies routed back to the operator who asked — and now records
+what was built, including the places the design turned out to be wrong.
 
 The short version of the recommendation: **the login gate ships first, or at
 the same time — never after.** Everything else here is plumbing; that one is
@@ -20,7 +21,7 @@ a genuine change in exposure. See [Safety](#safety-read-this-before-building).
 
 ## 1. What exists today
 
-More than you would expect. The outbound half is built and simply unused.
+Where each piece stands after milestones 1–3.
 
 | Piece | State | Where |
 |---|---|---|
@@ -34,11 +35,12 @@ More than you would expect. The outbound half is built and simply unused.
 | Per-node command queue + response window | **Built** (M1) | `cmdrouter.rs` |
 | Telnet client input read | **Built** (M2) | line-buffered, IAC-stripped |
 | Telnet login | **Built** (M2) | `LOGIN`, opt-in via `telnet_interactive` |
-| Command canonicalization + allowlist | **Missing** | §4 — the M3 gate |
-| Anything an authenticated session can *do* | **Missing** | M3 |
+| Command canonicalization + allowlist | **Built** (M3) | `commands.rs` |
+| Session → node command routing | **Built** (M3) | `telnetcmd.rs` |
+| `SHOW/DX` kept out of the spot pipeline | **Built** (M3) | `NodeEventFilter` |
+| Spotting (`DX`) | **Refused** | M4; admin-only and opt-in when it lands |
 
-So the work is: stop throwing replies away, start reading input, add a login,
-and solve the one genuinely hard problem — deciding whose reply is whose.
+What is left is milestone 4 — spotting — which is deliberately still refused.
 
 ## 2. Goals and non-goals
 
@@ -61,15 +63,17 @@ in place: `db.user_by_callsign()` returns the user and stored hash, and
 `auth::verify_password()` is argon2.
 
 ```
-Login: VU2CPL
+LOGIN VU2CPL
 Password: ********
-Welcome VU2CPL — 5 nodes, current: DB0SUE. Type HELP.
+Welcome VU2CPL (admin). Type HELP.
 ```
 
-A session that sends a blank callsign, or fails, drops to the read-only feed
-it gets today. That preserves every existing logger without a config change,
-which matters — RUMlog, Logger32 and N1MM+ are all pointed at 7575 already
-and none of them knows how to log in.
+**As built this is an opt-in verb, not a prompt on connect** — see milestone
+2 for why. A session that never types `LOGIN` is not prompted, not asked for
+anything, and not answered: it gets the plain spot feed exactly as before.
+That preserves every existing logger without a config change, which matters —
+RUMlog, Logger32 and N1MM+ are all pointed at 7575 already and none of them
+knows how to log in.
 
 **Honest limitation to document, not paper over:** telnet is plaintext. The
 password crosses the LAN in the clear and appears in any packet capture.
@@ -99,9 +103,10 @@ Two details worth settling now rather than in code review:
   nothing in DXSpider today, but it is DXCA's own session state; the
   canonicalizer intercepts it before the allowlist. Same for `SH/NODES`.
 - **A per-command override** — `<node> <command>`, e.g. `DB0SUE SH/DX 20` —
-  is worth having so a one-off query does not disturb the session's current
-  node. Cheap to add once the router exists, and it keeps the common case
-  (repeated queries against one node) free of prefixes.
+  would let a one-off query skip switching nodes. **Not built:** it needs
+  care, because a bare node name as the first token has to be told apart
+  from a mistyped command, and getting that wrong turns a typo into a
+  command aimed at the wrong node. `SET/NODE` covers the need for now.
 
 **What happens when the current node is not live?** Refuse with the node's
 actual state rather than queuing indefinitely — `DB0SUE is Reconnecting;
@@ -137,12 +142,16 @@ quiet period (~2 s) with no further output; or a hard timeout (~15 s). On
 timeout the session is told the reply may be incomplete rather than being
 left to guess — the honest-status principle the node client already follows.
 
-**Spots are never captured by the window.** `ClientEvent::Spot` continues
-straight into the pipeline as it does today; only `Line`, `Announce` and
-`Wwv` are candidates for routing. A `sh/dx` reply *looks* like spots, which
-is the one place this rule bites: those lines parse as spots and will flow
-into the spot pipeline as though freshly spotted. See
-[Safety](#safety-read-this-before-building).
+**Spots ARE captured by an open window** — reversed from this document's
+first draft, which said the opposite and was wrong. The original reasoning
+was that `ClientEvent::Spot` should always flow to the pipeline and only
+`Line`/`Announce`/`Wwv` should be routable. But a `SHOW/DX` reply *is* a
+burst of `DX de …` lines, they parse as spots, and they are hours old. Under
+the original rule they would have gone straight into the live feed. So while
+a window is open on a node, **every** event from that node belongs to the
+requester, spots included, and the pipeline sees none of them. Ambient spots
+resume the instant the window closes, which for a `SHOW/DX` is a fraction of
+a second later. See [Safety](#safety-read-this-before-building).
 
 ## 4. Command handling
 
@@ -324,8 +333,36 @@ in production by someone getting an alert for a QSO from last Tuesday.
    negotiation, which this server does not do (it strips inbound IAC and
    never negotiates). Worth doing before anyone types a password over this
    regularly.
-3. **Read-only passthrough.** `SH/*` and friends, with the allowlist and the
-   `SH/DX`-must-not-reach-the-pipeline rule. Feature flag defaults off.
+3. ~~**Read-only passthrough.**~~ **DONE 2026-08-28.** An authenticated
+   session picks a node and issues read-only queries; replies come back to
+   it alone. `commands.rs` canonicalizes and tiers, `telnetcmd.rs` holds the
+   per-session state and joins policy → router → nodes, and
+   `NodeEventFilter` gives the router first refusal on every node event.
+   Still behind `telnet_interactive`, still default off.
+
+   **The node runs the canonical form, not what was typed.** `sh/dx 5` is
+   forwarded as `SHOW/DX 5`. If the abbreviation went out instead, the
+   allowlist would be judging a different string from the one the node
+   executes, which is a hole rather than a nicety. Asserted end to end.
+
+   **Interception happens before the status counters, not just before the
+   pipeline.** A claimed event is dropped entirely, so a history query does
+   not inflate a node's spot count or move its "last spot" clock — the Spots
+   screen would otherwise show activity that never happened.
+
+   **The negative test was verified by breaking it.** Removing the
+   `set_event_filter` call makes
+   `sh_dx_history_reaches_the_asker_and_nothing_else` fail with
+   `SH/DX history LEAKED into the spot pipeline: ["VK3XYZ", "ZS6ABC", "K1JT"]`.
+   A negative assertion nobody has watched fail is worth very little; this
+   one has.
+
+   Refusals name the expansion — `s/pass` is refused *and* told it read as
+   `SET/PASSWORD` — so an operator learns why rather than guessing.
+   `dangerous_commands_never_reach_the_node` drives real abbreviations
+   (`s/pass`, `uns/dx`, `sysop`, `acc/spots`, `dx …`) through a live session
+   against a fake node that counts every byte it receives, and asserts the
+   count stays zero.
 4. **Spotting.** Admin-only, opt-in, with loop suppression. Separate milestone
    because it is the only step that transmits.
 

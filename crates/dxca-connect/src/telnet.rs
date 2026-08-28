@@ -12,7 +12,7 @@
 //! nodes prompt for a callsign, and it is tempting to do the same. But the
 //! loggers already pointed at port 7575 (RUMlog, Logger32, N1MM+) were
 //! configured against a server that never prompted, and what they transmit
-//! on connect is unknown — a 45-minute packet capture on the production Pi
+//! on connect is unknown — a 45-second packet capture on the production Pi
 //! showed an established RUMlog session sending *nothing at all*, but
 //! connect-time behaviour could not be observed without disconnecting a
 //! live logger. Prompting would therefore be a guess with a working setup
@@ -55,11 +55,37 @@ pub trait Authenticator: Send + Sync + 'static {
     fn authenticate(&self, callsign: &str, password: &str) -> Option<TelnetIdentity>;
 }
 
+/// Identifies one telnet session for the lifetime of its connection.
+pub type SessionId = u64;
+
+/// Where an authenticated session's commands go.
+///
+/// A trait for the same reason [`Authenticator`] is one: command policy and
+/// the cluster nodes live a layer up, and this crate must not reach for
+/// them. Replies are asynchronous — a node takes its time — so they arrive
+/// on the channel handed back by [`open`](CommandSink::open) rather than as
+/// a return value.
+pub trait CommandSink: Send + Sync + 'static {
+    /// Register a freshly authenticated session.
+    fn open(
+        &self,
+        session: SessionId,
+        identity: &TelnetIdentity,
+    ) -> tokio::sync::mpsc::UnboundedReceiver<String>;
+    /// One command line from that session.
+    fn submit(&self, session: SessionId, line: &str);
+    /// The session logged out or the socket closed.
+    fn close(&self, session: SessionId);
+}
+
 /// Enables the login verb. Absent = today's behaviour exactly, which is the
 /// default: an upgrade must never silently give a port new capabilities.
 #[derive(Clone)]
 pub struct InteractiveConfig {
     pub auth: Arc<dyn Authenticator>,
+    /// Absent = a session can log in but issue no commands (milestone 2's
+    /// state). Present = command passthrough.
+    pub commands: Option<Arc<dyn CommandSink>>,
 }
 
 pub struct ClusterServer {
@@ -89,6 +115,7 @@ impl ClusterServer {
 
         let accept_tx = tx.clone();
         let accept_clients = clients.clone();
+        let next_session = Arc::new(std::sync::atomic::AtomicU64::new(1));
         tokio::spawn(async move {
             loop {
                 let Ok((stream, _peer)) = listener.accept().await else {
@@ -97,9 +124,10 @@ impl ClusterServer {
                 let rx = accept_tx.subscribe();
                 let counter = accept_clients.clone();
                 let interactive = interactive.clone();
+                let session = next_session.fetch_add(1, Ordering::Relaxed);
                 counter.fetch_add(1, Ordering::Relaxed);
                 tokio::spawn(async move {
-                    let _ = serve_client(stream, rx, interactive).await;
+                    let _ = serve_client(stream, rx, interactive, session).await;
                     counter.fetch_sub(1, Ordering::Relaxed);
                 });
             }
@@ -142,23 +170,43 @@ async fn serve_client(
     mut stream: TcpStream,
     mut rx: broadcast::Receiver<String>,
     interactive: Option<InteractiveConfig>,
+    session: SessionId,
 ) -> std::io::Result<()> {
     stream.write_all(WELCOME.as_bytes()).await?;
     let mut buf = [0u8; 1024];
     let mut pending = Vec::<u8>::new();
     let mut state = SessionState::Anonymous;
     let mut failures = 0u32;
-    loop {
+    // Replies to this session's commands, once it has any. `None` until
+    // login, which is why an anonymous session cannot be sent anything.
+    let mut replies: Option<tokio::sync::mpsc::UnboundedReceiver<String>> = None;
+    let sink = interactive.as_ref().and_then(|c| c.commands.clone());
+
+    // Closing over `sink` in the loop below would move it; keep a handle
+    // for the disconnect path.
+    let closer = sink.clone();
+    let result = 'session: loop {
         tokio::select! {
             line = rx.recv() => match line {
                 Ok(line) => stream.write_all(line.as_bytes()).await?,
                 // Lagged: skip what we missed, keep the client connected.
                 Err(broadcast::error::RecvError::Lagged(_)) => continue,
-                Err(broadcast::error::RecvError::Closed) => return Ok(()),
+                Err(broadcast::error::RecvError::Closed) => break 'session Ok(()),
+            },
+            // Command replies. `recv()` on a None receiver would be a
+            // never-ready future, so the branch is disabled instead.
+            Some(reply) = async {
+                match replies.as_mut() {
+                    Some(rx) => rx.recv().await,
+                    None => std::future::pending().await,
+                }
+            } => {
+                stream.write_all(reply.as_bytes()).await?;
+                stream.write_all(b"\r\n").await?;
             },
             read = stream.read(&mut buf) => {
                 let n = match read {
-                    Ok(0) | Err(_) => return Ok(()), // client went away
+                    Ok(0) | Err(_) => break 'session Ok(()), // client went away
                     Ok(n) => n,
                 };
                 // With no login configured the bytes are still read — the
@@ -177,14 +225,37 @@ async fn serve_client(
                     if line.is_empty() {
                         continue;
                     }
+                    let was_authed = matches!(state, SessionState::Authed(_));
                     if let Some(reply) =
                         handle_line(&line, &mut state, &mut failures, cfg).await
                     {
                         stream.write_all(reply.as_bytes()).await?;
                     }
+                    match (&state, was_authed) {
+                        // Just logged in — open the command channel.
+                        (SessionState::Authed(id), false) => {
+                            if let Some(sink) = sink.as_ref() {
+                                replies = Some(sink.open(session, id));
+                            }
+                        }
+                        // Just logged out.
+                        (SessionState::Anonymous, true) => {
+                            if let Some(sink) = sink.as_ref() {
+                                sink.close(session);
+                            }
+                            replies = None;
+                        }
+                        // An ordinary command from an authenticated session.
+                        (SessionState::Authed(_), true) => {
+                            if let Some(sink) = sink.as_ref() {
+                                sink.submit(session, &line);
+                            }
+                        }
+                        _ => {}
+                    }
                     if failures >= MAX_LOGIN_FAILURES {
                         let _ = stream.write_all(b"Too many failures.\r\n").await;
-                        return Ok(());
+                        break 'session Ok(());
                     }
                 }
                 // An over-long line is dropped, not buffered forever.
@@ -193,7 +264,11 @@ async fn serve_client(
                 }
             },
         }
+    };
+    if let Some(sink) = closer {
+        sink.close(session);
     }
+    result
 }
 
 /// Process one input line. Returns what to send back, if anything.
@@ -338,6 +413,9 @@ mod login_tests {
     fn interactive() -> Option<InteractiveConfig> {
         Some(InteractiveConfig {
             auth: Arc::new(StubAuth),
+            // No sink: milestone 2's behaviour, and these tests assert it
+            // still holds — logging in must work with no passthrough.
+            commands: None,
         })
     }
 
