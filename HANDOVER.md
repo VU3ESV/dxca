@@ -473,6 +473,16 @@ proven against the Swift app's own artifacts.**
   1094/1094 datagrams on :2237 byte-identical to a source datagram
   (M2's spec baseline). Extractor: `scripts/extract_vectors.py`.
 
+## Release convention (2026-08-28, standing)
+
+**A tag is not a release.** Every tagged version gets a published GitHub
+release with the Windows zip attached — `deploy/win-bundle.sh`, then
+`gh release create <tag> target/win-bundle/dxca-<version>-windows-x64.zip`.
+Manoj's instruction, after v2.3.0/v2.3.1/v2.4.0 sat as bare tags: Windows
+users have no other route in, since building there needs the MSVC toolchain
+the cross-build exists to avoid. Notes should cover everything since the
+last *published* release, because tags can outrun releases.
+
 ## Open items → next session
 
 **Built, NOT deployed (2026-08-28): "current entities only" for award
