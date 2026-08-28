@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.7.0 on noderedpi4; adersh@192.168.1.151 is on v2.5.0**, two releases behind and waiting on the VPN. Every tag from v2.4.0 onward has a published GitHub release with a Windows zip (v2.3.0 and v2.3.1 remain bare tags, superseded by v2.4.0's release notes). **v2.3.0–v2.7.0 all shipped on 2026-08-28**, in order: the interactive telnet gate and read-only command passthrough (`telnet_interactive = true` on noderedpi4, still **false** on adersh); spotter attribution — Source is the feed that carried a spot, Spotter is the station that heard it — carried into Telegram and the My Alerts history, with the **first schema migration** this database has had; a spots search over call/spotter; award totals that count **current DXCC entities by default**, with an *include deleted* tickbox; skimmer identification with a **Manual only** display filter; and Telegram's own *human spots only* narrowing. Both migrations were verified against real data (91 and 102 alert rows preserved), and skimmer/spotter attribution was confirmed live on both stations.
+**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.7.0 on BOTH Pis** (noderedpi4 and adersh@192.168.1.151). Every tag from v2.4.0 onward has a published GitHub release with a Windows zip (v2.3.0 and v2.3.1 remain bare tags, superseded by v2.4.0's release notes). **v2.3.0–v2.7.0 all shipped on 2026-08-28**, in order: the interactive telnet gate and read-only command passthrough (`telnet_interactive = true` on noderedpi4, still **false** on adersh); spotter attribution — Source is the feed that carried a spot, Spotter is the station that heard it — carried into Telegram and the My Alerts history, with the **first schema migration** this database has had; a spots search over call/spotter; award totals that count **current DXCC entities by default**, with an *include deleted* tickbox; skimmer identification with a **Manual only** display filter; and Telegram's own *human spots only* narrowing. Both migrations were verified against real data (91 and 102 alert rows preserved), and skimmer/spotter attribution was confirmed live on both stations.
 **Repo:** https://github.com/vu2cpl/dxca (**public** — verified via
 `gh repo view` 2026-08-27; the doc said "private" until then, and the
 "Open items" release checklist still lists the public flip as pending)
@@ -494,10 +494,15 @@ last *published* release, because tags can outrun releases.
 **SHIPPED as v2.7.0 (2026-08-28): Telegram manual-only, and the DXCC
 toggle inverted.** Live on noderedpi4 (9 nodes),
 [released](https://github.com/vu2cpl/dxca/releases/tag/v2.7.0) with the
-Windows zip. **adersh is on v2.5.0, two releases behind** — needs the VPN.
-Verified after the upgrade that the stored notify row has no
-`notify_manual_only` key at all, which is exactly right: it deserializes to
-off, so Telegram behaves as it did.
+Windows zip. **adersh followed the same evening** (`--no-seed`, v2.5.0 → v2.7.0 in one
+step): 114 alert rows, account, cty and LoTW intact, four nodes Live.
+On both boxes the stored notify row has **no `notify_manual_only` key at
+all**, which is exactly right — it deserializes to off, so Telegram behaves
+as it did until someone ticks the box.
+
+*Field note: **95%** of adersh's feed is skimmer spots (21 of 22 sampled),
+against ~74% on noderedpi4. Manual-only will be a much bigger change on his
+station than on the shack's.*
 
 - **Telegram manual-only.** `NotifyUserConfig::notify_manual_only`, applied
   in `fan_out` through `passes_skimmer()` — the same predicate idiom as
