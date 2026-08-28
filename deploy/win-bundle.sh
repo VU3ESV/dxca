@@ -69,7 +69,10 @@ mkdir -p "$STAGE"
 cp "$BIN"                                   "$STAGE/dxca.exe"
 cp "$REPO/deploy/windows/install-dxca.cmd"   "$STAGE/"
 cp "$REPO/deploy/windows/uninstall-dxca.cmd" "$STAGE/"
-cp "$REPO/deploy/windows/README-WINDOWS.txt" "$STAGE/"
+# @VERSION@ is substituted rather than hand-edited: a version baked into the
+# shipped disclaimers drifts silently the moment Cargo.toml moves, and this
+# is the file a stranger reads to decide whether to trust the binary.
+sed "s/@VERSION@/$VERSION/g" "$REPO/deploy/windows/README-WINDOWS.txt" > "$STAGE/README-WINDOWS.txt"
 cp "$REPO/LICENSE"                           "$STAGE/LICENSE.txt"
 
 # CRLF for the files a Windows user opens in Notepad or runs as a batch.

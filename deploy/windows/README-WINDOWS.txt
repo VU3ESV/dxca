@@ -1,5 +1,5 @@
 ================================================================
- DXCA for Windows  —  v2.1.1  —  2026-08-28
+ DXCA for Windows  —  v@VERSION@
  FT8/FT4 + DX-cluster spot aggregator with a multi-user web GUI
 ================================================================
 
