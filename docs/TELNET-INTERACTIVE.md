@@ -1,10 +1,10 @@
 # Interactive telnet — cluster command passthrough
 
-**Status:** **milestones 1–3 built** — read-only cluster commands pass
-through to a chosen node, behind `telnet_interactive` (default off).
-Milestone 4 (spotting) is designed, not built, and stopping here is a
-perfectly good place to stop · **Drafted:** 2026-08-28 · **Phase:** 2
-(post-2.0)
+**Status:** **milestones 1–3 built and LIVE on noderedpi4** (v2.3.0,
+`telnet_interactive = true`, 2026-08-28). Off on the adersh install, which
+is still v2.2.2. Milestone 4 (spotting) is designed, not built, and stopping
+here is a perfectly good place to stop · **Drafted:** 2026-08-28 ·
+**Phase:** 2 (post-2.0)
 
 DXCA's telnet server used to be a one-way loudspeaker: it shouted spots at
 whoever connected and ignored everything they said. This document designed
@@ -363,6 +363,20 @@ in production by someone getting an alert for a QSO from last Tuesday.
    (`s/pass`, `uns/dx`, `sysop`, `acc/spots`, `dx …`) through a live session
    against a fake node that counts every byte it receives, and asserts the
    count stays zero.
+
+   **Enabled on noderedpi4 2026-08-28** and checked against the running
+   service: an anonymous session that threw a bare callsign, `set/name`,
+   `sh/dx` and `BYE` at port 7575 received **zero** non-spot bytes while
+   three real spots flowed through the same socket, and RUMlog reconnected
+   by itself after the restart. `LOGIN` prompts; a wrong password is
+   refused without saying which half was wrong. **A logged-in `SH/DX`
+   against a real node is still unproven** — it needs an account password,
+   so it is the operator's to run.
+
+   *Deploy note for anyone repeating this:* `Config` has
+   `deny_unknown_fields`, so `telnet_interactive` must go into the TOML
+   **after** the new binary is in place. Writing the key first makes the
+   running (older) service fail to parse its config on the next restart.
 4. **Spotting.** Admin-only, opt-in, with loop suppression. Separate milestone
    because it is the only step that transmits.
 

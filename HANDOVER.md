@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.2.2** tagged and [released](https://github.com/vu2cpl/dxca/releases/tag/v2.2.2) with the Windows zip — the My Alerts level tint. **IN PRODUCTION on both Pis**, each verified by `/api/status`: noderedpi4 (VPN down) and `adersh@192.168.1.151` (VPN up, `--no-seed`) — the two deploys had to be done in separate passes because the tunnel and the shack LAN cannot be reachable at once (see Known gotchas). Adersh's box came back with all four cluster nodes up (db0sue, n2wq, vu2cpl Live; vu2oy Connected), his single account, 402 cty entities and 234,734 LoTW users intact. Earlier the same morning, **v2.2.1** went to both Pis: the Telegram transport-error retry, prompted by ~20% overnight alert failures on the adersh install. Previous status: **v2.2.0** tagged, released (adds Windows) and in production on both Pis — noderedpi4 and the third-party `adersh@192.168.1.151` (`--no-seed`), both redeployed 2026-08-28 ~07:55 IST via `pi-deploy.sh`, each verified by the installer's own serving check and confirmed by `/api/status` reporting 2.2.0 with accounts, cty and LoTW data intact. Since 2.2.0 the version string is trustworthy again, so `/api/status` is the currency check. VU2WJ's Pi remains the one install not updated. Beyond the 2.1 wave below, 2.1.1 carried: spot-mode inference (Region 3, *marked* as inferred) and the end of the silent-DATA default; a working CQ-only filter; account edit/delete; a server-wide call **blacklist**; **MQTT publish** for panadapter overlays; **My ClubLog statistics** (per-band / per-mode entity breakdowns); an **alerts-sent history** including failures; a boxed status bar and chip-row Sources filter; and an installer that checks rustc and Node up front, always rebuilds in a source tree, warns when the checkout is behind, and verifies the result is genuinely serving. **Resolved in v2.2.0:** the `v2.1.1` tag predated most of that list, so for a while `/api/status` could not distinguish a current host from a stale one and binary hashes were the only honest check. 2.2.0 bumps the version string onto a tag that actually contains the work — including Windows support — so `/api/status` is trustworthy again. VU2WJ's Pi is the one install NOT updated.
+**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.3.0 on noderedpi4** — interactive telnet with read-only cluster-command passthrough, `telnet_interactive = true`, verified live (anonymous sessions unaffected, login prompts, bad password refused). **`adersh@192.168.1.151` is on v2.2.2** with the feature absent; it needs no rush, since the default is off anyway. A **GitHub release for v2.3.0 has NOT been published** — the tag is pushed, the Windows bundle is not built. Earlier the same day: v2.2.1 (Telegram transport retry, both Pis) and v2.2.2 (My Alerts level tint, both Pis, released).
 **Repo:** https://github.com/vu2cpl/dxca (**public** — verified via
 `gh repo view` 2026-08-27; the doc said "private" until then, and the
 "Open items" release checklist still lists the public flip as pending)
@@ -477,10 +477,21 @@ proven against the Swift app's own artifacts.**
 
 **Milestones 1–3 BUILT (2026-08-28), 4 (spotting) deliberately not:
 interactive telnet with cluster-command passthrough** —
-[`docs/TELNET-INTERACTIVE.md`](docs/TELNET-INTERACTIVE.md). **Working, but
-never yet run against a real DX-cluster node** — only fake ones in tests,
-and `telnet_interactive` is off on both Pis. First real use should be a
-`SH/DX` against DB0SUE with the Spots screen open beside it.
+[`docs/TELNET-INTERACTIVE.md`](docs/TELNET-INTERACTIVE.md). **Live on
+noderedpi4 since 2026-08-28** as v2.3.0 with `telnet_interactive = true`;
+**still off on `adersh@192.168.1.151`**, which remains on 2.2.2.
+
+**Verified against the production server, not just fakes:** an anonymous
+session throwing a bare callsign, `set/name`, `sh/dx` and `BYE` at port 7575
+got **zero** non-spot bytes back while three real spots flowed through it —
+so RUMlog is genuinely unaffected — and RUMlog itself reconnected on its own
+after the restart (`telnet_clients: 1`). `LOGIN VU2CPL` prompts for a
+password, and a wrong one is refused without revealing which half was wrong.
+
+**What is still unproven: a logged-in `SH/DX` against a real node.** That
+needs Manoj's account password, so it was left for him. Worth doing with the
+Spots screen open beside it — the one thing the fake nodes cannot show is
+that a real DB0SUE history burst stays out of the live feed.
 
 **M3** is the passthrough itself. `commands.rs` canonicalizes an abbreviated
 verb against a table of ~120 DXSpider commands and allows only the read-only
