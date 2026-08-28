@@ -521,9 +521,67 @@ install.sh chowns to the invoker, and a fresh install self-bootstraps
 > restart fix on noderedpi4, and a real third-party install on
 > adersh@192.168.1.151.
 
-Remaining before any public release: x86-64-Linux (+ optional Windows)
-release artifacts, a Windows build test, then the repo-public flip +
-vu2cpl.com card with the VU3ESV credit line.
+Remaining before any public release: x86-64-Linux release artifacts, then
+the vu2cpl.com card with the VU3ESV credit line. (The repo-public flip is
+DONE — `vu2cpl/dxca` is public and carries the `DXCA v2.0.0` release. The
+Windows build test is DONE — see below.)
+
+### Windows: builds, installs, runs (2026-08-28)
+
+First Windows build and run in the project's history. **Zero source
+changes were needed** — the `#[cfg(unix)]` gates on the SIGTERM handler
+and the db `0600` chmod were the only Unix-specific code, and both
+fall back correctly.
+
+- **Build:** `just win` — `cargo zigbuild --release -p dxca-server
+  --target x86_64-pc-windows-gnu`. A first attempt at
+  `x86_64-pc-windows-msvc` failed in exactly two places, both C, neither
+  ours: `ring` (`assert.h`) and `libsqlite3-sys` (`stdlib.h`), for want of
+  Windows CRT headers on the Mac. zig bundles mingw-w64's, so the GNU
+  target needs no Microsoft download or licence. **A native MSVC build is
+  still untried.**
+- **Bundle:** `just win-bundle` → `deploy/win-bundle.sh` produces
+  `dxca-<version>-windows-x64.zip` (exe + installer + uninstaller +
+  README-WINDOWS.txt + licence). It refuses to ship a binary carrying the
+  placeholder page.
+- **Verified on `manoj@192.168.1.170`** (DESKTOP-IP8PT88, Win10 22H2
+  19045, AMD64): web GUI, `/api/*`, telnet banner, SQLite creation, boot
+  -triggered LOCAL SYSTEM task, survives the installing session closing,
+  firewall rule + LAN reach, clean uninstall, and an **update over an
+  existing install that preserves `config\` and `data\`**.
+- **Still unverified:** spot ingest (no decoder or cluster node has ever
+  fed it), graceful shutdown (Ctrl-C-only path), long-run stability,
+  Win11/Server/ARM64, MSVC.
+- **The blocker to calling it *supported*** is unchanged: `data\dxca.db`
+  holds ClubLog app passwords and Telegram tokens in plain text, and the
+  `0600` protection is Unix-only. Windows needs DPAPI or an ACL hardening
+  pass before this is more than "works".
+
+Four Windows gotchas, each found by testing and now handled in
+`deploy/windows/install-dxca.cmd` — worth reading before writing any
+other Windows script here:
+
+1. **Batch has no `\"` escape.** Shell-style escaping produced a broken
+   path and the installer silently did nothing, exiting 1 with no output.
+2. **`schtasks /tr` quoting breaks on paths with spaces**, and schtasks
+   has no "start in". Fixed by generating a `run-dxca.cmd` wrapper and
+   registering with PowerShell `Register-ScheduledTask -WorkingDirectory`.
+   Without a working directory the relative `config\dxca.toml` never
+   resolves and dxca silently runs on defaults.
+3. **Firewall rules scoped `profile=private` are inert on a Public
+   network** — present, enabled, and doing nothing while the server
+   listens. Windows re-classifies on its own when an adapter
+   re-identifies; `.170` flipped to Public mid-session. The installer now
+   detects it and refuses to print a LAN URL that will not answer.
+4. **`timeout /t` fails under non-interactive SSH** ("Input redirection is
+   not supported") and does not wait at all. Use `powershell Start-Sleep`
+   in anything driven remotely.
+
+Also learned about the Meridian box while there, and **not yet fixed in
+that repo**: `meridian/HANDOVER.md` claims a `meridian-webui` firewall
+rule that does not exist; `MeridianServer` has a fixed `TimeTrigger`, not
+a boot trigger, so it does not survive a reboot; and its task carries
+`DisallowStartIfOnBatteries` + `StopIfGoingOnBatteries`.
 
 **Open, small:**
 

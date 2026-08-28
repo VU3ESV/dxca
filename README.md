@@ -4,8 +4,10 @@ FT8/FT4 + DX-cluster spot aggregator with a multi-user web GUI. Rust
 successor to [DXClusterAggregator for
 macOS](https://github.com/vu2cpl/DXClusterAggregator-macOS), built to run
 24/7 on a Raspberry Pi, and equally at home on macOS or Linux. See
-[How to install](#how-to-install). (Windows is untested — the code is
-written for it, but it has never been built or run there.)
+[How to install](#how-to-install). (Windows: a prebuilt `.exe` with an
+installer ships as a release asset as of 2026-08-28 — it builds, installs and
+runs, but it is far less proven than the other three and stores secrets
+unprotected. Read [Windows](#windows) before using it.)
 
 DXCA ingests spots from WSJT-X/JTDX instances (binary UDP) and DX-cluster
 telnet nodes, aggregates and dedupes them, and serves the result to logging
@@ -184,26 +186,57 @@ service to `/opt/dxca`. Everything else is the same.
 
 ### Windows
 
-**Not supported today, and not yet tested.** Be aware of what that means
-before spending time on it:
+**Works, but is the least proven of the four platforms.** First built and run
+on 2026-08-28. Read this whole section before installing.
 
-- The Rust code is written for it — the two Unix-only spots (the SIGTERM
-  handler and the database file's `0600` permissions) are `#[cfg(unix)]`
-  with a portable fallback — but **nobody has ever built or run it on
-  Windows**, so "should work" is a design intent, not a result.
-- There is no Windows installer. `install.sh` is a bash script that installs
-  a launchd agent or a systemd unit; neither exists on Windows. You would
-  build with `cargo build --release -p dxca-server` and run the binary
-  yourself, or wrap it in a service by hand.
-- Building needs the **MSVC Build Tools** (a C compiler), because two
-  dependencies compile C: bundled SQLite and `ring` (the TLS library).
-- **The database would not be permission-protected.** ClubLog app passwords
-  and Telegram tokens are stored in plain text and secured by the file being
-  mode `0600` — a `#[cfg(unix)]` code path. On Windows that step is skipped.
+Download `dxca-<version>-windows-x64.zip` from the releases page, unzip it
+somewhere permanent, then right-click **`install-dxca.cmd`** and choose *Run
+as administrator*. It installs `dxca.exe` as a LOCAL SYSTEM scheduled task
+with a boot trigger, and optionally opens the firewall. `uninstall-dxca.cmd`
+reverses both and leaves your `config\` and `data\` alone.
 
-If you want DXCA on a Windows network, the better answer today is to run it
-on a Pi or a Linux box and open the web GUI in the Windows machine's
-browser. That is what the web GUI is for.
+`dxca.exe` is one self-contained file — the dashboard is embedded and every
+DLL it imports is a Windows system library or Universal CRT. No Rust, no
+Node, no Visual C++ redistributable, and a config file is optional (a missing
+one yields working defaults).
+
+What you are getting, stated plainly:
+
+- **Secrets are not protected.** ClubLog app passwords and Telegram tokens
+  live in plain text in `data\dxca.db`, secured on Unix by mode `0600` — a
+  `#[cfg(unix)]` path that Windows skips entirely. The file is left with
+  inherited ACLs. Do not install on a shared machine, and use a ClubLog *app
+  password*, never your main one. This is the one gap that keeps Windows from
+  being "supported" rather than "works".
+- **Receiving spots is untested on Windows.** No WSJT-X, JTDX or cluster node
+  has fed the Windows build. Serving, storage, the web GUI, the telnet server
+  and the installer are all verified; the ingest path is not.
+- **The shipped binary is a GNU/mingw cross-build** made on macOS with
+  `cargo-zigbuild` (`just win`), not what MSVC would produce. A native MSVC
+  build needs the **Visual Studio Build Tools with the C++ workload**, because
+  bundled SQLite and `ring` both compile C. That route has never been tried.
+- **It is unsigned**, so SmartScreen will warn and some antivirus flags
+  unsigned Rust binaries. There is no code-signing certificate for this
+  project.
+- **Graceful shutdown is unexercised** — the Windows path handles Ctrl-C only,
+  and the service is stopped by termination.
+- Tested on exactly one machine: Windows 10 22H2, build 19045, AMD64.
+
+Two Windows-specific traps the installer handles for you, worth knowing if
+you set it up by hand instead:
+
+- **Create the admin account before opening the firewall.** The first-run
+  setup card is unauthenticated, so on an open port whoever loads it first
+  claims admin. The installer runs on loopback and waits for the account.
+- **Firewall rules are scoped to the Private profile.** Windows classifies an
+  unrecognised network as *Public*, and re-classifies on its own when an
+  adapter re-identifies. When that happens the rules are present, enabled and
+  completely inert — the server listens and nothing can reach it. The
+  installer detects this and says so rather than reporting success.
+
+If you want certainty rather than novelty, run DXCA on a Pi or a Linux box
+and open the web GUI in the Windows machine's browser. That configuration is
+the one in daily production use.
 
 ### First run
 
@@ -289,7 +322,11 @@ makes both stations fight over the same node session) into that host's home
 directory. The installer correctly declines to *install* them, but the guard
 runs after the transfer — the flag is what prevents the copy.
 
-**Windows** has no update path for the same reason it has no install path.
+**Windows** updates by re-running the installer from a newer zip over the
+same folder: it stops the service, replaces the binary and re-registers the
+task, and it never touches `config\` or `data\`, so accounts and settings
+survive. Unzip the new release *into the existing folder* — extracting
+elsewhere gives you a second install with an empty database.
 
 ### If something goes wrong
 

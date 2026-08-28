@@ -32,6 +32,15 @@ dist: web
     cargo zigbuild --release -p dxca-server --target aarch64-unknown-linux-gnu.2.36
     @echo "Pi binary: target/aarch64-unknown-linux-gnu/release/dxca"
 
+# Cross-compile a Windows x86-64 release binary (GNU/mingw ABI, not MSVC). Needs rustup target x86_64-pc-windows-gnu + cargo-zigbuild.
+win: web
+    cargo zigbuild --release -p dxca-server --target x86_64-pc-windows-gnu
+    @echo "Windows binary: target/x86_64-pc-windows-gnu/release/dxca.exe"
+
+# Assemble the shippable Windows zip: binary + installer + disclaimers.
+win-bundle:
+    deploy/win-bundle.sh
+
 # Native release build for this machine.
 release: web
     cargo build --release -p dxca-server
