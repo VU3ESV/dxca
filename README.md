@@ -480,6 +480,11 @@ heard.
 The search box above the table filters on **either** — type a DX callsign to
 follow one station, or a spotter to see everything one skimmer is hearing.
 
+**My Alerts** records the spotter alongside the source for every alert, so
+the history answers the same question after the fact. Alerts sent before
+this shipped show `—`: the column was added to existing databases on
+upgrade, and there was nothing to back-fill it with.
+
 ### Telnet login (optional, off by default)
 
 Set `telnet_interactive = true` and a telnet session can authenticate with

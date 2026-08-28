@@ -265,6 +265,10 @@ pub struct SentAlert {
     /// colour table the spots feed uses.
     pub level: String,
     pub source: String,
+    /// The station that spotted it, when a relaying node named one. Empty
+    /// for locally decoded spots, where `source` already names the receiver.
+    #[serde(default)]
+    pub spotter: String,
     pub delivered: bool,
     /// Telegram's complaint when `delivered` is false; empty otherwise.
     pub error: String,
@@ -324,7 +328,8 @@ CREATE TABLE IF NOT EXISTS alerts_sent (
     level TEXT NOT NULL,
     source TEXT NOT NULL,
     delivered INTEGER NOT NULL,
-    error TEXT NOT NULL DEFAULT ''
+    error TEXT NOT NULL DEFAULT '',
+    spotter TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS alerts_sent_user_time
     ON alerts_sent (user_id, time_unix DESC);
@@ -343,6 +348,46 @@ fn db_err<E: std::fmt::Display>(e: E) -> String {
     format!("db: {e}")
 }
 
+/// Columns added to tables that already exist in the field.
+///
+/// `CREATE TABLE IF NOT EXISTS` is a no-op on a database that already has
+/// the table, so a new column in [`SCHEMA`] reaches fresh installs only —
+/// every existing install silently keeps the old shape and then fails at
+/// the first query naming the column. This closes that gap.
+///
+/// Additive only, and deliberately so: `ADD COLUMN` is the one schema change
+/// SQLite performs without rewriting the table, and a column with a default
+/// cannot invalidate a row that is already there. Anything that needs to
+/// drop, rename or retype belongs in a real versioned migration, not here.
+const ADDED_COLUMNS: &[(&str, &str, &str)] = &[
+    // table, column, full DDL for ALTER TABLE ... ADD COLUMN
+    (
+        "alerts_sent",
+        "spotter",
+        "spotter TEXT NOT NULL DEFAULT ''",
+    ),
+];
+
+/// Bring an existing database up to the current shape. Runs on every open;
+/// each step is skipped when its column is already present, so it is cheap
+/// and safe to repeat.
+fn migrate(conn: &Connection) -> DbResult<()> {
+    for (table, column, ddl) in ADDED_COLUMNS {
+        let present = conn
+            .prepare(&format!("PRAGMA table_info({table})"))
+            .map_err(db_err)?
+            .query_map([], |r| r.get::<_, String>(1))
+            .map_err(db_err)?
+            .filter_map(Result::ok)
+            .any(|name| name == *column);
+        if !present {
+            conn.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN {ddl};"))
+                .map_err(db_err)?;
+        }
+    }
+    Ok(())
+}
+
 impl Db {
     pub fn open(path: &Path) -> DbResult<Db> {
         if let Some(dir) = path.parent() {
@@ -350,6 +395,7 @@ impl Db {
         }
         let conn = Connection::open(path).map_err(db_err)?;
         conn.execute_batch(SCHEMA).map_err(db_err)?;
+        migrate(&conn)?;
         conn.execute_batch("PRAGMA foreign_keys = ON;")
             .map_err(db_err)?;
         // Secrets at rest: owner-only, plan §5.
@@ -555,8 +601,8 @@ impl Db {
         conn.execute(
             "INSERT INTO alerts_sent
                (user_id, time_unix, callsign, frequency_hz, mode, band,
-                dxcc_name, level, source, delivered, error)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                dxcc_name, level, source, spotter, delivered, error)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             params![
                 user_id,
                 a.time_unix,
@@ -567,6 +613,7 @@ impl Db {
                 a.dxcc_name,
                 a.level,
                 a.source,
+                a.spotter,
                 a.delivered as i64,
                 a.error,
             ],
@@ -589,7 +636,7 @@ impl Db {
         let mut stmt = conn
             .prepare(
                 "SELECT time_unix, callsign, frequency_hz, mode, band,
-                        dxcc_name, level, source, delivered, error
+                        dxcc_name, level, source, spotter, delivered, error
                  FROM alerts_sent WHERE user_id = ?1
                  ORDER BY time_unix DESC, id DESC LIMIT ?2",
             )
@@ -605,8 +652,9 @@ impl Db {
                     dxcc_name: r.get(5)?,
                     level: r.get(6)?,
                     source: r.get(7)?,
-                    delivered: r.get::<_, i64>(8)? != 0,
-                    error: r.get(9)?,
+                    spotter: r.get(8)?,
+                    delivered: r.get::<_, i64>(9)? != 0,
+                    error: r.get(10)?,
                 })
             })
             .map_err(db_err)?;
@@ -997,6 +1045,90 @@ mod tests {
     }
 
     #[test]
+    /// The migration is the risky half of adding a column: production
+    /// databases already exist, `CREATE TABLE IF NOT EXISTS` will not touch
+    /// them, and the first query naming the new column would fail at
+    /// runtime rather than at compile time. This builds a database with the
+    /// OLD alerts_sent shape, opens it through `Db::open`, and checks the
+    /// column arrives with existing rows intact.
+    #[test]
+    fn opening_an_old_database_adds_the_spotter_column_without_losing_rows() {
+        // Unique per run: a previous failure leaves the directory behind
+        // (the panic skips the cleanup at the end), and reusing the path
+        // would then fail with "table users already exists" — masking the
+        // real assertion with a setup error.
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("dxca-migrate-{}-{nanos}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("dxca.db");
+
+        // A pre-migration database, written by hand: no `spotter` column.
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE users (
+                     id INTEGER PRIMARY KEY, callsign TEXT UNIQUE NOT NULL,
+                     display_name TEXT NOT NULL DEFAULT '', pass_hash TEXT NOT NULL,
+                     role TEXT NOT NULL DEFAULT 'user', created_unix INTEGER NOT NULL);
+                 CREATE TABLE alerts_sent (
+                     id INTEGER PRIMARY KEY,
+                     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                     time_unix INTEGER NOT NULL, callsign TEXT NOT NULL,
+                     frequency_hz INTEGER NOT NULL, mode TEXT NOT NULL,
+                     band TEXT NOT NULL, dxcc_name TEXT NOT NULL,
+                     level TEXT NOT NULL, source TEXT NOT NULL,
+                     delivered INTEGER NOT NULL, error TEXT NOT NULL DEFAULT '');
+                 INSERT INTO users (id, callsign, pass_hash, created_unix)
+                     VALUES (1, 'VU2CPL', 'h', 0);
+                 INSERT INTO alerts_sent
+                     (user_id, time_unix, callsign, frequency_hz, mode, band,
+                      dxcc_name, level, source, delivered, error)
+                     VALUES (1, 100, 'OLDCALL', 14074000, 'FT8', '20M',
+                             'Bouvet', 'newDXCC', 'DB0SUE', 1, '');",
+            )
+            .unwrap();
+        }
+
+        // Opening it must migrate, not explode.
+        let db = Db::open(&path).expect("an old database must still open");
+        let rows = db.sent_alerts(1, 10).expect("the new column must be queryable");
+        assert_eq!(rows.len(), 1, "the existing row survives");
+        assert_eq!(rows[0].callsign, "OLDCALL");
+        assert_eq!(rows[0].spotter, "", "back-filled with the default");
+
+        // And a new row round-trips the spotter.
+        db.record_sent_alert(
+            1,
+            &SentAlert {
+                time_unix: 200,
+                callsign: "3Y0J".into(),
+                frequency_hz: 14_074_000,
+                mode: "FT8".into(),
+                band: "20M".into(),
+                dxcc_name: "Bouvet".into(),
+                level: "newDXCC".into(),
+                source: "N2WQ-2".into(),
+                spotter: "VU2XYZ".into(),
+                delivered: true,
+                error: String::new(),
+            },
+        )
+        .unwrap();
+        let rows = db.sent_alerts(1, 10).unwrap();
+        assert_eq!(rows[0].spotter, "VU2XYZ", "newest first");
+
+        // Idempotent: opening again must not try to add it twice.
+        drop(db);
+        let db = Db::open(&path).expect("re-open must be a no-op");
+        assert_eq!(db.sent_alerts(1, 10).unwrap().len(), 2);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     fn sent_alerts_keep_failures_and_stay_bounded_per_user() {
         let (db, _p) = temp_db();
         let a = db.create_user("VU2CPL", "h", "", "admin").unwrap();
@@ -1011,6 +1143,7 @@ mod tests {
             dxcc_name: "INDIA".into(),
             level: "newDXCC".into(),
             source: "VU2OY".into(),
+            spotter: String::new(),
             delivered,
             error: error.into(),
         };

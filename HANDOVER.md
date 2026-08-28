@@ -496,10 +496,25 @@ not match the data and he said he would check where he was seeing it.
 Verified in a browser against a fake DXSpider node emitting varied spotters,
 in both themes — not only in tests, per the invisible-prompt lesson.
 
-**Deliberately skipped:** the spotter is *not* stored in the `alerts_sent`
-history. That needs a column, and `db.rs` has no migration mechanism —
-inventing one mid-feature was the wrong trade. If the history should carry
-it, that is the first thing to build.
+**The history carries it too** (asked for straight after): `alerts_sent`
+gained a `spotter` column, and with it **`db.rs` finally has a migration
+step**. `CREATE TABLE IF NOT EXISTS` is a no-op on a database that already
+exists, so a new column in `SCHEMA` reaches fresh installs only — every
+install in the field would have kept the old shape and then failed at the
+first query naming the column. `migrate()` walks `ADDED_COLUMNS`, checks
+`PRAGMA table_info`, and issues `ALTER TABLE ... ADD COLUMN` for whatever is
+missing. Additive only, on purpose: `ADD COLUMN` is the one change SQLite
+makes without rewriting the table, and a defaulted column cannot invalidate
+an existing row. Anything needing a drop, rename or retype wants a real
+versioned migration instead — do not stretch this.
+
+`opening_an_old_database_adds_the_spotter_column_without_losing_rows` builds
+a database with the **pre-migration** shape by hand, opens it through
+`Db::open`, and checks the column appears, the old row survives, a new row
+round-trips, and a second open is a no-op. **It earned its keep immediately**
+— it caught a parameter-order bug where the spotter string was being written
+into the `delivered` column, which no compiler would have flagged and which
+would have corrupted every alert row in production.
 
 
 **KNOWN, ACCEPTED (2026-08-28): the Spots level filter is usually empty —

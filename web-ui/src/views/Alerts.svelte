@@ -156,7 +156,8 @@
           <thead>
             <tr>
               <th>Time</th><th>DX Call</th><th>kHz</th><th>Mode</th>
-              <th>Band</th><th>DXCC</th><th>Level</th><th>Source</th><th></th>
+              <th>Band</th><th>DXCC</th><th>Level</th><th>Source</th>
+              <th>Spotter</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -170,6 +171,7 @@
                 <td>{a.dxcc_name}</td>
                 <td class="alert">{levelLabel(a.level)}</td>
                 <td class="muted">{a.source}</td>
+                <td class="mono muted">{a.spotter || '—'}</td>
                 <td>
                   {#if !a.delivered}
                     <span class="err failed" title={a.error}>failed</span>

@@ -277,6 +277,7 @@ impl UserService {
                     .and_then(|v| v.as_str().map(str::to_string))
                     .unwrap_or_default(),
                 source: spot.source_name.clone(),
+                spotter: spot.spotter.clone().unwrap_or_default(),
                 delivered: true,
                 error: String::new(),
             };
