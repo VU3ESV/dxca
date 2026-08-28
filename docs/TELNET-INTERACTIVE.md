@@ -1,8 +1,9 @@
 # Interactive telnet — cluster command passthrough
 
-**Status:** **milestone 1 built** (router + plumbing, nothing user-facing);
-milestones 2–4 designed, not built · **Drafted:** 2026-08-28 · **Phase:** 2
-(post-2.0)
+**Status:** **milestones 1–2 built** — the router, the node plumbing, and an
+opt-in login gate (`telnet_interactive`, default off). **No command
+passthrough yet**, which is milestone 3 and the point of the exercise ·
+**Drafted:** 2026-08-28 · **Phase:** 2 (post-2.0)
 
 Today DXCA's telnet server is a one-way loudspeaker: it shouts spots at
 whoever connects and ignores everything they say. This document designs the
@@ -31,9 +32,10 @@ More than you would expect. The outbound half is built and simply unused.
 | Node replies *delivered anywhere* | **Built** (M1) | `NodeManager::subscribe_lines()` |
 | Node prompt as a completion marker | **Built** (M1) | `ClientEvent::Prompt` |
 | Per-node command queue + response window | **Built** (M1) | `cmdrouter.rs` |
-| Telnet client input read | **Missing** | discarded ([telnet.rs:87](../crates/dxca-connect/src/telnet.rs)) |
-| Telnet login | **Missing** | no auth of any kind; binds `0.0.0.0:7575` |
+| Telnet client input read | **Built** (M2) | line-buffered, IAC-stripped |
+| Telnet login | **Built** (M2) | `LOGIN`, opt-in via `telnet_interactive` |
 | Command canonicalization + allowlist | **Missing** | §4 — the M3 gate |
+| Anything an authenticated session can *do* | **Missing** | M3 |
 
 So the work is: stop throwing replies away, start reading input, add a login,
 and solve the one genuinely hard problem — deciding whose reply is whose.
@@ -290,8 +292,38 @@ in production by someone getting an alert for a QSO from last Tuesday.
    §5 — historical spots go to the requester and stop there. It is asserted
    in `sh_dx_results_are_captured_and_never_reach_the_pipeline`, using the
    real spot parser rather than a synthetic value.
-2. **Login gate.** Callsign+password against the accounts table; unauthenticated
-   sessions keep the read-only feed. *No passthrough yet.*
+2. ~~**Login gate.**~~ **DONE 2026-08-28.** `LOGIN <callsign>` → `Password: `
+   → argon2 against the accounts table, off the async runtime via
+   `spawn_blocking` because verifying on it would stall every other
+   session's spot delivery. Behind `telnet_interactive`, default **false**.
+   Anonymous sessions are untouched, which is the whole point and has its
+   own test. No passthrough: an authenticated session can currently do
+   nothing except `BYE`.
+
+   **Design change from §3.1: login is an opt-in verb, not a prompt on
+   connect.** The original text had the server prompt `Login:` when a client
+   connects, the way a real node does. That is a guess with a working setup
+   as the stake — the loggers on 7575 were configured against a server that
+   never prompted, and what they send on connect could not be observed
+   without disconnecting a live one. A 45-second capture on the production
+   Pi showed an established RUMlog session sending **nothing at all**, which
+   rules out mid-session chatter tripping the parser but says nothing about
+   connect time. An opt-in verb makes connect-time behaviour irrelevant: a
+   client that never sends `LOGIN` cannot be affected. Revisit only with a
+   capture of an actual reconnect.
+
+   Two hardening details worth keeping: an unknown callsign still pays for a
+   dummy argon2 verification, so response time does not reveal which
+   callsigns hold accounts (asserted, including that the dummy hash actually
+   *parses* — a malformed one would skip the work and fail silently); and
+   `BYE` is honoured only once authenticated, so a logger that happens to
+   transmit it is not hung up on.
+
+   **Still open, inherited by milestone 3:** the password is echoed by the
+   operator's own terminal. Suppressing it needs telnet `IAC WILL ECHO`
+   negotiation, which this server does not do (it strips inbound IAC and
+   never negotiates). Worth doing before anyone types a password over this
+   regularly.
 3. **Read-only passthrough.** `SH/*` and friends, with the allowlist and the
    `SH/DX`-must-not-reach-the-pipeline rule. Feature flag defaults off.
 4. **Spotting.** Admin-only, opt-in, with loop suppression. Separate milestone
@@ -307,12 +339,14 @@ Stopping after 3 would be a perfectly good place to stop.
 - **One current node, or a broadcast query mode?** `SH/DX` against all five
   and merging results is genuinely useful for DX hunting; it also multiplies
   the correlation problem. Deferred, not rejected.
-- **Does RUMlog send anything on connect?** It currently gets away with
-  whatever it sends because input is discarded. Before enabling a login
-  prompt, capture what each logger actually transmits — a logger that opens
-  with a stray line could find itself failing a login it never meant to
-  attempt. **This should be checked before milestone 2, with a packet
-  capture, not assumed.**
+- ~~**Does RUMlog send anything on connect?**~~ **Answered enough, 2026-08-28.**
+  A 45-second `tcpdump` on the production Pi, filtered to payload-bearing
+  packets from the Mac to port 7575, captured **zero** — an established
+  RUMlog session is completely silent. Connect-time behaviour remains
+  unobserved, because seeing it means disconnecting a live logger. Milestone
+  2 sidesteps the question entirely by making login an opt-in verb rather
+  than a prompt, so this is no longer a gate on anything. Still worth a
+  capture the next time a logger reconnects on its own.
 
 ## 9. Appendix — the DXSpider command inventory
 

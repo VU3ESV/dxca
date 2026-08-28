@@ -98,7 +98,7 @@ async fn blocked_calls_never_reach_the_ring() {
         cluster_nodes: Vec::new(),
         ..Config::default()
     };
-    let (pipeline_state, input_tx) = pipeline::start(&cfg).await.unwrap();
+    let (pipeline_state, input_tx) = pipeline::start(&cfg, None).await.unwrap();
     let db = Arc::new(Db::open(&data_dir.join("dxca.db")).unwrap());
     let users = Arc::new(UserService::new(
         db,

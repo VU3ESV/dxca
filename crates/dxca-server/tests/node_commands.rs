@@ -79,7 +79,7 @@ async fn command_reaches_the_node_and_its_reply_comes_back() {
         udp_sources: Vec::new(),
         ..Config::default()
     };
-    let (_state, input_tx) = pipeline::start(&cfg).await.expect("pipeline");
+    let (_state, input_tx) = pipeline::start(&cfg, None).await.expect("pipeline");
     let nodes = Arc::new(NodeManager::new());
     let mut lines = nodes.subscribe_lines();
     nodes.start_node("DB0SUE".into(), test_client_cfg(node_port), input_tx);
@@ -171,7 +171,7 @@ async fn node_prompts_are_published_not_swallowed() {
         udp_sources: Vec::new(),
         ..Config::default()
     };
-    let (_state, input_tx) = pipeline::start(&cfg).await.expect("pipeline");
+    let (_state, input_tx) = pipeline::start(&cfg, None).await.expect("pipeline");
     let nodes = Arc::new(NodeManager::new());
     let mut lines = nodes.subscribe_lines();
     nodes.start_node("DB0SUE".into(), test_client_cfg(node_port), input_tx);
@@ -201,4 +201,73 @@ async fn node_prompts_are_published_not_swallowed() {
 async fn unknown_node_is_refused() {
     let nodes = NodeManager::new();
     assert!(!nodes.send_line("NOSUCH", "sh/dx"));
+}
+
+// --- milestone 2: the login gate against the real accounts table --------
+
+/// The stub authenticator in `telnet.rs` proves the protocol; this proves
+/// the wiring — that a real account in SQLite, with a real argon2 hash,
+/// logs in over a real socket, and that a wrong password does not.
+#[tokio::test]
+async fn telnet_login_uses_the_real_accounts_table() {
+    use dxca_connect::telnet::{ClusterServer, InteractiveConfig};
+    use dxca_server::auth::{DbAuthenticator, hash_password};
+    use dxca_server::db::Db;
+    use tokio::net::TcpStream;
+
+    let dir = std::env::temp_dir().join(format!("dxca-telnet-login-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let db = Arc::new(Db::open(&dir.join("dxca.db")).unwrap());
+    db.create_user(
+        "VU2CPL",
+        "Manoj",
+        &hash_password("shack-secret").unwrap(),
+        "admin",
+    )
+    .unwrap();
+
+    let server = ClusterServer::start_with(
+        0,
+        Some(InteractiveConfig {
+            auth: Arc::new(DbAuthenticator::new(db.clone())),
+        }),
+    )
+    .await
+    .unwrap();
+    let port = server.local_port();
+
+    async fn read_until(stream: &mut TcpStream, needle: &str) -> String {
+        let mut got = String::new();
+        let mut buf = [0u8; 512];
+        while !got.contains(needle) {
+            let n = tokio::time::timeout(std::time::Duration::from_secs(5), stream.read(&mut buf))
+                .await
+                .unwrap_or_else(|_| panic!("timed out waiting for {needle:?}; got {got:?}"))
+                .expect("read");
+            assert!(n > 0, "server closed early; got {got:?}");
+            got.push_str(&String::from_utf8_lossy(&buf[..n]));
+        }
+        got
+    }
+
+    // Wrong password first — the account exists, the secret does not match.
+    let mut c = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+    read_until(&mut c, "DXCA").await;
+    c.write_all(b"LOGIN VU2CPL\r\n").await.unwrap();
+    read_until(&mut c, "Password").await;
+    c.write_all(b"guessing\r\n").await.unwrap();
+    assert!(read_until(&mut c, "failed").await.contains("Login failed."));
+
+    // The real one, on a fresh connection.
+    let mut c = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+    read_until(&mut c, "DXCA").await;
+    c.write_all(b"LOGIN vu2cpl\r\n").await.unwrap();
+    read_until(&mut c, "Password").await;
+    c.write_all(b"shack-secret\r\n").await.unwrap();
+    let welcome = read_until(&mut c, "Welcome").await;
+    assert!(welcome.contains("VU2CPL"), "got {welcome:?}");
+    assert!(welcome.contains("admin"), "role carried through: {welcome:?}");
+
+    let _ = std::fs::remove_dir_all(&dir);
 }

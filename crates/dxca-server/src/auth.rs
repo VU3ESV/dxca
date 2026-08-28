@@ -99,3 +99,80 @@ mod tests {
         assert_eq!(token_from_cookie_header("foo=1"), None);
     }
 }
+
+/// Telnet login backed by the same accounts as the web UI
+/// (`docs/TELNET-INTERACTIVE.md` milestone 2).
+///
+/// Deliberately no session tokens: a telnet connection *is* the session, and
+/// it ends when the socket does.
+pub struct DbAuthenticator {
+    db: std::sync::Arc<Db>,
+}
+
+impl DbAuthenticator {
+    pub fn new(db: std::sync::Arc<Db>) -> Self {
+        DbAuthenticator { db }
+    }
+}
+
+impl dxca_connect::telnet::Authenticator for DbAuthenticator {
+    fn authenticate(
+        &self,
+        callsign: &str,
+        password: &str,
+    ) -> Option<dxca_connect::telnet::TelnetIdentity> {
+        let found = self.db.user_by_callsign(callsign).ok().flatten();
+        let Some((user, hash)) = found else {
+            // Verify against a throwaway hash anyway. Skipping the argon2
+            // work for an unknown callsign would return in microseconds
+            // instead of ~100 ms, which tells an attacker on the LAN which
+            // callsigns hold accounts here.
+            let _ = verify_password(password, DUMMY_HASH);
+            return None;
+        };
+        if !verify_password(password, &hash) {
+            return None;
+        }
+        Some(dxca_connect::telnet::TelnetIdentity {
+            user_id: user.id,
+            callsign: user.callsign,
+            role: user.role,
+        })
+    }
+}
+
+/// A real argon2 hash (of a value nothing can log in with) used solely to
+/// spend the same time on an unknown callsign as on a known one.
+const DUMMY_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$c29tZXNhbHRzb21lc2FsdA$hR8dY7pO0T7v8Vz2yNDpNMEDIz3PYHBLnnHK/vZUKvI";
+
+#[cfg(test)]
+mod telnet_auth_tests {
+    use super::*;
+
+    /// The unknown-callsign timing defence only works if the dummy hash is
+    /// a *parseable* argon2 hash. A malformed one makes `verify_password`
+    /// bail out before doing any work, which is exactly the fast path the
+    /// constant is there to avoid — and it would fail silently.
+    #[test]
+    fn dummy_hash_is_real_enough_to_cost_time() {
+        assert!(
+            PasswordHash::new(DUMMY_HASH).is_ok(),
+            "DUMMY_HASH must parse or the timing defence is a no-op"
+        );
+        assert!(!verify_password("anything", DUMMY_HASH));
+
+        // And it costs roughly what a real verification costs.
+        let real = hash_password("correct horse").unwrap();
+        let t0 = std::time::Instant::now();
+        let _ = verify_password("wrong", &real);
+        let known = t0.elapsed();
+        let t1 = std::time::Instant::now();
+        let _ = verify_password("wrong", DUMMY_HASH);
+        let unknown = t1.elapsed();
+        let ratio = unknown.as_secs_f64() / known.as_secs_f64().max(1e-9);
+        assert!(
+            (0.2..5.0).contains(&ratio),
+            "unknown-callsign path took {unknown:?} vs {known:?} for a known one"
+        );
+    }
+}

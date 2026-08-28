@@ -206,7 +206,7 @@ async fn two_users_same_stream_different_highlights_and_pings() {
         udp_sources: Vec::new(),
         ..Config::default()
     };
-    let (pipeline_state, input_tx) = pipeline::start(&cfg).await.unwrap();
+    let (pipeline_state, input_tx) = pipeline::start(&cfg, None).await.unwrap();
     let db = Arc::new(Db::open(&data_dir.join("dxca.db")).unwrap());
     let users = Arc::new(UserService::new(
         db,

@@ -475,9 +475,26 @@ proven against the Swift app's own artifacts.**
 
 ## Open items → next session
 
-**Milestone 1 BUILT (2026-08-28), 2–4 still designed only: interactive
+**Milestones 1–2 BUILT (2026-08-28), 3–4 still designed only: interactive
 telnet with cluster-command passthrough** —
-[`docs/TELNET-INTERACTIVE.md`](docs/TELNET-INTERACTIVE.md). M1 shipped the
+[`docs/TELNET-INTERACTIVE.md`](docs/TELNET-INTERACTIVE.md).
+
+**M2** added the login gate: `LOGIN <callsign>` → `Password:` → argon2
+against the accounts table (via `spawn_blocking`; verifying on the async
+runtime would stall every other session's spots). Gated by the new
+`telnet_interactive` config key, **default false** — the port is
+unauthenticated and node sessions carry the shack callsign, so it never
+arrives switched on. **Login is an opt-in verb, not a prompt on connect**,
+which is a deliberate change from the design: the loggers on 7575 were set
+up against a server that never prompted, and a 45 s capture on the Pi showed
+an established RUMlog session sends nothing at all, but connect-time
+behaviour can't be seen without disconnecting a live logger. An opt-in verb
+makes that unknowable question irrelevant. `an_anonymous_session_is_answered_with_silence_and_spots`
+is the regression guard for every existing logger and should never be
+deleted. **An authenticated session still cannot do anything** — commands
+are M3.
+
+M1 shipped the
 router (`cmdrouter.rs`: per-node queue, response window, quiet + hard
 timers — a pure state machine taking `now_ms` and returning actions, so it
 tests without sockets or a clock) plus `NodeManager::send_line()` and
@@ -492,9 +509,9 @@ like every other graft there. The router's `on_event` returns a `consumed`
 flag, and **a consumed event must not flow onward** — that is what keeps
 `sh/dx` output out of the spot pipeline.
 Manoj wants to issue cluster commands through DXCA to the upstream nodes.
-What remains missing after M1: telnet input is still discarded
-(`telnet.rs:87`), there is no login, and no command canonicalization or
-allowlist exists. The doc's load-bearing points, if you read nothing else: the
+What remains after M2: command canonicalization and the allowlist (§4), and
+wiring an authenticated session to the router. The doc's load-bearing
+points, if you read nothing else: the
 **login gate ships with the feature, not after** (7575 binds `0.0.0.0` with
 no auth, and every node logs in as the shack callsign, so passthrough
 without auth means the LAN can spot as VU2CPL); response correlation is

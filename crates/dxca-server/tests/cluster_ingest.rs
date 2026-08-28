@@ -67,7 +67,7 @@ async fn cluster_spot_flows_to_ring_and_telnet() {
         udp_sources: Vec::new(),
         ..Config::default()
     };
-    let (state, input_tx) = pipeline::start(&cfg).await.expect("pipeline");
+    let (state, input_tx) = pipeline::start(&cfg, None).await.expect("pipeline");
     let mut telnet = TcpStream::connect(("127.0.0.1", state.telnet.local_port()))
         .await
         .unwrap();
@@ -135,7 +135,7 @@ async fn flaky_node_stays_unproven_and_recycles_with_escalating_backoff() {
         udp_sources: Vec::new(),
         ..Config::default()
     };
-    let (_state, input_tx) = pipeline::start(&cfg).await.expect("pipeline");
+    let (_state, input_tx) = pipeline::start(&cfg, None).await.expect("pipeline");
     let manager = NodeManager::new();
     manager.start_node("FLAKY".into(), test_client_cfg(node_port), input_tx);
 

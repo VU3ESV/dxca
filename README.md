@@ -462,6 +462,24 @@ passthrough → RUMlog **2237**.
 Per-user settings (ClubLog credentials, alert preferences, Telegram) are
 managed in the web GUI per account, not in the file.
 
+### Telnet login (optional, off by default)
+
+Set `telnet_interactive = true` and a telnet session can authenticate with
+`LOGIN <callsign>` against its DXCA account. **Loggers are unaffected either
+way** — a session that never sends `LOGIN` gets the plain spot feed and has
+its input ignored, exactly as before, so RUMlog, Logger32 and N1MM+ need no
+change.
+
+Logging in currently unlocks nothing beyond `BYE`: passing cluster commands
+through to the upstream nodes is designed but not built, in
+[`docs/TELNET-INTERACTIVE.md`](docs/TELNET-INTERACTIVE.md). The setting is
+opt-in anyway, because port 7575 is otherwise unauthenticated and every
+cluster-node session logs in with your callsign.
+
+Telnet is plaintext: the password crosses the LAN in the clear, and your own
+terminal echoes it as you type. Fine for a shack LAN, not for a port
+reachable from outside it.
+
 ### Spot modes
 
 A spot's mode comes from the decoder (WSJT-X and friends always name it) or

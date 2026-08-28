@@ -69,6 +69,13 @@ pub struct Config {
     pub web_bind: String,
     /// Telnet cluster server port.
     pub telnet_port: u16,
+    /// Offer `LOGIN` on the telnet server, letting an account authenticate
+    /// (`docs/TELNET-INTERACTIVE.md`). **Default false, deliberately:** an
+    /// upgrade must never silently give port 7575 capabilities the operator
+    /// did not ask for — this ships to other people's Pis, whose node
+    /// sessions carry *their* callsign. With it off the server behaves
+    /// exactly as it always has.
+    pub telnet_interactive: bool,
     /// Rebroadcast dedupe window (CALL-BAND-MODE), 1.x default 60 s.
     pub dedupe_window_secs: u64,
     /// In-memory spot ring size served to the web UI.
@@ -110,6 +117,7 @@ impl Default for Config {
         Self {
             web_bind: "0.0.0.0:7580".into(),
             telnet_port: 7575,
+            telnet_interactive: false,
             udp_sources: vec![
                 UdpSource {
                     name: "MSHV".into(),

@@ -12,6 +12,20 @@ web_bind = "0.0.0.0:7580"
 # Telnet cluster server for loggers (Logger32, N1MM+, RUMlog, ...).
 telnet_port = 7575
 
+# Offer `LOGIN <callsign>` on the telnet port, so an operator can
+# authenticate against their DXCA account (docs/TELNET-INTERACTIVE.md).
+# Loggers are unaffected either way: a session that never sends LOGIN keeps
+# the plain spot feed and its input is ignored, exactly as before.
+#
+# Off by default on purpose. Cluster commands are NOT passed through yet, so
+# today this only unlocks logging in — but the port is unauthenticated and
+# every cluster node session logs in with `login_call` below, so the setting
+# stays opt-in rather than arriving switched on in an upgrade.
+#
+# Telnet is plaintext: the password crosses the LAN in the clear. Fine for a
+# shack LAN, not for anything reachable from outside it.
+telnet_interactive = false
+
 # Rebroadcast dedupe: first spot per CALL-BAND-MODE per window reaches the
 # telnet feed and filtered UDP destinations.
 dedupe_window_secs = 60

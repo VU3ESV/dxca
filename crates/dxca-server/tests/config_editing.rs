@@ -135,7 +135,7 @@ async fn admin_edits_hot_apply_and_persist() {
         ..Config::default()
     };
 
-    let (pipeline_state, input_tx) = pipeline::start(&cfg).await.unwrap();
+    let (pipeline_state, input_tx) = pipeline::start(&cfg, None).await.unwrap();
     let db = Arc::new(Db::open(&data_dir.join("dxca.db")).unwrap());
     let users = Arc::new(UserService::new(
         db,

@@ -8,7 +8,7 @@
 use crate::config::{Config, UdpSource};
 use dxca_connect::broadcast::{DestinationConfig, SpotPayload, UdpBroadcaster};
 use dxca_connect::mqtt::{MqttDestinationConfig, MqttPublisher, MqttSpot};
-use dxca_connect::telnet::ClusterServer;
+use dxca_connect::telnet::{ClusterServer, InteractiveConfig};
 use dxca_connect::wsjtx_udp::SourceDatagram;
 use dxca_core::wsjtx::{self, Message};
 use dxca_core::{Spot, format, time_from_decode_ms};
@@ -176,8 +176,9 @@ fn now_unix() -> i64 {
 /// runs until the process exits.
 pub async fn start(
     cfg: &Config,
+    interactive: Option<InteractiveConfig>,
 ) -> std::io::Result<(Arc<PipelineState>, mpsc::Sender<PipelineInput>)> {
-    let telnet = ClusterServer::start(cfg.telnet_port).await?;
+    let telnet = ClusterServer::start_with(cfg.telnet_port, interactive).await?;
     let broadcaster = Arc::new(UdpBroadcaster::new(cfg.broadcast_destinations())?);
 
     let (spot_events, _) = tokio::sync::broadcast::channel(1024);

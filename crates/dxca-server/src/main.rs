@@ -8,6 +8,7 @@
 
 use dxca_connect::clublog::Endpoints;
 use dxca_connect::telegram::Telegram;
+use dxca_connect::telnet::InteractiveConfig;
 use dxca_server::api::{self, AppState};
 use dxca_server::db::Db;
 use dxca_server::nodes::NodeManager;
@@ -26,7 +27,21 @@ async fn main() {
         }
     };
 
-    let (pipeline_state, input_tx) = match pipeline::start(&cfg).await {
+    // Opened before the pipeline: the telnet server's optional login gate
+    // authenticates against these accounts, so the database has to exist
+    // before the listener binds.
+    let db = match Db::open(&Path::new(&cfg.data_dir).join("dxca.db")) {
+        Ok(db) => Arc::new(db),
+        Err(e) => {
+            eprintln!("dxca: {e}");
+            std::process::exit(1);
+        }
+    };
+
+    let interactive = cfg.telnet_interactive.then(|| InteractiveConfig {
+        auth: Arc::new(dxca_server::auth::DbAuthenticator::new(db.clone())),
+    });
+    let (pipeline_state, input_tx) = match pipeline::start(&cfg, interactive).await {
         Ok(started) => started,
         Err(e) => {
             eprintln!("dxca: pipeline start failed (port clash?): {e}");
@@ -37,15 +52,6 @@ async fn main() {
     // DX-cluster node clients (M3): honest-status supervised connections.
     let manager = NodeManager::new();
     manager.apply(&cfg.cluster_nodes, &input_tx);
-
-    // Users + alerts (M4).
-    let db = match Db::open(&Path::new(&cfg.data_dir).join("dxca.db")) {
-        Ok(db) => Arc::new(db),
-        Err(e) => {
-            eprintln!("dxca: {e}");
-            std::process::exit(1);
-        }
-    };
     let telegram = match &cfg.telegram_base_override {
         Some(base) => Telegram::with_base(base),
         None => Telegram::default(),

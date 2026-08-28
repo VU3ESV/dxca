@@ -225,7 +225,7 @@ async fn spots_are_published_to_both_topics_with_credentials() {
         cluster_nodes: Vec::new(),
         ..Config::default()
     };
-    let (pipeline_state, input_tx) = pipeline::start(&cfg).await.unwrap();
+    let (pipeline_state, input_tx) = pipeline::start(&cfg, None).await.unwrap();
     let db = Arc::new(Db::open(&data_dir.join("dxca.db")).unwrap());
     let users = Arc::new(UserService::new(
         db,
