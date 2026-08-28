@@ -28,6 +28,15 @@ use tokio::sync::broadcast;
 
 pub const WELCOME: &str = "DX Cluster Server - DXCA\r\n";
 
+/// Second banner line, sent only when the login gate is enabled.
+///
+/// Without it nothing on the wire says `LOGIN` exists — an operator
+/// connects, sees a wall of spots, and reasonably concludes the server
+/// never asked them for anything. Loggers are unaffected: this is banner
+/// text, which they discard along with the first line.
+pub const LOGIN_HINT: &str =
+    "Type  LOGIN <callsign>  for cluster commands (SH/DX, SH/WWV, ...).\r\n";
+
 /// Longest input line accepted; longer ones are discarded rather than
 /// buffered, so a client cannot grow the server's memory by never sending
 /// a newline.
@@ -173,6 +182,9 @@ async fn serve_client(
     session: SessionId,
 ) -> std::io::Result<()> {
     stream.write_all(WELCOME.as_bytes()).await?;
+    if interactive.is_some() {
+        stream.write_all(LOGIN_HINT.as_bytes()).await?;
+    }
     let mut buf = [0u8; 1024];
     let mut pending = Vec::<u8>::new();
     let mut state = SessionState::Anonymous;
@@ -188,7 +200,18 @@ async fn serve_client(
     let result = 'session: loop {
         tokio::select! {
             line = rx.recv() => match line {
-                Ok(line) => stream.write_all(line.as_bytes()).await?,
+                Ok(line) => {
+                    // The spot feed is held back while a password is being
+                    // typed. Otherwise the `Password: ` prompt — which has
+                    // no newline, because the cursor must stay put for the
+                    // answer — gets a spot line glued to it and scrolls
+                    // away, which reads exactly like never being asked.
+                    // A few seconds of spots are missed; being able to log
+                    // in is worth more.
+                    if !matches!(state, SessionState::AwaitingPassword { .. }) {
+                        stream.write_all(line.as_bytes()).await?;
+                    }
+                }
                 // Lagged: skip what we missed, keep the client connected.
                 Err(broadcast::error::RecvError::Lagged(_)) => continue,
                 Err(broadcast::error::RecvError::Closed) => break 'session Ok(()),
@@ -298,7 +321,7 @@ async fn handle_line(
             match verdict {
                 Some(id) => {
                     let greeting = format!(
-                        "Welcome {}{}. Commands arrive in a later release.\r\n",
+                        "\r\nWelcome {}{}. Type HELP for what you can do here.\r\n",
                         id.callsign,
                         if id.role == "admin" { " (admin)" } else { "" }
                     );
@@ -310,7 +333,7 @@ async fn handle_line(
                     *state = SessionState::Anonymous;
                     *failures += 1;
                     // Deliberately does not say which half was wrong.
-                    Some("Login failed.\r\n".into())
+                    Some("\r\nLogin failed.\r\n".into())
                 }
             }
         }
@@ -323,7 +346,16 @@ async fn handle_line(
                         *state = SessionState::AwaitingPassword {
                             callsign: call.to_uppercase(),
                         };
-                        Some("Password: ".into())
+                        // Leading CRLF so the prompt starts on a clean line
+                        // rather than after whatever spot arrived last, and
+                        // an explicit warning because this server does not
+                        // negotiate telnet ECHO — the password will appear
+                        // on screen as it is typed.
+                        Some(
+                            "\r\nThe spot feed pauses while you type. \
+                             Your password WILL be visible.\r\nPassword: "
+                                .into(),
+                        )
                     }
                     None => Some("Usage: LOGIN <callsign>\r\n".into()),
                 },
@@ -459,7 +491,11 @@ mod login_tests {
         let server = ClusterServer::start_with(0, interactive()).await.unwrap();
         let port = server.local_port();
         let mut c = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
-        assert!(read_until(&mut c, "DXCA").await.contains("DX Cluster Server"));
+        // Two banner lines when the gate is on: the historical one, plus the
+        // hint that tells a human LOGIN exists. Both must be consumed before
+        // asserting silence — a banner is not a reply to input.
+        let banner = read_until(&mut c, "LOGIN <callsign>").await;
+        assert!(banner.contains("DX Cluster Server"));
 
         // The kind of thing a logger might blurt out on connect.
         for junk in [
@@ -566,6 +602,61 @@ mod login_tests {
             tail.push_str(&String::from_utf8_lossy(&buf[..n]));
         }
         assert!(tail.contains("Too many failures."), "got {tail:?}");
+    }
+
+    /// The bug that made this feature look broken in production: the
+    /// `Password: ` prompt carries no newline (the cursor has to stay put
+    /// for the answer), so on a live feed the next spot glued itself to the
+    /// prompt and scrolled it away. From the operator's chair that is
+    /// indistinguishable from never being asked. The feed is now held while
+    /// a password is outstanding.
+    #[tokio::test]
+    async fn the_password_prompt_is_not_buried_by_the_spot_feed() {
+        let server = ClusterServer::start_with(0, interactive()).await.unwrap();
+        let port = server.local_port();
+        let mut c = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+        read_until(&mut c, "LOGIN <callsign>").await;
+
+        c.write_all(b"LOGIN VU2CPL\r\n").await.unwrap();
+        let prompt = read_until(&mut c, "Password: ").await;
+        // A busy node, mid-login.
+        for i in 0..20 {
+            server.broadcast_line(&format!(
+                "DX de FLOOD:      14074.0   TEST{i}         FT8 -10 dB  1428Z"
+            ));
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        expect_quiet(&mut c).await;
+        assert!(
+            prompt.trim_end().ends_with("Password:"),
+            "the prompt must be the last thing on screen, got {prompt:?}"
+        );
+
+        // Once the password is in, the feed resumes.
+        c.write_all(b"secret\r\n").await.unwrap();
+        read_until(&mut c, "Welcome").await;
+        server.broadcast_line("DX de TEST:      21074.0   W1AW   FT8  1429Z");
+        assert!(read_until(&mut c, "W1AW").await.contains("W1AW"));
+    }
+
+    /// Nothing on the wire used to say `LOGIN` existed.
+    #[tokio::test]
+    async fn the_banner_tells_the_operator_how_to_log_in() {
+        let server = ClusterServer::start_with(0, interactive()).await.unwrap();
+        let mut c = TcpStream::connect(("127.0.0.1", server.local_port()))
+            .await
+            .unwrap();
+        let banner = read_until(&mut c, "LOGIN").await;
+        assert!(banner.contains("LOGIN <callsign>"), "got {banner:?}");
+
+        // ...but only when the gate is on. A plain install's banner is
+        // unchanged, which is what every existing logger sees.
+        let plain = ClusterServer::start_with(0, None).await.unwrap();
+        let mut p = TcpStream::connect(("127.0.0.1", plain.local_port()))
+            .await
+            .unwrap();
+        read_until(&mut p, "DX Cluster Server").await;
+        expect_quiet(&mut p).await;
     }
 
     /// A real telnet client opens with IAC negotiation. Those bytes are not
