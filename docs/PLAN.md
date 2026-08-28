@@ -274,9 +274,11 @@ GET  /                                  # embedded Svelte UI
   docs + user manual refresh. *Exit: v2.0.0 tagged; DXCA 1.x (this repo)
   enters maintenance mode with a pointer to the successor.*
 
-Phase-2 backlog (post-2.0): per-user telnet feed filtering (§5), MQTT
-status, durable SQLite spot history + search UI, Meridian integration
-(§6).
+Phase-2 backlog (post-2.0): per-user telnet feed filtering (§5),
+**interactive telnet with cluster-command passthrough — designed in
+[`TELNET-INTERACTIVE.md`](TELNET-INTERACTIVE.md), and the login gate it
+specifies must land with it, not after**, MQTT status, durable SQLite spot
+history + search UI, Meridian integration (§6).
 
 ## 11. Open decisions (settle in M0)
 

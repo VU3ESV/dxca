@@ -475,6 +475,23 @@ proven against the Swift app's own artifacts.**
 
 ## Open items → next session
 
+**Designed, not built (2026-08-28): interactive telnet with cluster-command
+passthrough** — [`docs/TELNET-INTERACTIVE.md`](docs/TELNET-INTERACTIVE.md).
+Manoj wants to issue cluster commands through DXCA to the upstream nodes.
+Half of it already exists unused: `ClusterClient::send_line` and
+`submit_spot` are built and the node handles are addressable by name; what
+is missing is that node replies are discarded in an empty match arm
+(`nodes.rs:167`), telnet input is discarded (`telnet.rs:87`), and there is
+no login. The doc's load-bearing points, if you read nothing else: the
+**login gate ships with the feature, not after** (7575 binds `0.0.0.0` with
+no auth, and every node logs in as the shack callsign, so passthrough
+without auth means the LAN can spot as VU2CPL); response correlation is
+solved with a **per-node serialized command queue**, since the protocol has
+no request IDs; and `SH/DX` output must never reach the spot pipeline or it
+injects hours-old spots into everyone's feed and alerts. Four milestones,
+and stopping after the third (read-only passthrough) is a fine place to
+stop.
+
 *(Resolved 2026-08-28: v2.2.2 is on both Pis. Adersh's went out in a second
 pass once the VPN came back up — the subnet clash makes a two-host deploy
 inherently two passes, which is the practical cost of that gotcha and worth
