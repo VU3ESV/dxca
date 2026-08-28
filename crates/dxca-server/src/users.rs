@@ -347,10 +347,93 @@ fn alert_html(c: &Classification, call: &str, spot: &Spot) -> String {
         spot.mode,
         spot.snr_db
     );
+    // Who actually heard it, and when. A relaying node (HamAlert, DB0SUE)
+    // in the Source line answers "which feed carried this", not "who spotted
+    // it" — on an alert that may send you to the radio, the difference
+    // between a W3LPL skimmer catch and a hand-typed spot two hops away is
+    // worth knowing. `spotter` is absent for locally decoded spots, where
+    // the source already names the receiver.
+    let origin = match &spot.spotter {
+        Some(s) if !s.is_empty() && !s.eq_ignore_ascii_case(&spot.source_name) => {
+            format!("{s} via {}", spot.source_name)
+        }
+        _ => spot.source_name.clone(),
+    };
     format!(
-        "<b>{}</b>\n{}\nSource: {}",
+        "<b>{}</b>\n{}\nSpotted by: {}  at {}Z",
         escape_html(&title),
         escape_html(&body),
-        escape_html(&spot.source_name)
+        escape_html(&origin),
+        escape_html(&spot.hhmm()),
     )
+}
+
+#[cfg(test)]
+mod alert_message_tests {
+    use super::*;
+    use dxca_core::Spot;
+
+    fn spot(source: &str, spotter: Option<&str>) -> Spot {
+        Spot {
+            // 14:28 UTC on some day — hhmm() is derived from this.
+            time_unix: 14 * 3600 + 28 * 60,
+            snr_db: -10,
+            delta_time_s: 0.0,
+            delta_frequency_hz: 0,
+            mode: "FT8".into(),
+            mode_inferred: false,
+            message: "CQ K1JT".into(),
+            is_cq: true,
+            comment: String::new(),
+            low_confidence: false,
+            off_air: false,
+            dial_frequency_hz: 14_074_000,
+            source_name: source.into(),
+            spotter: spotter.map(str::to_string),
+        }
+    }
+
+    fn classification() -> Classification {
+        Classification {
+            level: AlertLevel::NewDxcc,
+            dxcc_id: Some(24),
+            dxcc_name: Some("Bouvet".into()),
+            band: Some("20M"),
+            is_beacon: false,
+        }
+    }
+
+    /// A relaying node is not the station that heard the DX. An alert that
+    /// may send the operator to the radio should say which is which.
+    #[test]
+    fn a_relayed_alert_names_the_spotter_and_the_node() {
+        let html = alert_html(&classification(), "3Y0J", &spot("N2WQ-2", Some("VU2XYZ")));
+        assert!(html.contains("VU2XYZ via N2WQ-2"), "got {html}");
+    }
+
+    /// Locally decoded: the source already names the receiver, so "via"
+    /// would just repeat it.
+    #[test]
+    fn a_local_alert_names_the_decoder_once() {
+        let html = alert_html(&classification(), "3Y0J", &spot("MSHV", None));
+        assert!(html.contains("Spotted by: MSHV"), "got {html}");
+        assert!(!html.contains("via"), "no redundant relay clause: {html}");
+    }
+
+    /// The spot's own time, in UTC, not the delivery time — a queued or
+    /// retried alert must still say when the station was heard.
+    #[test]
+    fn the_alert_carries_the_spot_time_in_utc() {
+        let html = alert_html(&classification(), "3Y0J", &spot("N2WQ-2", Some("VU2XYZ")));
+        assert!(html.contains("1428Z"), "got {html}");
+    }
+
+    /// A node that spots under its own callsign should not read
+    /// "W3LPL via W3LPL".
+    #[test]
+    fn a_node_spotting_under_its_own_name_is_not_doubled() {
+        let html = alert_html(&classification(), "3Y0J", &spot("W3LPL", Some("W3LPL")));
+        assert!(html.contains("Spotted by: W3LPL"), "got {html}");
+        assert!(!html.contains("via"), "got {html}");
+    }
 }

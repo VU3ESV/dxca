@@ -324,6 +324,9 @@ fn synthetic_spot(node_name: &str, p: &ParsedSpot) -> Spot {
         off_air: false,
         dial_frequency_hz: (p.freq_khz * 1000.0) as u64,
         source_name: node_name.to_string(),
+        // The parser had this all along; it used to be discarded here, which
+        // is why a relayed spot showed only the node that carried it.
+        spotter: (!p.spotter.is_empty()).then(|| p.spotter.clone()),
     }
 }
 
@@ -365,6 +368,38 @@ fn scrape_mode(comment: &str) -> String {
 mod tests {
     use super::*;
     use dxca_connect::dxcluster::wire::parse_spot_line;
+
+    /// The whole point of the `spotter` field: a relaying node is not the
+    /// station that heard the DX. HamAlert, DB0SUE and N2WQ all carry other
+    /// people's spots, and attributing them to the node hides who was
+    /// actually on the air.
+    #[test]
+    fn the_spotting_station_survives_the_relay() {
+        let p = parse_spot_line(
+            "DX de VU2XYZ:    14074.0  K1JT           FT8 -10 dB                  1428Z",
+        )
+        .unwrap();
+        let s = synthetic_spot("N2WQ-2", &p);
+        assert_eq!(s.source_name, "N2WQ-2", "the feed that carried it");
+        assert_eq!(
+            s.spotter.as_deref(),
+            Some("VU2XYZ"),
+            "the station that heard it"
+        );
+    }
+
+    /// A skimmer's `-#` suffix is stripped by the parser, so the spotter is
+    /// the operator's callsign rather than a machine name with punctuation.
+    #[test]
+    fn a_skimmer_spotter_is_recorded_without_its_marker() {
+        let p = parse_spot_line(
+            "DX de K1ABC-#:   14025.3  W9XYZ          12 dB  22 WPM  CQ         1423Z",
+        )
+        .unwrap();
+        let s = synthetic_spot("HamAlert", &p);
+        assert_eq!(s.spotter.as_deref(), Some("K1ABC"));
+        assert_eq!(s.source_name, "HamAlert");
+    }
 
     #[test]
     fn cluster_spot_becomes_synthetic_decode() {

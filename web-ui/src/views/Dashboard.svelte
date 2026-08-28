@@ -12,6 +12,10 @@
   let station = $state<any>(null);
   let sortKey = $state('time_unix');
   let sortDesc = $state(true);
+  /// Free-text narrowing, matched against the spotted call and the spotter.
+  /// Deliberately not persisted: a forgotten search that survives a reload
+  /// looks exactly like a broken feed.
+  let search = $state('');
   let cqOnly = $state(false);
   let hideDupes = $state(true);
   let sourceFilter = $state<Set<string>>(new Set());
@@ -90,11 +94,17 @@
     Object.keys(status?.spots_per_source ?? {}).sort(),
   );
 
+  let searchTerm = $derived(search.trim().toUpperCase());
+
   let visible = $derived.by(() => {
     let rows = spots.filter((s) => {
       // The server decides this now. Sniffing the message text matched
       // every cluster spot, because those messages are synthesised as
       // "CQ <call>" whatever the spot actually reported.
+      if (searchTerm) {
+        const hay = `${s.dx_call ?? ''} ${s.spotter ?? ''}`.toUpperCase();
+        if (!hay.includes(searchTerm)) return false;
+      }
       if (cqOnly && !s.is_cq) return false;
       if (sourceFilter.size && !sourceFilter.has(s.source_name)) return false;
       if (bandFilter.size && (!s.band || !bandFilter.has(s.band))) return false;
@@ -293,6 +303,16 @@
   />
 
   <div class="filters">
+    <input
+      class="search"
+      type="search"
+      placeholder="Search call or spotter"
+      bind:value={search}
+      aria-label="Filter spots by callsign or spotter"
+    />
+    {#if searchTerm}
+      <button class="clear" onclick={() => (search = '')} title="Clear the search">clear</button>
+    {/if}
     <label class="flabel"><input type="checkbox" bind:checked={cqOnly} />CQ only</label>
     <label class="flabel"><input type="checkbox" bind:checked={hideDupes} />Hide duplicates</label>
     <span class="count muted">{visible.length} spots</span>
@@ -313,6 +333,7 @@
           <tr>
             <th onclick={() => sortBy('time_unix')}>Time<i>{caret('time_unix')}</i></th>
             <th onclick={() => sortBy('source_name')}>Source<i>{caret('source_name')}</i></th>
+            <th onclick={() => sortBy('spotter')}>Spotter<i>{caret('spotter')}</i></th>
             <th onclick={() => sortBy('dx_call')}>DX Call<i>{caret('dx_call')}</i></th>
             <th onclick={() => sortBy('freq')}>kHz<i>{caret('freq')}</i></th>
             <th onclick={() => sortBy('mode')}>Mode<i>{caret('mode')}</i></th>
@@ -332,6 +353,9 @@
             >
               <td class="mono">{hhmm(s.time_unix)}Z</td>
               <td>{s.source_name}</td>
+              <td class="mono spotter" title={s.spotter ? `Spotted by ${s.spotter}, relayed by ${s.source_name}` : 'Decoded here'}>
+                {s.spotter ?? '—'}
+              </td>
               <td class="mono call">
                 {s.dx_call ?? '—'}{#if s.is_lotw}<span class="lotw" title="LoTW user">●</span>{/if}
               </td>
@@ -532,6 +556,41 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 0.35rem 0.75rem;
+  }
+
+  /* Inherits the card/field vocabulary rather than inventing a control:
+     same border, radius and focus ring as the System tab's inputs. */
+  .search {
+    font: inherit;
+    font-size: 0.8rem;
+    padding: 0.25rem 0.5rem;
+    min-width: 12rem;
+    color: var(--fg);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+
+  .search:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  .clear {
+    font: inherit;
+    font-size: 0.75rem;
+    padding: 0.2rem 0.45rem;
+    color: var(--muted);
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  /* A spotter is a callsign; give it the same weight as one, but muted —
+     the DX call is what the eye should land on first. */
+  .spotter {
+    color: var(--muted);
   }
 
   .flabel {

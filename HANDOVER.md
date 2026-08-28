@@ -475,6 +475,33 @@ proven against the Swift app's own artifacts.**
 
 ## Open items → next session
 
+**Built, NOT deployed (2026-08-28): spotter attribution + spots search.**
+Three of four requests from Manoj; the fourth ("local spots not showing
+modes") is **unresolved and still his to reproduce** — the live API shows
+MSHV spots carrying `mode:"FT8", mode_inferred:false`, so the symptom did
+not match the data and he said he would check where he was seeing it.
+
+- **`Spot::spotter`** is a new `Option<String>` on the core model. The
+  parser always extracted the spotting station; `synthetic_spot` dropped it,
+  so every relayed spot was attributed to the *node* that carried it. A
+  HamAlert or N2WQ feed says nothing about whose receiver heard the DX,
+  which was the whole complaint. `None` for locally decoded spots.
+- **Telegram** now ends `Spotted by: VU2XYZ via N2WQ-2  at 1428Z`. The
+  "via" clause is suppressed when spotter and node are the same, so a
+  W3LPL-fed W3LPL spot does not read "W3LPL via W3LPL". Time is the spot's
+  own `hhmm()` in UTC, not delivery time.
+- **Spots table** gained a sortable Spotter column beside Source, and a
+  search box matching either the DX call or the spotter.
+
+Verified in a browser against a fake DXSpider node emitting varied spotters,
+in both themes — not only in tests, per the invisible-prompt lesson.
+
+**Deliberately skipped:** the spotter is *not* stored in the `alerts_sent`
+history. That needs a column, and `db.rs` has no migration mechanism —
+inventing one mid-feature was the wrong trade. If the history should carry
+it, that is the first thing to build.
+
+
 **KNOWN, ACCEPTED (2026-08-28): the Spots level filter is usually empty —
 and it is NOT a 2.3.x regression.** Reported as "some issue in 2.3.1", so
 worth recording plainly: nothing in the v2.3.0/v2.3.1 telnet work touches

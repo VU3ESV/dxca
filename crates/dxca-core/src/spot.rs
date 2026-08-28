@@ -48,7 +48,25 @@ pub struct Spot {
     pub low_confidence: bool,
     pub off_air: bool,
     pub dial_frequency_hz: u64,
+    /// Where DXCA got this spot: a decoder source ("MSHV") or the configured
+    /// name of the cluster node that relayed it ("DB0SUE", "HamAlert").
+    ///
+    /// **Not the same as who spotted it** — see [`Spot::spotter`]. A node
+    /// name answers "which of my feeds carried this"; on a relaying node
+    /// like HamAlert or DB0SUE that says nothing about the station whose
+    /// receiver actually heard the DX.
     pub source_name: String,
+    /// The **spotting station** — the call after `DX de` on the cluster
+    /// line, skimmer `-#` suffix already stripped by the parser.
+    ///
+    /// `None` for spots decoded here, where the local receiver is the
+    /// spotter and `source_name` already names it. The parser has always
+    /// extracted this; until 2026-08-28 `synthetic_spot` dropped it on the
+    /// floor, so every relayed spot was attributed to the relaying node and
+    /// the operator could not tell a W3LPL skimmer catch from a hand-typed
+    /// spot two hops away.
+    #[serde(default)]
+    pub spotter: Option<String>,
 }
 
 impl Spot {
@@ -195,6 +213,7 @@ mod tests {
             off_air: false,
             dial_frequency_hz: 14_074_000,
             source_name: "JTDX".into(),
+            spotter: None,
         }
     }
 

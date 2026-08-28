@@ -462,6 +462,24 @@ passthrough → RUMlog **2237**.
 Per-user settings (ClubLog credentials, alert preferences, Telegram) are
 managed in the web GUI per account, not in the file.
 
+### Who spotted it
+
+Two different questions, two columns. **Source** is the feed that carried the
+spot — a decoder ("MSHV") or the cluster node that relayed it ("N2WQ-2",
+"HamAlert"). **Spotter** is the station whose receiver actually heard the DX,
+taken from the `DX de …` line with any skimmer `-#` suffix stripped. On a
+relaying node those are rarely the same, and only the second one tells you
+whether a spot came from a skimmer wall or a human two hops away. Locally
+decoded spots show no spotter — the source already names the receiver.
+
+Telegram alerts carry both, plus the spot's own time in UTC:
+`Spotted by: VU2XYZ via N2WQ-2  at 1428Z`. The time is the spot's, not the
+delivery time, so a retried or queued alert still says when the station was
+heard.
+
+The search box above the table filters on **either** — type a DX callsign to
+follow one station, or a spotter to see everything one skimmer is hearing.
+
 ### Telnet login (optional, off by default)
 
 Set `telnet_interactive = true` and a telnet session can authenticate with

@@ -274,6 +274,9 @@ async fn run_pipeline(
                     off_air: decode.off_air,
                     dial_frequency_hz: dial,
                     source_name: datagram.source_name.clone(),
+                    // Decoded here: the local receiver is the spotter, and
+                    // `source_name` already says which decoder heard it.
+                    spotter: None,
                 };
                 process_spot(&state, &mut dedupe, spot, dedupe_window_secs, ring_capacity);
             }

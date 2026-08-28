@@ -156,6 +156,7 @@ fn spot(call: &str) -> Spot {
         off_air: false,
         dial_frequency_hz: 14_074_000,
         source_name: "VU2OY".into(),
+        spotter: None,
     }
 }
 
