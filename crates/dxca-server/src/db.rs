@@ -180,6 +180,17 @@ pub struct NotifyUserConfig {
     // ("20M"), modes are award buckets ("CW"/"PHONE"/"DATA").
     pub notify_bands: Vec<String>,
     pub notify_modes: Vec<String>,
+    /// Ping only for spots a **human** typed, never a skimmer's.
+    ///
+    /// Off by default, so an existing account keeps behaving exactly as it
+    /// did. Stored in the notify JSON blob, so an old row without the key
+    /// simply deserializes to `false` — no migration.
+    ///
+    /// This is the Telegram half of the Spots screen's "Manual only", and
+    /// independent of it on purpose: the whole point of the split is to be
+    /// able to watch everything on screen while only being pinged for the
+    /// spots a person bothered to send.
+    pub notify_manual_only: bool,
 }
 
 impl Default for NotifyUserConfig {
@@ -199,6 +210,7 @@ impl Default for NotifyUserConfig {
             notify_unconf_mode: false,
             notify_bands: Vec::new(),
             notify_modes: Vec::new(),
+            notify_manual_only: false,
         }
     }
 }
@@ -206,6 +218,14 @@ impl Default for NotifyUserConfig {
 impl NotifyUserConfig {
     /// Does this spot's band/mode survive the Telegram narrowing? Empty list
     /// = no narrowing on that axis.
+    /// Should a spot from a **skimmer** ping this account?
+    ///
+    /// Narrows like `passes_band_mode`: `false` only when the operator has
+    /// asked for human spots and this one is a machine's.
+    pub fn passes_skimmer(&self, is_skimmer: bool) -> bool {
+        !(self.notify_manual_only && is_skimmer)
+    }
+
     pub fn passes_band_mode(&self, band: Option<&str>, mode_class: &str) -> bool {
         let band_ok = self.notify_bands.is_empty()
             || band.is_some_and(|b| self.notify_bands.iter().any(|x| x == b));
@@ -998,6 +1018,33 @@ impl Db {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    /// An account stored before this key existed must deserialize to
+    /// "off", or an upgrade would silently start suppressing alerts that
+    /// used to arrive.
+    #[test]
+    fn manual_only_defaults_off_for_a_stored_row_that_predates_it() {
+        let old_row = r#"{"telegram_enabled":true,"telegram_bot_token":"t",
+            "telegram_chat_id":"c","cooldown_minutes":15,
+            "notify_new_dxcc":true,"notify_bands":[],"notify_modes":[]}"#;
+        let cfg: NotifyUserConfig = serde_json::from_str(old_row).expect("old row parses");
+        assert!(!cfg.notify_manual_only, "must default off");
+        assert!(cfg.telegram_enabled, "the rest of the row still loads");
+        assert_eq!(cfg.cooldown_minutes, 15);
+    }
+
+    #[test]
+    fn manual_only_narrows_skimmers_and_nothing_else() {
+        let mut n = NotifyUserConfig::default();
+        // Off by default: every spot passes, machine or not.
+        assert!(n.passes_skimmer(true));
+        assert!(n.passes_skimmer(false));
+
+        n.notify_manual_only = true;
+        assert!(!n.passes_skimmer(true), "a skimmer spot is held back");
+        assert!(n.passes_skimmer(false), "a human's still pings");
+    }
 
     #[test]
     fn empty_band_mode_lists_mean_all() {

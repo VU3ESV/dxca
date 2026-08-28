@@ -33,6 +33,7 @@
     notify_unconf_dxcc: false, notify_unconf_slot: false,
     notify_unconf_band: false, notify_unconf_mode: false,
     notify_bands: [], notify_modes: [],
+    notify_manual_only: false,
   });
   let message = $state('');
   let error = $state('');
@@ -126,6 +127,13 @@
       <ChipGroup label="Modes" options={modes()} bind:selected={modeSel} />
       <ChipGroup label="Bands" options={bands()} bind:selected={bandSel} />
     </div>
+    <label
+      class="manual-only"
+      title="Skimmers spot relentlessly — often most of the feed. Tick this to be pinged only for spots a person typed. Independent of the Spots screen's own Manual only, so you can still watch everything on screen."
+    >
+      <input type="checkbox" bind:checked={cfg.notify_manual_only} />Only ping
+      for spots a human made (skip skimmers)
+    </label>
 
     <div class="actions">
       <button class="primary" onclick={save} disabled={busy}>Save</button>
@@ -187,6 +195,16 @@
 </div>
 
 <style>
+  .manual-only {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0.5rem 0 0;
+    color: var(--muted);
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+
   /* Same row vocabulary as the Spots feed — the level tint via [data-level]
      and a nowrap dense table — so a sent alert reads as the spot it was. */
   .table-scroll {

@@ -168,11 +168,11 @@
 
       {#if canFilter(station.stats_current)}
         <label
-          class="current-only"
-          title="The ARRL deleted list — Abu Ail, Blenheim Reef, British North Borneo and 59 others. Those QSOs stay in your log; they just score nothing toward current DXCC or the Challenge."
+          class="include-deleted"
+          title="Totals count current DXCC entities by default, matching the ARRL standings. Tick to add the 62 deleted entities — Abu Ail, Blenheim Reef, British North Borneo and the rest. Those QSOs are in your log either way; they just score nothing."
         >
-          <input type="checkbox" bind:checked={awards.currentOnly} />current
-          entities only
+          <input type="checkbox" bind:checked={awards.includeDeleted} />include
+          deleted entities
         </label>
       {/if}
 
@@ -255,7 +255,7 @@
 </div>
 
 <style>
-  .current-only {
+  .include-deleted {
     display: flex;
     align-items: center;
     gap: 0.3rem;

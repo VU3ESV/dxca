@@ -491,8 +491,30 @@ last *published* release, because tags can outrun releases.
 
 ## Open items → next session
 
-**Built, NOT deployed (2026-08-28): skimmer identification + "Manual only".**
-Both Pis are on v2.5.0; this is unreleased.
+**Built, NOT deployed (2026-08-28): Telegram manual-only, and the DXCC
+toggle inverted.** noderedpi4 is on v2.6.0, adersh on v2.5.0.
+
+- **Telegram manual-only.** `NotifyUserConfig::notify_manual_only`, applied
+  in `fan_out` through `passes_skimmer()` — the same predicate idiom as
+  `passes_band_mode`, so it is unit-testable rather than inline. Lives in
+  the notify JSON blob, so **no migration**: an old row deserializes to
+  `false` and behaves exactly as before, which has its own test. The point
+  of keeping it independent of the Spots screen's Manual-only is the same
+  as for band/mode narrowing — watch everything on screen, be interrupted
+  only by people.
+- **The DXCC toggle is inverted**, at Manoj's request: current-only is now
+  the **default** (it is what the ARRL publishes and what an operator
+  compares against) and the tickbox reads *include deleted entities*. The
+  shared preference key changed from `currentOnly` to `includeDeleted`; a
+  stale stored value simply reads as `false`, which is the wanted default.
+- **Placement**: on the Spots station card the tickbox moved to the far
+  right of the row, after the numbers — wedged between the callsign and the
+  first total it broke the label/number/caption rhythm and read as a stray
+  control. **My ClubLog's placement was left alone** — Manoj said it was
+  fine there, so only its label and default changed.
+
+Earlier the same evening, shipped as **v2.6.0**: skimmer identification and
+the Spots "Manual only" filter.
 
 Asked for as "how do I skip skimmers?" The answer through the telnet
 passthrough is *you can't, deliberately*: `accept/rbn` / `reject/rbn` are

@@ -211,15 +211,6 @@
         {/if}
       </div>
       {#if station.stats}
-        {#if canFilter(station.stats_current)}
-          <label
-            class="current-only"
-            title="The ARRL deleted list — Abu Ail, Blenheim Reef, British North Borneo and 59 others. Those QSOs stay in your log; they just score nothing toward current DXCC or the Challenge."
-          >
-            <input type="checkbox" bind:checked={awards.currentOnly} />current
-            entities only
-          </label>
-        {/if}
         <dl class="awards">
           <div>
             <dt>DXCC</dt>
@@ -247,6 +238,15 @@
             </div>
           {/if}
         </dl>
+        {#if canFilter(station.stats_current)}
+          <label
+            class="include-deleted"
+            title="Totals count current DXCC entities by default, matching the ARRL standings. Tick to add the 62 deleted entities — Abu Ail, Blenheim Reef, British North Borneo and the rest. Those QSOs are in your log either way; they just score nothing."
+          >
+            <input type="checkbox" bind:checked={awards.includeDeleted} />include
+            deleted
+          </label>
+        {/if}
       {:else}
         <span class="hint">
           No log loaded — set your ClubLog credentials in <b>My ClubLog</b> and
@@ -516,13 +516,18 @@
 
   /* Sits with the totals it changes, not in the filter row — it is part of
      reading the card, not part of narrowing the feed. */
-  .current-only {
+  /* After the numbers and hard right, not wedged between the callsign and
+     the first total: the stat blocks are a rhythm of label/number/caption,
+     and a checkbox dropped into the middle of it reads as a stray control.
+     Subordinate on purpose — it changes the numbers, it is not one. */
+  .include-deleted {
     display: flex;
     align-items: center;
     gap: 0.3rem;
-    margin: 0 0 0.4rem;
+    margin-left: auto;
     color: var(--muted);
-    font-size: 0.75rem;
+    font-size: 0.72rem;
+    white-space: nowrap;
     cursor: pointer;
   }
 

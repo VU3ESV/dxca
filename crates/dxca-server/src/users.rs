@@ -292,6 +292,14 @@ impl UserService {
             if !notify.passes_band_mode(c.band, dxca_core::modes::canonical(&spot.mode)) {
                 continue;
             }
+            // Machines spot relentlessly — on this station roughly three
+            // quarters of the feed — so an operator who only wants to be
+            // interrupted by a spot a person bothered to send can say so.
+            // Independent of the Spots screen's own Manual-only, like the
+            // band/mode narrowing above it.
+            if !notify.passes_skimmer(spot.is_skimmer) {
+                continue;
+            }
             let Some(call) = spot.dx_callsign() else {
                 continue;
             };

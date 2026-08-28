@@ -507,7 +507,12 @@ off the callsign to keep it readable: without it, `W3LPL` the operator and
 `W3LPL-#` the skimmer would be indistinguishable on screen, though they are
 not the same kind of spot at all.
 
-Note this is a **display** filter, not a node-side one. DXCA holds a single
+**Telegram has its own** *only ping for spots a human made* switch in My
+Alerts, independent of the screen filter — so you can watch everything and
+still be interrupted only by people. On this station skimmers are roughly
+three quarters of the feed.
+
+Note the Spots filter is a **display** filter, not a node-side one. DXCA holds a single
 cluster session per node, shared by every account and by the spot pipeline,
 so a `reject/rbn` sent to the node would narrow everyone's feed and persist
 on the node account — which is why the telnet passthrough refuses those
@@ -518,22 +523,22 @@ the history answers the same question after the fact. Alerts sent before
 this shipped show `—`: the column was added to existing databases on
 upgrade, and there was nothing to back-fill it with.
 
-### Current entities only
+### Deleted entities
 
 DXCC has a **deleted** list — Abu Ail, Blenheim Reef, British North Borneo
 and 59 others. Those QSOs are real contacts and stay in your log, but they
-score nothing toward current DXCC or the Challenge, so totals that include
-them match no published standing.
+score nothing toward current DXCC or the Challenge.
 
-The station card on **Spots** and the statistics on **My ClubLog** both
-carry a *current entities only* tickbox. It is one shared preference, so
-the two screens can never disagree about which entities count, and it is
-remembered per browser. Both sets of totals are sent together, so toggling
-is instant rather than a round trip.
+**Award totals count current entities by default**, which is what the ARRL
+publishes and therefore what you are comparing against. An *include deleted
+entities* tickbox on the **Spots** station card and the **My ClubLog**
+statistics adds them back when you want the historical figure. One shared
+preference, so the two screens can never disagree, remembered per browser;
+both sets of totals are sent together, so toggling is instant.
 
-The tickbox only appears once cty.xml is loaded: without it there is no way
-to know which entities are deleted, and showing unfiltered numbers under a
-"current only" label would be a quiet lie.
+The tickbox only appears once cty.xml is loaded — without it there is no way
+to know which entities are deleted, so DXCA offers no choice it cannot
+honour.
 
 ### Telnet login (optional, off by default)
 
