@@ -300,6 +300,7 @@ mod tests {
                 prefix: "VU".into(),
                 cq_zone: 22,
                 continent: "AS".into(),
+                deleted: false,
             },
         );
         entities.insert(
@@ -310,6 +311,7 @@ mod tests {
                 prefix: "K".into(),
                 cq_zone: 5,
                 continent: "NA".into(),
+                deleted: false,
             },
         );
         let rules = vec![

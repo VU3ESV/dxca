@@ -5,6 +5,7 @@
   import { api, openStream, hhmm, ago } from '../lib/api';
   import { onMount } from 'svelte';
   import ChipGroup from '../lib/ChipGroup.svelte';
+  import { awards, pick, canFilter } from '../lib/awards.svelte';
   import { loadReference, bands, modes, levels, levelLabel } from '../lib/reference.svelte';
 
   let spots = $state<any[]>([]);
@@ -89,6 +90,12 @@
     if (m === 'CW') return 'CW';
     return PHONE.includes(m) ? 'PHONE' : 'DATA';
   }
+
+  // Which set of award totals the card shows. The server sends both; the
+  // tickbox chooses, so toggling costs no round trip.
+  let shownStats = $derived(
+    station ? pick(station.stats, station.stats_current) : null,
+  );
 
   let sourceNames = $derived(
     Object.keys(status?.spots_per_source ?? {}).sort(),
@@ -199,10 +206,19 @@
         {/if}
       </div>
       {#if station.stats}
+        {#if canFilter(station.stats_current)}
+          <label
+            class="current-only"
+            title="The ARRL deleted list — Abu Ail, Blenheim Reef, British North Borneo and 59 others. Those QSOs stay in your log; they just score nothing toward current DXCC or the Challenge."
+          >
+            <input type="checkbox" bind:checked={awards.currentOnly} />current
+            entities only
+          </label>
+        {/if}
         <dl class="awards">
           <div>
             <dt>DXCC</dt>
-            <dd><b>{station.stats.dxcc_worked}</b><span class="sep">/</span><span class="conf">{station.stats.dxcc_confirmed}</span></dd>
+            <dd><b>{shownStats.dxcc_worked}</b><span class="sep">/</span><span class="conf">{shownStats.dxcc_confirmed}</span></dd>
             <dd class="cap">worked / confirmed</dd>
           </div>
           <!-- Challenge sits next to DXCC, not next to Slots: it is an award
@@ -210,12 +226,12 @@
                count is what makes people read the two as the same thing. -->
           <div title="DXCC Challenge: one point per entity per band over 160-6m (60m excluded, WARC included). Mode-agnostic. 1000 confirmed points to claim.">
             <dt>Challenge</dt>
-            <dd><b>{station.stats.challenge_worked}</b><span class="sep">/</span><span class="conf">{station.stats.challenge_confirmed}</span></dd>
+            <dd><b>{shownStats.challenge_worked}</b><span class="sep">/</span><span class="conf">{shownStats.challenge_confirmed}</span></dd>
             <dd class="cap">worked / confirmed</dd>
           </div>
           <div title="Band x mode combinations. Distinct from Challenge points, which ignore mode and exclude 60m.">
             <dt>Slots</dt>
-            <dd><b>{station.stats.slots_worked}</b><span class="sep">/</span><span class="conf">{station.stats.slots_confirmed}</span></dd>
+            <dd><b>{shownStats.slots_worked}</b><span class="sep">/</span><span class="conf">{shownStats.slots_confirmed}</span></dd>
             <dd class="cap">worked / confirmed</dd>
           </div>
           {#if station.qso_count}
@@ -479,6 +495,18 @@
   .opname {
     font-size: var(--fs-hint);
     color: var(--muted);
+  }
+
+  /* Sits with the totals it changes, not in the filter row — it is part of
+     reading the card, not part of narrowing the feed. */
+  .current-only {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin: 0 0 0.4rem;
+    color: var(--muted);
+    font-size: 0.75rem;
+    cursor: pointer;
   }
 
   .awards {

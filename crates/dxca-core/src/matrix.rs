@@ -91,6 +91,15 @@ impl LogMatrix {
     /// **at least one** confirmed slot — the DXCC-award rule — not entities
     /// whose every slot is confirmed.
     pub fn stats(&self) -> MatrixStats {
+        self.stats_excluding(&HashSet::new())
+    }
+
+    /// [`stats`](Self::stats) with `skip` entities left out — the ARRL
+    /// deleted list, in practice, so the totals match the standings an
+    /// operator is comparing against. Worked-but-deleted QSOs are real
+    /// contacts and stay in the matrix; they simply stop scoring here.
+    pub fn stats_excluding(&self, skip: &HashSet<i32>) -> MatrixStats {
+        let kept = || self.by_dxcc.iter().filter(|(adif, _)| !skip.contains(adif));
         let challenge = |bands: &HashSet<String>| {
             bands
                 .iter()
@@ -98,20 +107,14 @@ impl LogMatrix {
                 .count()
         };
         MatrixStats {
-            dxcc_worked: self.by_dxcc.len(),
-            dxcc_confirmed: self
-                .by_dxcc
-                .values()
-                .filter(|s| !s.confirmed_slots.is_empty())
+            dxcc_worked: kept().count(),
+            dxcc_confirmed: kept()
+                .filter(|(_, s)| !s.confirmed_slots.is_empty())
                 .count(),
-            slots_worked: self.by_dxcc.values().map(|s| s.slots.len()).sum(),
-            slots_confirmed: self.by_dxcc.values().map(|s| s.confirmed_slots.len()).sum(),
-            challenge_worked: self.by_dxcc.values().map(|s| challenge(&s.bands)).sum(),
-            challenge_confirmed: self
-                .by_dxcc
-                .values()
-                .map(|s| challenge(&s.confirmed_bands))
-                .sum(),
+            slots_worked: kept().map(|(_, s)| s.slots.len()).sum(),
+            slots_confirmed: kept().map(|(_, s)| s.confirmed_slots.len()).sum(),
+            challenge_worked: kept().map(|(_, s)| challenge(&s.bands)).sum(),
+            challenge_confirmed: kept().map(|(_, s)| challenge(&s.confirmed_bands)).sum(),
         }
     }
 
@@ -124,8 +127,17 @@ impl LogMatrix {
     /// Empty rows are kept so the gaps are visible — a band with nothing on
     /// it is the most interesting row on the page.
     pub fn by_band_and_mode(&self) -> BandModeStats {
-        let count =
-            |has: &dyn Fn(&DxccStatus) -> bool| self.by_dxcc.values().filter(|s| has(s)).count();
+        self.by_band_and_mode_excluding(&HashSet::new())
+    }
+
+    /// [`by_band_and_mode`](Self::by_band_and_mode), minus `skip`.
+    pub fn by_band_and_mode_excluding(&self, skip: &HashSet<i32>) -> BandModeStats {
+        let count = |has: &dyn Fn(&DxccStatus) -> bool| {
+            self.by_dxcc
+                .iter()
+                .filter(|(adif, s)| !skip.contains(adif) && has(s))
+                .count()
+        };
 
         let bands = crate::bands::SELECTABLE_BANDS
             .iter()
@@ -189,6 +201,69 @@ pub struct MatrixStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The ARRL counts current entities; a deleted one is a real QSO that
+    /// scores nothing. Excluding must drop it from every total at once —
+    /// entities, slots and Challenge points — or the card shows a mixture
+    /// that matches no published standing.
+    #[test]
+    fn deleted_entities_drop_out_of_every_total_together() {
+        let mut m = LogMatrix::default();
+        // India (324, current) on two Challenge bands, both confirmed.
+        m.record(324, "20M", "CW", "VU2ABC", true);
+        m.record(324, "40M", "CW", "VU2XYZ", true);
+        // Abu Ail (002, DELETED) on one Challenge band, confirmed.
+        m.record(2, "20M", "CW", "OLD1", true);
+
+        let all = m.stats();
+        assert_eq!(all.dxcc_worked, 2);
+        assert_eq!(all.dxcc_confirmed, 2);
+        assert_eq!(all.challenge_worked, 3, "2 bands + 1 band");
+        assert_eq!(all.challenge_confirmed, 3);
+
+        let current = m.stats_excluding(&HashSet::from([2]));
+        assert_eq!(current.dxcc_worked, 1, "Abu Ail no longer counts");
+        assert_eq!(current.dxcc_confirmed, 1);
+        assert_eq!(current.slots_worked, 2, "only India's two slots");
+        assert_eq!(current.slots_confirmed, 2);
+        assert_eq!(current.challenge_worked, 2);
+        assert_eq!(current.challenge_confirmed, 2);
+
+        // The QSO itself is untouched — it was still a contact.
+        assert!(m.status(2).is_some(), "the deleted entity stays in the log");
+    }
+
+    /// The per-band table has to agree with the totals, or the two cards on
+    /// screen contradict each other.
+    #[test]
+    fn the_band_table_excludes_deleted_entities_too() {
+        let mut m = LogMatrix::default();
+        m.record(324, "20M", "CW", "VU2ABC", true);
+        m.record(2, "20M", "CW", "OLD1", true);
+
+        let band = |st: &BandModeStats, k: &str| {
+            st.bands.iter().find(|b| b.key == k).unwrap().clone()
+        };
+        assert_eq!(band(&m.by_band_and_mode(), "20M").worked, 2);
+        let current = m.by_band_and_mode_excluding(&HashSet::from([2]));
+        assert_eq!(band(&current, "20M").worked, 1);
+        assert_eq!(band(&current, "20M").confirmed, 1);
+    }
+
+    /// Excluding nothing must be identical to not excluding — `stats()`
+    /// delegates to the filtered path, so a bug there would silently change
+    /// every existing total.
+    #[test]
+    fn excluding_an_empty_set_changes_nothing() {
+        let mut m = LogMatrix::default();
+        m.record(324, "20M", "CW", "VU2ABC", true);
+        m.record(291, "40M", "DATA", "K1ABC", false);
+        assert_eq!(m.stats(), m.stats_excluding(&HashSet::new()));
+        assert_eq!(
+            m.by_band_and_mode(),
+            m.by_band_and_mode_excluding(&HashSet::new())
+        );
+    }
 
     #[test]
     fn record_tracks_worked_and_confirmed() {

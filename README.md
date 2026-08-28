@@ -484,8 +484,17 @@ relaying node those are rarely the same, and only the second one tells you
 whether a spot came from a skimmer wall or a human two hops away. Locally
 decoded spots show no spotter — the source already names the receiver.
 
-Telegram alerts carry both, plus the spot's own time in UTC:
-`Spotted by: VU2XYZ via N2WQ-2  at 1428Z`. The time is the spot's, not the
+Telegram alerts carry both on their own line, plus the spot's own time in
+UTC:
+
+```
+Spotter: VU2XYZ   Node: N2WQ-2
+1428Z
+```
+
+Labelled rather than joined into a sentence, because on a phone those two
+labels are what you scan for. Locally decoded spots show only `Node:` —
+there is no spotting station to name. The time is the spot's, not the
 delivery time, so a retried or queued alert still says when the station was
 heard.
 
@@ -496,6 +505,23 @@ follow one station, or a spotter to see everything one skimmer is hearing.
 the history answers the same question after the fact. Alerts sent before
 this shipped show `—`: the column was added to existing databases on
 upgrade, and there was nothing to back-fill it with.
+
+### Current entities only
+
+DXCC has a **deleted** list — Abu Ail, Blenheim Reef, British North Borneo
+and 59 others. Those QSOs are real contacts and stay in your log, but they
+score nothing toward current DXCC or the Challenge, so totals that include
+them match no published standing.
+
+The station card on **Spots** and the statistics on **My ClubLog** both
+carry a *current entities only* tickbox. It is one shared preference, so
+the two screens can never disagree about which entities count, and it is
+remembered per browser. Both sets of totals are sent together, so toggling
+is instant rather than a round trip.
+
+The tickbox only appears once cty.xml is loaded: without it there is no way
+to know which entities are deleted, and showing unfiltered numbers under a
+"current only" label would be a quiet lie.
 
 ### Telnet login (optional, off by default)
 

@@ -2,6 +2,7 @@
   // My ClubLog (plan §8 page 4): credentials, alert toggles, refresh.
   import { api, ago } from '../lib/api';
   import { onMount } from 'svelte';
+  import { awards, pick, canFilter } from '../lib/awards.svelte';
   import { loadReference, levels } from '../lib/reference.svelte';
 
   // Level key → the classifier toggle that decides whether a spot is ever
@@ -49,6 +50,14 @@
   // The statistics come from the same endpoint the Spots station card uses,
   // so the two can never disagree about what the log holds.
   let station = $state<any>(null);
+  // Both cards read the same shared preference, so the totals here and the
+  // station card on Spots can never disagree about which entities count.
+  let shownStats = $derived(
+    station ? pick(station.stats, station.stats_current) : null,
+  );
+  let shownBandMode = $derived(
+    station ? pick(station.by_band_mode, station.by_band_mode_current) : null,
+  );
   async function loadStation() {
     const r = await api('GET', '/api/me/station');
     if (r.status === 200) station = r.json;
@@ -157,35 +166,45 @@
         {#if station.last_refresh_unix}· refreshed {ago(station.last_refresh_unix)} ago{/if}
       </p>
 
+      {#if canFilter(station.stats_current)}
+        <label
+          class="current-only"
+          title="The ARRL deleted list — Abu Ail, Blenheim Reef, British North Borneo and 59 others. Those QSOs stay in your log; they just score nothing toward current DXCC or the Challenge."
+        >
+          <input type="checkbox" bind:checked={awards.currentOnly} />current
+          entities only
+        </label>
+      {/if}
+
       <dl class="stats">
-        <div><dt>DXCC worked</dt><dd class="num">{station.stats.dxcc_worked}</dd></div>
-        <div><dt>DXCC confirmed</dt><dd class="num ok-num">{station.stats.dxcc_confirmed}</dd></div>
-        <div><dt>Challenge worked</dt><dd class="num">{station.stats.challenge_worked}</dd></div>
-        <div><dt>Challenge confirmed</dt><dd class="num ok-num">{station.stats.challenge_confirmed}</dd></div>
-        <div><dt>Slots worked</dt><dd class="num">{station.stats.slots_worked}</dd></div>
-        <div><dt>Slots confirmed</dt><dd class="num ok-num">{station.stats.slots_confirmed}</dd></div>
+        <div><dt>DXCC worked</dt><dd class="num">{shownStats.dxcc_worked}</dd></div>
+        <div><dt>DXCC confirmed</dt><dd class="num ok-num">{shownStats.dxcc_confirmed}</dd></div>
+        <div><dt>Challenge worked</dt><dd class="num">{shownStats.challenge_worked}</dd></div>
+        <div><dt>Challenge confirmed</dt><dd class="num ok-num">{shownStats.challenge_confirmed}</dd></div>
+        <div><dt>Slots worked</dt><dd class="num">{shownStats.slots_worked}</dd></div>
+        <div><dt>Slots confirmed</dt><dd class="num ok-num">{shownStats.slots_confirmed}</dd></div>
       </dl>
 
-      {#if station.by_band_mode}
+      {#if shownBandMode}
         <h2 class="sub-head">Entities per band</h2>
         <div class="editor-scroll">
           <table class="slices">
             <thead>
               <tr>
                 <th>Band</th>
-                {#each station.by_band_mode.bands as b (b.key)}<th class="num">{b.key}</th>{/each}
+                {#each shownBandMode.bands as b (b.key)}<th class="num">{b.key}</th>{/each}
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td>Worked</td>
-                {#each station.by_band_mode.bands as b (b.key)}
+                {#each shownBandMode.bands as b (b.key)}
                   <td class="num" class:zero={!b.worked}>{b.worked}</td>
                 {/each}
               </tr>
               <tr>
                 <td>Confirmed</td>
-                {#each station.by_band_mode.bands as b (b.key)}
+                {#each shownBandMode.bands as b (b.key)}
                   <td class="num ok-num" class:zero={!b.confirmed}>{b.confirmed}</td>
                 {/each}
               </tr>
@@ -198,19 +217,19 @@
           <thead>
             <tr>
               <th>Mode</th>
-              {#each station.by_band_mode.modes as m (m.key)}<th class="num">{m.key}</th>{/each}
+              {#each shownBandMode.modes as m (m.key)}<th class="num">{m.key}</th>{/each}
             </tr>
           </thead>
           <tbody>
             <tr>
               <td>Worked</td>
-              {#each station.by_band_mode.modes as m (m.key)}
+              {#each shownBandMode.modes as m (m.key)}
                 <td class="num" class:zero={!m.worked}>{m.worked}</td>
               {/each}
             </tr>
             <tr>
               <td>Confirmed</td>
-              {#each station.by_band_mode.modes as m (m.key)}
+              {#each shownBandMode.modes as m (m.key)}
                 <td class="num ok-num" class:zero={!m.confirmed}>{m.confirmed}</td>
               {/each}
             </tr>
@@ -236,6 +255,16 @@
 </div>
 
 <style>
+  .current-only {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin: -0.2rem 0 0.7rem;
+    color: var(--muted);
+    font-size: 0.78rem;
+    cursor: pointer;
+  }
+
   /* The band table is sixteen columns; it scrolls inside the card rather
      than widening the page, the same rule the System editors follow. */
   .editor-scroll {

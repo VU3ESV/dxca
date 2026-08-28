@@ -71,6 +71,20 @@ impl DxccResolver {
         self.exact.get(&clean) == Some(&0)
     }
 
+    /// ADIF ids of every **deleted** entity this resolver knows.
+    ///
+    /// Handed to [`crate::matrix::LogMatrix::stats_excluding`] so award
+    /// totals can be shown the way the ARRL counts them. The matrix itself
+    /// stays resolver-free — it stores what was worked, not what currently
+    /// scores — so the caller, which holds both, supplies the set.
+    pub fn deleted_adifs(&self) -> std::collections::HashSet<i32> {
+        self.entities
+            .values()
+            .filter(|e| e.deleted)
+            .map(|e| e.adif)
+            .collect()
+    }
+
     pub fn entity(&self, adif: i32) -> Option<&DxccEntity> {
         self.entities.get(&adif)
     }
@@ -146,6 +160,7 @@ mod tests {
                     prefix: prefix.into(),
                     cq_zone: 0,
                     continent: String::new(),
+                    deleted: false,
                 },
             );
         }

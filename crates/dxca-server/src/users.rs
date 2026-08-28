@@ -200,6 +200,45 @@ impl UserService {
         Some(self.matrices.read().unwrap().get(&user_id)?.stats())
     }
 
+    /// The same totals counting **current entities only** — the ARRL
+    /// deleted list left out, so they line up with the published standings.
+    ///
+    /// `None` also when no cty.xml is loaded: without the resolver there is
+    /// no way to know which entities are deleted, and quietly returning the
+    /// unfiltered totals under a "current only" label would be a lie.
+    pub fn stats_current(&self, user_id: i64) -> Option<dxca_core::matrix::MatrixStats> {
+        let resolver = self.resolver.read().unwrap().clone();
+        if !resolver.is_loaded() {
+            return None;
+        }
+        Some(
+            self.matrices
+                .read()
+                .unwrap()
+                .get(&user_id)?
+                .stats_excluding(&resolver.deleted_adifs()),
+        )
+    }
+
+    /// Per-band / per-mode counts, current entities only. `None` on the same
+    /// terms as [`stats_current`](Self::stats_current).
+    pub fn band_mode_stats_current(
+        &self,
+        user_id: i64,
+    ) -> Option<dxca_core::matrix::BandModeStats> {
+        let resolver = self.resolver.read().unwrap().clone();
+        if !resolver.is_loaded() {
+            return None;
+        }
+        Some(
+            self.matrices
+                .read()
+                .unwrap()
+                .get(&user_id)?
+                .by_band_and_mode_excluding(&resolver.deleted_adifs()),
+        )
+    }
+
     /// Per-band and per-mode entity counts for the My ClubLog statistics
     /// card. Same in-memory matrix as `stats`, just sliced.
     pub fn band_mode_stats(&self, user_id: i64) -> Option<dxca_core::matrix::BandModeStats> {
@@ -348,20 +387,21 @@ fn alert_html(c: &Classification, call: &str, spot: &Spot) -> String {
         spot.mode,
         spot.snr_db
     );
-    // Who actually heard it, and when. A relaying node (HamAlert, DB0SUE)
-    // in the Source line answers "which feed carried this", not "who spotted
-    // it" — on an alert that may send you to the radio, the difference
-    // between a W3LPL skimmer catch and a hand-typed spot two hops away is
-    // worth knowing. `spotter` is absent for locally decoded spots, where
-    // the source already names the receiver.
+    // Who actually heard it, and which of our feeds carried it. Labelled
+    // rather than joined with "via": on a phone, `Spotter:` and `Node:` are
+    // scannable, and a relay chain written as prose is not.
+    //
+    // A node that spots under its own callsign shows both lines the same,
+    // which is the honest answer — it means the node made the spot itself.
     let origin = match &spot.spotter {
-        Some(s) if !s.is_empty() && !s.eq_ignore_ascii_case(&spot.source_name) => {
-            format!("{s} via {}", spot.source_name)
+        Some(sp) if !sp.is_empty() => {
+            format!("Spotter: {sp}   Node: {}", spot.source_name)
         }
-        _ => spot.source_name.clone(),
+        // Decoded here: there is no spotting station to name.
+        _ => format!("Node: {}", spot.source_name),
     };
     format!(
-        "<b>{}</b>\n{}\nSpotted by: {}  at {}Z",
+        "<b>{}</b>\n{}\n{}\n{}Z",
         escape_html(&title),
         escape_html(&body),
         escape_html(&origin),
@@ -407,18 +447,22 @@ mod alert_message_tests {
     /// A relaying node is not the station that heard the DX. An alert that
     /// may send the operator to the radio should say which is which.
     #[test]
-    fn a_relayed_alert_names_the_spotter_and_the_node() {
+    fn a_relayed_alert_labels_the_spotter_and_the_node() {
         let html = alert_html(&classification(), "3Y0J", &spot("N2WQ-2", Some("VU2XYZ")));
-        assert!(html.contains("VU2XYZ via N2WQ-2"), "got {html}");
+        assert!(html.contains("Spotter: VU2XYZ"), "got {html}");
+        assert!(html.contains("Node: N2WQ-2"), "got {html}");
+        assert!(!html.contains(" via "), "labelled, not prose: {html}");
     }
 
     /// Locally decoded: the source already names the receiver, so "via"
     /// would just repeat it.
+    /// Decoded here: there is no spotting station, so no Spotter line —
+    /// an empty label would read as missing data rather than as "us".
     #[test]
-    fn a_local_alert_names_the_decoder_once() {
+    fn a_local_alert_names_only_the_node() {
         let html = alert_html(&classification(), "3Y0J", &spot("MSHV", None));
-        assert!(html.contains("Spotted by: MSHV"), "got {html}");
-        assert!(!html.contains("via"), "no redundant relay clause: {html}");
+        assert!(html.contains("Node: MSHV"), "got {html}");
+        assert!(!html.contains("Spotter:"), "no empty label: {html}");
     }
 
     /// The spot's own time, in UTC, not the delivery time — a queued or
@@ -429,12 +473,13 @@ mod alert_message_tests {
         assert!(html.contains("1428Z"), "got {html}");
     }
 
-    /// A node that spots under its own callsign should not read
-    /// "W3LPL via W3LPL".
+    /// A node that spots under its own callsign shows both labels reading
+    /// the same. That is the honest answer — it means the node made the
+    /// spot itself, rather than relaying somebody else's.
     #[test]
-    fn a_node_spotting_under_its_own_name_is_not_doubled() {
+    fn a_node_spotting_under_its_own_name_shows_both_labels() {
         let html = alert_html(&classification(), "3Y0J", &spot("W3LPL", Some("W3LPL")));
-        assert!(html.contains("Spotted by: W3LPL"), "got {html}");
-        assert!(!html.contains("via"), "got {html}");
+        assert!(html.contains("Spotter: W3LPL"), "got {html}");
+        assert!(html.contains("Node: W3LPL"), "got {html}");
     }
 }

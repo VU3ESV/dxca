@@ -26,6 +26,16 @@ pub struct DxccEntity {
     pub prefix: String,
     pub cq_zone: i32,
     pub continent: String,
+    /// An ARRL **deleted** entity — Abu Ail, Blenheim Reef, British North
+    /// Borneo and 59 others. A QSO with one still counts as worked and is
+    /// still a real contact, but it scores nothing toward *current* DXCC or
+    /// the Challenge, so an operator comparing their totals against the
+    /// ARRL standings needs to exclude them.
+    ///
+    /// cty.xml has always carried this; it was read only to skip building a
+    /// prefix rule (a deleted entity has no live prefix to resolve) and was
+    /// then discarded, so nothing downstream could tell the difference.
+    pub deleted: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -136,6 +146,7 @@ pub fn parse(content: &str) -> Option<CtyData> {
                                     prefix: prefix.clone(),
                                     cq_zone: tmp.cqz.unwrap_or(0),
                                     continent: tmp.continent.clone().unwrap_or_default(),
+                                    deleted: tmp.deleted,
                                 },
                             );
                             if !tmp.deleted && !prefix.is_empty() {
@@ -370,6 +381,24 @@ mod tests {
   <prefix record="2"><call>K</call><entity>UNITED STATES</entity><adif>291</adif></prefix>
  </prefixes>
 </clublog>"#;
+
+    /// cty.xml has always carried `<deleted>`; the parser read it only to
+    /// decide whether to build a prefix rule, and then dropped it. Without
+    /// it on the entity, nothing downstream can separate current DXCC from
+    /// the ARRL deleted list.
+    #[test]
+    fn the_deleted_flag_survives_onto_the_entity() {
+        let data = parse(SAMPLE).expect("sample parses");
+        assert!(!data.entities[&324].deleted, "India is current");
+        assert!(data.entities[&222].deleted, "the deleted one is marked");
+
+        // Still true that a deleted entity contributes no prefix rule — a
+        // dead entity has no live prefix to resolve a callsign against.
+        assert!(
+            !data.prefix_rules.iter().any(|r| r.adif == 222),
+            "no prefix rule for a deleted entity"
+        );
+    }
 
     #[test]
     fn parses_entities_exceptions_prefixes() {

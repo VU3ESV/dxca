@@ -475,6 +475,41 @@ proven against the Swift app's own artifacts.**
 
 ## Open items → next session
 
+**Built, NOT deployed (2026-08-28): "current entities only" for award
+totals, and a Telegram format change.** Both Pis are still on v2.4.0.
+
+**Current-entities toggle.** DXCC has 62 deleted entities in cty.xml (Abu
+Ail, Aldabra, Blenheim Reef, British North Borneo…). cty.xml has always
+carried `<deleted>`, and the parser has always read it — but only to decide
+whether to build a prefix rule, after which it was discarded. `DxccEntity`
+now keeps the flag, `DxccResolver::deleted_adifs()` exposes the set, and
+`LogMatrix` gained `stats_excluding` / `by_band_and_mode_excluding`. The
+matrix itself stays resolver-free — it stores what was *worked*, not what
+currently *scores* — so the caller, which holds both, supplies the set.
+
+`/api/me/station` sends **both** sets (`stats` + `stats_current`,
+`by_band_mode` + `by_band_mode_current`), so the tickbox is instant; the
+payload is a dozen integers and a round trip per toggle would cost more.
+The preference is shared between the Spots station card and the My ClubLog
+statistics via `web-ui/src/lib/awards.svelte.ts`, deliberately — two cards
+disagreeing about which entities count is worse than either answer alone.
+`*_current` is **null when no cty.xml is loaded**, and the tickbox hides
+itself: showing unfiltered numbers under a "current only" label would be a
+quiet lie.
+
+Verified end to end against a seeded matrix (3 current + 4 deleted
+entities) with the real 402-entity cty.xml: DXCC 7→3, Challenge 42→30,
+confirmed 26→18, and the per-band table dropping 40M/20M/15M from 7 to 3
+while 30M correctly stayed at 3 (the deleted entities were never worked
+there).
+
+**Telegram format**, at Manoj's request: `Spotted by: X via Y` became
+`Spotter: X   Node: Y` on its own line, with the time below it. Labelled
+rather than prose because those two labels are what you scan for on a
+phone. A local decode shows only `Node:` — an empty `Spotter:` would read
+as missing data rather than as "us".
+
+
 *(Resolved 2026-08-28: the two world-readable database copies left in
 `adersh@192.168.1.151:/tmp` during the v2.4.0 migration check were deleted
 as soon as the VPN came back; his box now has nothing of mine in `/tmp`,

@@ -527,10 +527,16 @@ async fn station(State(app): State<AppState>, headers: HeaderMap) -> Response {
         // log), so the card names the one the matrix was built from.
         "log_callsign": cl.as_ref().map(|c| c.callsign.clone()).filter(|c| !c.is_empty()),
         "stats": app.users.stats(user.id),
+        // The same totals with the ARRL deleted entities left out. Both are
+        // sent so the "current only" tickbox is instant — the numbers are a
+        // dozen integers, and a round trip per toggle would be worse than
+        // the bytes.
+        "stats_current": app.users.stats_current(user.id),
         // The per-band / per-mode breakdown behind the My ClubLog statistics
         // card. Sliced from the same in-memory matrix, so it costs a walk of
         // the entity map and no extra storage.
         "by_band_mode": app.users.band_mode_stats(user.id),
+        "by_band_mode_current": app.users.band_mode_stats_current(user.id),
         "qso_count": meta.map(|m| m.0),
         "last_refresh_unix": meta.map(|m| m.1),
     }))
