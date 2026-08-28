@@ -204,6 +204,19 @@
     font-weight: 600;
   }
 
+  /* The tint itself. `data-level` on the row resolves `--lvl`/`--lvl-bg`
+     from app.css's level table, but painting with them is per-component
+     (Dashboard's rules are scoped to Dashboard) — without these two rules
+     the rows sat untinted, vocabulary claimed but not delivered. Every
+     sent alert was flagged by definition, so no gate class. */
+  .sent tr[data-level] td {
+    background: var(--lvl-bg);
+  }
+
+  .sent tr[data-level] .alert {
+    color: var(--lvl);
+  }
+
   .failed {
     font-size: 0.75rem;
     cursor: help;

@@ -1028,6 +1028,22 @@ on reload would be the same invisibility again.
 successes would hide the single most useful row on the page — the shack
 broker analogue is a bad chat id, which otherwise fails in silence forever.
 
+> **Correction (2026-08-28): the level tint above was claimed, not
+> delivered.** The rows carried `data-level` from the start, and this doc
+> said they rendered "in the Spots row vocabulary — level tint via
+> `[data-level]`" — but no rule in `Alerts.svelte` ever *painted* with the
+> `--lvl` / `--lvl-bg` those attributes resolve. Dashboard's two painting
+> rules (`tr.flagged td`, `tr.flagged .alert`) are scoped to Dashboard, as
+> Svelte scopes all component CSS, so My Alerts showed uniformly grey rows.
+> Fixed by adding the pair to `Alerts.svelte`, keyed on `tr[data-level]`
+> rather than a `.flagged` class — every sent alert was flagged by
+> definition, so there is nothing to gate on. Verified across all eight
+> levels in both themes: each resolves a distinct wash and Level colour,
+> `?` variants reading as muted versions of their `New` counterparts.
+> Worth generalizing from: `data-level` on an element buys nothing on its
+> own, and a third table wanting the tint will need these two rules again
+> (or app.css would have to paint, which it deliberately does not).
+
 Bounded at `ALERT_HISTORY_MAX = 500` **per user**, pruned on insert, so a
 busy operator cannot evict another account's history. That is asserted, not
 assumed: the unit test floods A past the cap and checks B's single row
