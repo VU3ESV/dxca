@@ -262,6 +262,14 @@ Then, in order of what actually matters:
    2334 (JTDX), 2335 (WSJT-X). Point your logger's telnet cluster at port
    **7575** on this machine.
 
+   That is the whole decoder setup — **no secondary / 2nd / Simplified UDP
+   broadcast is needed in any of the three.** Logged QSOs travel on the same
+   socket as the decodes (WSJT-X type-5) and reach your logger through the
+   passthrough destination, so one feed per decoder covers spots, click-to-fill
+   and QSO logging alike. The one exception is **MSHV**, whose broadcast gates
+   each message type separately: tick **Enable Logged QSO** there, or its QSOs
+   never leave. JTDX and WSJT-X need nothing beyond the port.
+
 ### Updating
 
 **Same script, every platform.** There is no separate updater — `install.sh`

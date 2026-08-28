@@ -210,7 +210,11 @@ When ready to make the Pi the production aggregator:
 1. **Decoders** (all on the Mac): change the UDP server IP from
    `127.0.0.1` to `192.168.1.169`, ports unchanged — MSHV Network Config
    (2333), JTDX Reporting primary UDP (2334), WSJT-X Reporting UDP
-   (2335). The 2233 ADIF→RUMlog paths stay `127.0.0.1` — untouched.
+   (2335). *(The step used to add "the 2233 ADIF→RUMlog paths stay
+   `127.0.0.1` — untouched". Those paths turned out to be unnecessary
+   altogether — passthrough carries logged QSOs to RUMlog on 2237. Tick
+   MSHV's **Enable Logged QSO** and configure nothing else; see the 1.x
+   `docs/UDP-PIPELINE.md` § "Logged QSOs need no second feed".)*
 2. **Pi web UI** `http://192.168.1.169:7580` (same login): System tab →
    tick the five nodes' **On** boxes → Apply & save.
 3. **Mac**: stop the local instance so it releases the cluster logins:
