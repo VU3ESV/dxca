@@ -83,6 +83,24 @@ proven-live one.** A `SET/NODE <name>` command switches it, `SH/NODES` lists
 what is available with live status. This mirrors how an operator thinks
 ("I'm on DB0SUE right now") and keeps every command unambiguous.
 
+*Confirmed as a requirement by Manoj, 2026-08-28: commands go to a selected
+node, explicitly never as a broadcast.*
+
+Two details worth settling now rather than in code review:
+
+- **`SET/NODE` is local to DXCA and must not reach a node.** It collides with
+  nothing in DXSpider today, but it is DXCA's own session state; the
+  canonicalizer intercepts it before the allowlist. Same for `SH/NODES`.
+- **A per-command override** — `<node> <command>`, e.g. `DB0SUE SH/DX 20` —
+  is worth having so a one-off query does not disturb the session's current
+  node. Cheap to add once the router exists, and it keeps the common case
+  (repeated queries against one node) free of prefixes.
+
+**What happens when the current node is not live?** Refuse with the node's
+actual state rather than queuing indefinitely — `DB0SUE is Reconnecting;
+pick another with SET/NODE or wait`. Silently holding a command until a
+reconnect would be the honest-status rule broken in a new place.
+
 ### 3.3 Response correlation — the hard part
 
 The cluster protocol has no request IDs. A reply to `sh/dx` arrives as a
@@ -149,9 +167,35 @@ able to reach them through a passthrough. Refuse by default with a message
 pointing at the real telnet client — an operator who genuinely needs to
 reconfigure a node account can connect to it directly.
 
-Because node command sets vary, the allowlist matches on the leading verb
-with prefix rules (`SH/`, `SHOW/`, `ACC/`, `REJ/`) rather than an exhaustive
-table, and unknown verbs are refused rather than forwarded. Fail closed.
+### Abbreviation makes a denylist impossible
+
+DXSpider states it plainly: *"All commands can be abbreviated, so SHOW/DX can
+be abbreviated to SH/DX, ANNOUNCE can be shortened to AN and so on."* The
+manual documents **no minimum length and no uniqueness rule**, so the same
+command arrives in many spellings and the node resolves them itself.
+
+This is load-bearing, and it kills the obvious implementations:
+
+- **A denylist cannot work.** To block `SET/HOMENODE` you would have to
+  enumerate `SET/HOME`, `SE/HOMENODE`, `S/HOME`, and every other prefix a
+  node might accept. Miss one and it goes straight through.
+- **Prefix string-matching on `SH/` cannot work either** (an earlier draft of
+  this document proposed exactly that, wrongly). `SH/` does not identify a
+  show command — `S/H` might also reach one, and `SET/…` shares the `S`.
+
+**Therefore: canonicalize, then allowlist.** Keep a table of the DXSpider
+commands DXCA knows, expand each incoming verb to its canonical full form
+against that table, and forward only what the allowlist admits *after*
+expansion. Anything that does not expand to a known command — ambiguous,
+unknown, or a spelling the table cannot resolve — is refused with a message
+saying so. Fail closed, every time.
+
+The cost is that DXCA must carry a command inventory and keep it roughly
+current, and that a node-specific command DXCA has never heard of gets
+refused even though the node would accept it. That is the correct trade:
+the alternative is forwarding unrecognized text to a session authenticated
+as the station owner. An operator who needs an exotic command can telnet to
+the node directly.
 
 ## 5. Safety — read this before building
 
@@ -163,6 +207,17 @@ all; that is harmless only because the server cannot currently be talked to.
 Adding passthrough without the login gate would mean anyone on the LAN can
 transmit spots under the shack callsign and issue commands against its node
 accounts. Hence: **login first, spotting admin-only and off by default.**
+
+**`DX` can spot on someone else's behalf.** The documented grammar is
+`DX [by <call>] <freq> <call> <remarks>` — the optional `by` clause credits
+the spot to a *different* callsign. Through a passthrough that means a
+session could put a spot on the network attributed to an arbitrary station,
+from a node session authenticated as the shack. If spotting is enabled at
+all, **strip or refuse the `by` clause**: a DXCA-originated spot is the
+shack's, and attributing it to anyone else is not a facility this needs.
+Note too that frequency and callsign may appear in either order
+(`DX FR0G 144.600` and `DX 144.600 FR0G` are both valid), so validating a
+`dx` line means parsing it properly, not pattern-matching field positions.
 
 **This ships to other people's Pis.** The third-party install at
 `adersh@192.168.1.151` takes whatever the next release contains, and its
@@ -232,7 +287,64 @@ Stopping after 3 would be a perfectly good place to stop.
   attempt. **This should be checked before milestone 2, with a packet
   capture, not assumed.**
 
-## 9. Testing
+## 9. Appendix — the DXSpider command inventory
+
+Sorted into the tiers of §4 rather than alphabetically, because the tier is
+the decision. Sources at the end of this document; the node is always the
+authority on what it actually accepts.
+
+**Tier 1 — read-only queries. Safe to forward.**
+`show/dx`, `show/mydx`, `show/fdx`, `show/dxcc`, `show/dxstats`,
+`show/dxqsl`, `show/wwv`, `show/wcy`, `show/muf`, `show/sun`, `show/moon`,
+`show/prefix`, `show/qrz`, `show/qra`, `show/wm7d`, `show/db0sdx`,
+`show/heading`, `show/satellite`, `show/contest`, `show/date`, `show/time`,
+`show/station`, `show/configuration`, `show/links`, `show/route`,
+`show/who`, `show/hfstats`, `show/hftable`, `show/vhfstats`,
+`show/vhftable`, `show/files`, `show/filter`, `help`, `apropos`, `dbavail`,
+`dbshow`, `who`, `blank`, `echo`, `type`.
+
+*Caveat:* `show/dx`, `show/mydx` and `show/fdx` return `DX de` lines — the
+[pipeline-contamination trap](#safety-read-this-before-building).
+
+**Tier 2 — session filters. Forwardable, but they change what the shared
+node session receives.**
+`accept/spots`, `accept/announce`, `accept/wwv`, `accept/wcy`, `accept/rbn`,
+`reject/*` (same set), `clear/spots`, `clear/announce`, `clear/rbn`,
+`clear/wwv`, `clear/wcy`, `clear/route`.
+
+**These are not per-user.** DXCA holds *one* session per node, shared by
+every DXCA user and by the spot pipeline itself. A filter set through the
+passthrough silently narrows what everybody gets, including the Spots feed
+and Telegram alerts, and it persists on the node. Recommendation: **refuse
+tier 2 initially**, and if it is ever wanted, implement it as a DXCA-side
+filter on the operator's own feed rather than a node-side one. This is a
+trap the design should not walk into for convenience.
+
+**Tier 3 — transmits. Admin-only, opt-in, off by default.**
+`dx` (see the `by`-clause note above), `announce`, `wx`, `talk`, `chat`,
+`join`, `leave`, `send`, `reply`.
+
+Note that everything past `dx` in that list is *messaging other humans* as
+the shack callsign. None of it is needed for the stated goal, and the
+simplest correct answer is to refuse the lot and allow only `dx`.
+
+**Tier 4 — refuse outright. Mutates the account or the session's identity.**
+`set/name`, `set/qth`, `set/qra`, `set/location`, `set/address`,
+`set/email`, `set/homenode`, `set/password`, `set/startup`, `set/language`,
+`set/prompt`, `set/page`, `set/usstate`, `set/dxcq`, `set/dxitu`,
+`set/dxgrid`, `set/beep`, `set/echo`, `set/here`, `set/logininfo`,
+`set/announce`, `set/talk`, `set/wwv`, `set/wcy`, `set/wx`, `set/seeme`,
+every `unset/*`, `unset/privilege`, `sysop`, `kill`, `directory`, `read`,
+`enable/ftx`, `disable/ftx`, `bye`.
+
+`set/password` and `sysop` are the obvious ones. But `unset/dx` or
+`unset/wwv` would **stop the node sending spots at all** — a single command
+that silently kills the shack's feed from that node until someone notices
+and re-enables it. `bye` disconnects the shared session. `kill` deletes
+mail. None of these belong behind a passthrough, and `bye` in particular
+must be intercepted locally as "end *your* telnet session", never forwarded.
+
+## 10. Testing
 
 The queue, terminator detection and allowlist are pure logic and belong in
 unit tests with synthesized `ClientEvent` streams — no sockets, no node.
@@ -242,3 +354,11 @@ asserting that a command reaches the fake node, its reply reaches the right
 session, and a *second* session sees none of it. That last assertion is the
 one that proves the correlation design, and it should exist before the
 feature is enabled anywhere.
+
+---
+
+## Sources
+
+- [DXSpider User Command Reference (wiki)](https://wiki.dxcluster.org/wiki/DXSpider_User_Command_Reference)
+- [The DXSpider User Manual v1.51 — Command Reference](https://www.dxspider.org/usermanual_en-12.html)
+  — abbreviation rule and the `DX` / `SHOW/DX` grammars.
