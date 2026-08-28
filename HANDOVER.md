@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.5.0 on both Pis** — spotter attribution (Source = the feed that carried it, Spotter = the station that heard it), a spots search box over call/spotter, both carried into Telegram alerts and the My Alerts history, and the **first schema migration** this database has had. Verified live: 63 of 73 spots carry a spotter (W3LPL relaying EA3EDU, DB0SUE relaying IU7DLD), local MSHV decodes correctly carry none, and the migration kept all 91 existing alert rows. `telnet_interactive = true` from v2.3.x still live. **`adersh@192.168.1.151` is also on v2.5.0** (deployed the same evening, `--no-seed`, backed up first): all 102 of his alert rows survived the migration, his account, cty and LoTW data intact, four nodes back Live, and 30 of 30 spots carrying a spotter. `telnet_interactive` stays **false** there — the feature has never been enabled on his box. **GitHub releases for v2.3.0, v2.3.1 and v2.4.0 are all unpublished** — tags pushed, no release pages, no Windows bundles.
+**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.7.0 on noderedpi4, v2.5.0 on adersh** — spotter attribution (Source = the feed that carried it, Spotter = the station that heard it), a spots search box over call/spotter, both carried into Telegram alerts and the My Alerts history, and the **first schema migration** this database has had. Verified live: 63 of 73 spots carry a spotter (W3LPL relaying EA3EDU, DB0SUE relaying IU7DLD), local MSHV decodes correctly carry none, and the migration kept all 91 existing alert rows. `telnet_interactive = true` from v2.3.x still live. **`adersh@192.168.1.151` is also on v2.5.0** (deployed the same evening, `--no-seed`, backed up first): all 102 of his alert rows survived the migration, his account, cty and LoTW data intact, four nodes back Live, and 30 of 30 spots carrying a spotter. `telnet_interactive` stays **false** there — the feature has never been enabled on his box. **GitHub releases for v2.3.0, v2.3.1 and v2.4.0 are all unpublished** — tags pushed, no release pages, no Windows bundles.
 **Repo:** https://github.com/vu2cpl/dxca (**public** — verified via
 `gh repo view` 2026-08-27; the doc said "private" until then, and the
 "Open items" release checklist still lists the public flip as pending)
@@ -491,8 +491,13 @@ last *published* release, because tags can outrun releases.
 
 ## Open items → next session
 
-**Built, NOT deployed (2026-08-28): Telegram manual-only, and the DXCC
-toggle inverted.** noderedpi4 is on v2.6.0, adersh on v2.5.0.
+**SHIPPED as v2.7.0 (2026-08-28): Telegram manual-only, and the DXCC
+toggle inverted.** Live on noderedpi4 (9 nodes),
+[released](https://github.com/vu2cpl/dxca/releases/tag/v2.7.0) with the
+Windows zip. **adersh is on v2.5.0, two releases behind** — needs the VPN.
+Verified after the upgrade that the stored notify row has no
+`notify_manual_only` key at all, which is exactly right: it deserializes to
+off, so Telegram behaves as it did.
 
 - **Telegram manual-only.** `NotifyUserConfig::notify_manual_only`, applied
   in `fan_out` through `passes_skimmer()` — the same predicate idiom as
