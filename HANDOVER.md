@@ -475,6 +475,40 @@ proven against the Swift app's own artifacts.**
 
 ## Open items → next session
 
+**KNOWN, ACCEPTED (2026-08-28): the Spots level filter is usually empty —
+and it is NOT a 2.3.x regression.** Reported as "some issue in 2.3.1", so
+worth recording plainly: nothing in the v2.3.0/v2.3.1 telnet work touches
+this. The filter and the 500-spot backfill both date from 2026-08-27
+(`4886f7e`, `02267a1`).
+
+The behaviour is deliberate — picking "New DXCC" makes the feed a New-DXCC
+feed, not "everything, DXCC highlighted", and the comment in
+`Dashboard.svelte` says so. Selecting every pill still hides *unflagged*
+spots, which is why it does not help. The problem is arithmetic:
+
+- the Spots screen backfills **500 spots** (`/api/spots?limit=500`);
+- with nine nodes live the feed runs at **~105 spots/min**, so 500 spots is
+  **~4.8 minutes** of history;
+- genuinely new spots are rare — 24 Telegram alerts in six hours, ~4/hour;
+- expected flagged spots inside a 4.8-minute window ≈ **0.3**, so roughly
+  three times in four the honest answer is zero.
+
+A five-minute keyhole onto something that happens every fifteen minutes.
+
+**The backend is not implicated** and this was checked before blaming the
+UI: the matrix holds 56,836 QSOs (refreshed 2026-08-28 11:41) and
+classification demonstrably works — T5FE newBand 160M at 19:50, RI1FJL
+newMode at 19:47, 24 alerts in six hours.
+
+**Manoj's call, 2026-08-28: leave it.** Working as designed, not worth
+changing now. If it is ever revisited, the fix is **server-side filtering**:
+the ring holds 5000 spots (~48 minutes at this rate) and the server already
+classifies per user, so a `level=` parameter on `/api/spots` applied after
+`annotate_spot` gives ten times the window with a *smaller* payload than
+raising the backfill limit. The weaker alternatives are a bigger limit, or
+having the UI retain flagged spots as they age out.
+
+
 **Milestones 1–3 BUILT (2026-08-28), 4 (spotting) deliberately not:
 interactive telnet with cluster-command passthrough** —
 [`docs/TELNET-INTERACTIVE.md`](docs/TELNET-INTERACTIVE.md). **Live on

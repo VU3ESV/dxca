@@ -572,6 +572,17 @@ it is absent from the Spots table, the telnet cluster server, the filtered
 UDP destinations and Telegram alerts — for every account at once. It is not
 a display filter; the band and mode chips are that.
 
+> **The alert-level chips narrow hard, and will often show nothing.**
+> Picking "New DXCC" makes the feed a New-DXCC feed rather than
+> "everything, with DXCC highlighted", so spots that are not flagged are
+> hidden — selecting every chip does not bring them back. On a busy feed
+> this is usually an empty table: the screen holds the last 500 spots,
+> which at ~100 spots/min is about five minutes, while genuinely new spots
+> arrive a few times an hour. Working as intended, but worth knowing before
+> concluding the highlighting has broken. The Telegram alert history in
+> **My Alerts** is the reliable record of what was new.
+
+
 Matching is exact and case-insensitive against the **spotted** station's
 callsign: `R1ABC` blocks that call and nothing else. Edits take effect on the
 next spot, with no restart.
