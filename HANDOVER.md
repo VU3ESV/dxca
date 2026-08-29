@@ -527,16 +527,24 @@ last *published* release, because tags can outrun releases.
 
 ## Open items → next session
 
-**Designed, not built (2026-08-29): the phase-rotation spot mask** —
+**Milestone 1 BUILT (2026-08-29), 2–4 designed only: the phase-rotation
+spot mask** —
 [`docs/PHASE-ROTATION-MASK.md`](docs/PHASE-ROTATION-MASK.md). Manoj's
 request, taking Meridian's locator-driven band rotation and applying it to
 the spot feed: stop showing New-DXCC 160m spots at local midday.
 
-**Nothing for this exists yet.** `wire::looks_like_grid` validates a locator
-but nothing converts one to coordinates, and there is no solar maths in the
-tree at all. Four pieces, the first three pure and golden-testable:
-Maidenhead → lat/lon, sun elevation, a band-openness model, then the
-per-user locator and settings (JSON blob, so **no migration**).
+**M1 shipped the pure maths**: `dxca_core::grid::parse` (Maidenhead → the
+centre of the square) and `dxca_core::solar::elevation` (NOAA solar
+position). **Nothing is filtered and nothing is user-facing** — Manoj's
+standing requirement is that this stays an opt-in tickbox, default off, no
+imposing. Remaining: the band-openness model, the per-user locator and
+settings (JSON blob, so **no migration**), and the UI.
+
+Sunrise agrees with published times to within 5–8 minutes, consistently
+late, which is atmospheric refraction — almanacs quote apparent sunrise,
+this returns the true geometric one. Left uncorrected on purpose and pinned
+by a test that explains itself. The Tromsø tests (midnight sun, polar night)
+are the argument for elevation over clock time made executable.
 
 **The load-bearing decisions, if you read nothing else:** use **sun
 elevation**, not clock time — a fixed local-time rule is wrong by up to six

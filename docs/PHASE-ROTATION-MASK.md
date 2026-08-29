@@ -1,7 +1,8 @@
 # Phase-rotation spot mask
 
-**Status:** design only, nothing built · **Drafted:** 2026-08-29 ·
-**Phase:** 2
+**Status:** **milestone 1 built** (the pure maths); milestones 2–4 designed,
+not built. Nothing user-facing yet, and **nothing is filtered** ·
+**Drafted:** 2026-08-29 · **Phase:** 2
 
 Bands rotate through the day. At local midday 160m is dead for anything but
 ground wave, and a New-DXCC flag on a 160m spot is an interruption the
@@ -147,9 +148,30 @@ both, use what is given, do not ask for more.
 
 ## 7. Milestones
 
-1. **Maidenhead + solar, pure.** `grid_to_latlon` and `sun_elevation`, with
-   golden tests against published values — JN58TD is Munich; NOAA publishes
-   sunrise and sunset for known places and dates. Nothing user-facing.
+1. ~~**Maidenhead + solar, pure.**~~ **DONE 2026-08-29.** `grid::parse`
+   returns the **centre** of a 4- or 6-character square (the corner is up to
+   75 km out and the centre costs nothing), and `solar::elevation` is the
+   NOAA solar-position algorithm — no data files, no network, no clock of
+   its own.
+
+   **Validated against the outside world, not only against itself.**
+   Computed sunrise agrees with published times to within 5–8 minutes, in a
+   consistent direction: Munich in June 03:20 UTC against a published 03:14,
+   in December 07:08 against 07:03, Bengaluru in June 00:32 against 00:24.
+   That bias is **atmospheric refraction** — almanacs quote the *apparent*
+   sunrise, this returns the true geometric one — and it is left uncorrected
+   deliberately, because no band-openness threshold can use that precision.
+   The test pins the bias with its explanation, so a future reader finds the
+   reason rather than a mystery.
+
+   The polar cases have their own tests, since they are the whole argument
+   for elevation over clock time: at Tromsø the sun never sets across all 24
+   hours in June, and never rises in December. A local-time rule would be
+   wrong there for months at a stretch.
+
+   One correction worth recording: MK68 is **not** Bengaluru — it is 18.5N
+   73.0E. Bengaluru is MK82. Transposing the two square digits moves you
+   several hundred kilometres, and both are now pinned in the tests.
 2. **The band model and the locator field.** `band_plausible(band, elev)`,
    the per-user setting, and the API annotation. Still nothing visible.
 3. **Dim mode, with the masked count.** The Spots screen only. This is the

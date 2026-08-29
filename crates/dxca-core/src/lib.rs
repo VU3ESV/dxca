@@ -17,8 +17,10 @@ pub mod classify;
 pub mod cty;
 pub mod dxcc;
 pub mod format;
+pub mod grid;
 pub mod matrix;
 pub mod modes;
+pub mod solar;
 mod spot;
 pub mod wsjtx;
 
