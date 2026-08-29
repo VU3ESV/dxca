@@ -283,15 +283,11 @@ which is now the rule for any host that is not noderedpi4.
   distro packages are below it. Declared as `rust-version` in
   `[workspace.package]` and re-checked by `install.sh` (`MIN_RUSTC`) — the
   two move together. See "The rustc floor is 1.88" below.
-- **The VPN to Adersh's LAN shadows the shack LAN.** Both networks are
-  `192.168.1.0/24`, and while the tunnel (`utun7`) is up macOS routes the
-  whole subnet through it — so `192.168.1.151` works but the shack's own
-  hosts (noderedpi4 at `.169`, the broker, gpsntp) become unreachable from
-  the Mac, and `noderedpi4.local` ssh fails "Network is unreachable".
-  Observed 2026-08-28 mid-deploy: the route flipped between two commands.
-  There is no per-host workaround from userland worth keeping — disconnect
-  the VPN to talk to the shack, reconnect for Adersh's Pi. Order multi-host
-  work accordingly (shack first or Adersh first, not interleaved).
+- **The VPN no longer shadows the shack LAN — SOLVED 2026-08-30.** This sat
+  here for two days as unfixable ("disconnect the VPN to talk to the shack"),
+  on a diagnosis that was wrong: this Mac is not on `192.168.1.0/24` at all.
+  Both tunnels and the shack now run at once. See *Both VPN tunnels and the
+  shack LAN, at once (2026-08-30)* below.
 
 ## Burn-in log (Mac phase, 2026-08-27 — superseded by the Pi cutover above)
 
@@ -661,14 +657,61 @@ The VPN was **down** at the time, so this is not the subnet clash. It
 resolved quickly earlier the same day, so something changed on the network
 or in mDNS. Use the IP to avoid it; not investigated further.
 
-## Deploy sequence (2026-08-29, standing)
+## Both VPN tunnels and the shack LAN, at once (2026-08-30)
 
-**Local first, then one VPN host at a time.** noderedpi4 is reachable while
-the VPN is *down*, so it goes first and needs no coordination. Then prompt
-Manoj for the VPN, deploy `adersh@192.168.1.151`, **report back and wait** —
-he brings `vu2wj@192.168.1.201` online himself before that one can be done.
-Never treat "the VPN is up" as covering both third-party boxes; ping each
-before assuming. His instruction, 2026-08-29.
+**The diagnosis this file carried was wrong.** It said the shack and Adersh's
+LAN were both `192.168.1.0/24` and therefore irreconcilable. This Mac has a
+**single IPv4 address, `192.168.10.226/24` on `en0`**, and the shack's hosts
+are *routed* — `route -n get 192.168.1.169` names gateway `192.168.10.1`, not
+a connected interface. Nothing ever clashed at the interface level. A tunnel
+route simply out-specified the default route.
+
+Two things in the WireGuard configs had to go, and neither is the IPv4 route
+one reaches for first:
+
+- **`::/0` in `AllowedIPs`** — each tunnel claimed the entire IPv6 default
+  route. Two tunnels cannot both be it, and that is what stopped them
+  coexisting.
+- **`DNS = 8.8.8.8, …` (Adersh) and `1.1.1.1, …` (vu2wj)** — a `DNS` line
+  repoints *system* resolution at a public server for as long as the tunnel
+  is up, which is what made `noderedpi4.local` fail. Split routing wants none
+  of the remote resolver.
+
+With `AllowedIPs` narrowed to the one host that matters — `192.168.1.151/32`
+and `192.168.1.201/32` — and no `DNS` line, every other address in
+`192.168.1.0/24` keeps following the default route to the shack.
+
+**The macOS WireGuard app (1.0.16) runs only one tunnel at a time.** Tested:
+activating the second deactivates the first, and no preference changes it.
+For both at once, export the tunnels from the app and run them with
+`wg-quick`, which gives each its own `utun`:
+
+    sudo wg-quick up ~/<dir>/Adersh_vu2cpl.conf
+    sudo wg-quick up ~/<dir>/Shaji_vu2wj.conf
+
+Deactivate the app's own tunnels first so no peer runs twice. `wg-quick down`
+with the same paths reverses it. **Verified 2026-08-30: `.151`, `.201` and
+`.169` all ping simultaneously.**
+
+Two traps met on the way. The exported `.conf` files hold **private keys in
+plain text** — keep them somewhere deliberate, not the Desktop, and out of
+any shared backup. And `wg-quick` rejects a config whose basename carries a
+space or runs past 15 characters, so `Shaji _vu2wj.conf` had to be renamed.
+
+**One honest gap:** what `AllowedIPs` said *before* it was first edited was
+never captured, so the 2026-08-28 blackout is only *inferred* to have been a
+wide (`/24` or `0.0.0.0/0`) route. The `DNS` line is confirmed, not inferred.
+
+## Deploy sequence (2026-08-29, standing; network half retired 2026-08-30)
+
+**The networking reason for one-at-a-time is gone** — see the section above;
+all three Pis and the Windows box are reachable together now. What stands is
+the *human* half of the rule, which was never about routing: the third-party
+boxes are not always powered up, and Manoj brings `vu2wj@192.168.1.201`
+online himself. So: deploy the shack and the Windows box freely, deploy
+`adersh@192.168.1.151` when its tunnel is up, and still **ask before
+assuming vu2wj is on**. Never treat "the tunnels are up" as proof a
+third-party box is; ping each before deploying to it.
 
 ## The three installs (2026-08-28)
 
@@ -678,9 +721,10 @@ before assuming. His instruction, 2026-08-29.
 | `192.168.1.151` | `adersh` | Third party, over the VPN. `--no-seed` always. |
 | `192.168.1.201` (hostname `rpi`) | `vu2wj` | Third party. `--no-seed` always. |
 
-All three are aarch64 Debian 13 (trixie). **The VPN and the shack LAN cannot
-both be reachable** — both are `192.168.1.0/24` — so a deploy to the
-third-party boxes is its own pass; see Known gotchas.
+All three are aarch64 Debian 13 (trixie). They were long recorded as
+un-coexisting with the shack LAN; that was **wrong and is fixed** as of
+2026-08-30 — both tunnels and the shack run together, so a deploy no longer
+needs its own pass. See *Both VPN tunnels and the shack LAN, at once*.
 
 **VU2WJ's Pi joined the fleet 2026-08-28**, having sat on **v2.1.0** since
 its install — nine releases behind, and the only box whose database predated
