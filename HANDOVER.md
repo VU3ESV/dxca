@@ -745,18 +745,29 @@ online himself. So: deploy the shack and the Windows box freely, deploy
 assuming vu2wj is on**. Never treat "the tunnels are up" as proof a
 third-party box is; ping each before deploying to it.
 
-## The three installs (2026-08-28)
+## The installs (2026-08-28; VU2OY added 2026-08-30)
 
 | Host | Account | Notes |
 |---|---|---|
 | `noderedpi4.local` / `192.168.1.169` | `vu2cpl` | The shack. Seeded deploys; `telnet_interactive = true`. |
+| `192.168.1.170` | `manoj` | The shack's Windows box. `win-deploy.sh`, update only. |
 | `192.168.1.151` | `adersh` | Third party, over the VPN. `--no-seed` always. |
 | `192.168.1.201` (hostname `rpi`) | `vu2wj` | Third party. `--no-seed` always. |
+| `192.168.220.51` | *unknown from here* | **VU2OY (Ranjith).** Third party, over the PiVPN tunnel added 2026-08-30. |
 
-All three are aarch64 Debian 13 (trixie). They were long recorded as
-un-coexisting with the shack LAN; that was **wrong and is fixed** as of
-2026-08-30 — both tunnels and the shack run together, so a deploy no longer
-needs its own pass. See *Both VPN tunnels and the shack LAN, at once*.
+**VU2OY's box was not deployed from this Mac.** Found running **v2.13.0 with
+2 nodes** within the hour of that release, over a tunnel that had just been
+built — and there is no trace of it in this Mac's `known_hosts`, `ssh/config`
+or shell history, so it did not come from `pi-deploy.sh` here. Most likely
+Ranjith installed it himself from the release or from source. **Confirm who
+administers it and on what account before ever deploying to it**, and treat
+`--no-seed` as mandatory when that day comes: its database is his.
+
+The three Pis under `pi-deploy.sh` are aarch64 Debian 13 (trixie). The VPN
+hosts were long recorded as un-coexisting with the shack LAN; that was
+**wrong and is fixed** as of 2026-08-30 — all three tunnels and the shack run
+together, so a deploy no longer needs its own pass. See *Both VPN tunnels and
+the shack LAN, at once*.
 
 **VU2WJ's Pi joined the fleet 2026-08-28**, having sat on **v2.1.0** since
 its install — nine releases behind, and the only box whose database predated
