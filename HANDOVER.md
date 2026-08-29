@@ -836,27 +836,41 @@ answer ICMP (Windows blocks it), and a first check read as "no answer" while
 the host was up and serving. Probe a port instead — 22, 7580 and 7575 were
 all open. Do not conclude that box is down from a failed ping.
 
-### NEXT: the gate no longer passes, and it is the toolchain (2026-08-30)
+### NEXT: the gate has never passed — and it is not the toolchain (2026-08-30)
 
-`cargo test` is fine — 205 pass. **`cargo fmt --check` and `cargo clippy` both
-fail on `main`, and neither failure comes from any recent change.**
-`rust-toolchain.toml` pins `channel = "stable"`, which has now moved to Rust
-1.96: rustfmt changed its mind about 43 sites, and the new
-`result_large_err` lint fires on `dxca-connect`'s ureq calls (`ureq::Error`
-is ≥272 bytes). Every affected file is untouched since v2.12.1.
+`cargo test` is fine: 205 pass. **`cargo fmt --check` and `cargo clippy` both
+fail on `main`** — 43 rustfmt sites across `dxca-connect` and `dxca-core`, and
+`result_large_err` on the ureq calls in `telegram.rs` (`ureq::Error` is ≥272
+bytes).
 
-A 43-file reformat was deliberately kept out of the v2.12.2 release commit,
-so this is still open. Two ways out, and it is worth picking deliberately
-rather than letting the next `stable` move it again:
+**An earlier version of this entry blamed a toolchain move. That was wrong**,
+and the correction is the useful part: rustc **1.96.1 was installed
+2026-07-08**, and this repo's **first commit is 2026-08-26**. dxca has only
+ever been built on this one compiler, so nothing drifted — the 43 sites and
+the lint have been there since the beginning.
 
-- **Pin the toolchain to a version** (`channel = "1.95"` or whatever was in
-  use when the gate last passed), so the fleet's builds stop shifting under
-  it. Costs: manual bumps, and `install.sh`'s `MIN_RUSTC` has to stay in
-  step.
-- **Take the reformat and silence the lint** in one dedicated commit —
-  `cargo fmt --all`, plus either boxing the ureq error or an
-  `#[allow(clippy::result_large_err)]` with a note saying why. Keeps
-  floating `stable`, and accepts this recurring on future releases.
+Why nobody saw them: `cargo fmt` and `cargo clippy` need the Homebrew rustup
+PATH prefix that Known gotchas already documents. Without it they are not
+subcommands at all, so `just gate` dies at step one instead of reporting real
+failures, and what actually gets run is `cargo test`. **A gate that cannot
+run is indistinguishable from a gate that passes**, which is the lesson worth
+keeping.
+
+The toolchain is now pinned to `1.96.1` (`rust-toolchain.toml`, 2026-08-30)
+so the ground stops shifting — but **the pin does not fix this**; 1.96.1 is
+the compiler that fails. What remains is one dedicated commit:
+
+- `cargo fmt --all` for the 43 sites — mechanical, but large, which is why it
+  was kept out of the v2.12.2 release.
+- Then `result_large_err`: either box the ureq error, or
+  `#[allow(clippy::result_large_err)]` with a comment saying why the error
+  size is acceptable here.
+- Then make `just gate` runnable without the PATH dance — either symlink the
+  missing rustup proxies, or have the Justfile set `PATH` itself. Otherwise
+  this recurs the moment anyone trusts a green `just test` for a green gate.
+
+The published v2.12.2 release notes carry the same wrong toolchain-drift
+explanation, unedited as of this writing.
 
 ### NEXT: a detailed help file — setup and use (Manoj, 2026-08-29)
 
