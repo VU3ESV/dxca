@@ -698,12 +698,21 @@ left:
 0. **Redeploy the two LAN hosts** whenever convenient, so the version they
    report matches what they run. No functional change.
 
-1. **`adersh@192.168.1.151` then `vu2wj@192.168.1.201`**, one at a time on
-   Manoj's prompt, both **`--no-seed`** — their databases carry their own
-   ClubLog credentials and Telegram tokens, and seeding would hand this
-   station's over. **Take a pre-migration copy of each `data/dxca.db` first**:
-   the `snr_db` migration runs on their first open, and I failed to do that on
-   noderedpi4 (see below).
+1. **`vu2wj@192.168.1.201` is the last host on v2.11.1.** `adersh` went to
+   v2.12.0 on 2026-08-29 (4/4 nodes proven, 245 alert rows preserved, its own
+   `dxca.toml` untouched). Same recipe for vu2wj:
+   **`deploy/pi-deploy.sh --no-seed vu2wj@192.168.1.201`** — `--no-seed` is not
+   optional, their database carries their own ClubLog credentials and Telegram
+   token — and **copy `data/dxca.db` to `dxca.db.pre-v2.12.0` FIRST**, because
+   the `snr_db` migration runs on their first open. adersh has that backup;
+   noderedpi4 does not, which is the one thing this session got wrong.
+
+   **Expect the transfer to fail at least once over the VPN.** The adersh
+   deploy died with `Connection closed by 192.168.1.151 port 22` part-way
+   through rsync. Nothing was harmed — the swap happens after the transfer, so
+   the host was still on its old binary and serving — but **check before
+   retrying** rather than assuming: `systemctl is-active dxca`, the binary's
+   size and date, and the version the API reports. A plain retry then worked.
 2. **An unfinished fix is STASHED, not committed** —
    `git stash list` → `configgate-wip-2026-08-29` (`1f1da1d`). It addresses a
    real defect found on 2026-08-29 when a VPN came up and took the
