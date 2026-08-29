@@ -3,6 +3,7 @@
   import { onMount } from 'svelte';
   import HelpTip from '../../lib/HelpTip.svelte';
   import ApplySave from '../../lib/ApplySave.svelte';
+  import ConfigGate from '../../lib/ConfigGate.svelte';
   import {
     server, loadServerConfig, drop, SOURCE_NAME_MAX,
   } from '../../lib/serverconfig.svelte';
@@ -16,7 +17,7 @@
     ]);
 </script>
 
-{#if server.cfg}
+<ConfigGate>
   <div class="card">
     <h2>
       UDP sources
@@ -61,4 +62,4 @@
     <div class="actions"><button onclick={add}>+ Add source</button></div>
     <ApplySave />
   </div>
-{/if}
+</ConfigGate>

@@ -28,7 +28,11 @@ export async function loadServerConfig(force = false): Promise<void> {
   if (r.status === 200) {
     server.cfg = r.json;
     server.loaded = true;
+    server.error = '';
   } else {
+    // `api` never throws now, so an unreachable server arrives here as
+    // status 0 rather than as a rejected promise that left the page on
+    // "Loading…" for ever.
     server.error = r.json?.error ?? `HTTP ${r.status}`;
   }
 }

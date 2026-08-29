@@ -9,6 +9,7 @@
   import { onMount } from 'svelte';
   import HelpTip from '../../lib/HelpTip.svelte';
   import ApplySave from '../../lib/ApplySave.svelte';
+  import ConfigGate from '../../lib/ConfigGate.svelte';
   import Mqtt from './Mqtt.svelte';
   import { server, loadServerConfig, drop } from '../../lib/serverconfig.svelte';
 
@@ -24,7 +25,7 @@
     ]);
 </script>
 
-{#if server.cfg}
+<ConfigGate>
   <div class="card">
     <h2>
       Broadcast destinations
@@ -89,4 +90,4 @@
   </div>
 
   <Mqtt />
-{/if}
+</ConfigGate>

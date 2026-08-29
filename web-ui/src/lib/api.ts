@@ -6,16 +6,40 @@ export interface ApiResult {
   json: any;
 }
 
+/// Never throws. A caller gets `status: 0` when the request could not be made
+/// at all, and every caller in the app already branches on `status === 200`,
+/// so an unreachable server degrades into the same path as a rejected one.
+///
+/// This used to let `fetch`'s own rejection escape, and the difference is not
+/// academic: an HTTP error is a *reply*, while a route disappearing under a
+/// live page is an *exception*, and only the first was being handled. On
+/// 2026-08-29 a VPN came up and took the route to DXCA with it; every screen's
+/// `onMount` rejected half-way through, and the Settings pages — which render
+/// nothing until their config arrives — went blank with no explanation. From
+/// the other side of the screen that reads as "all my settings are gone".
+export const NETWORK_DOWN = 0;
+
 export async function api(
   method: string,
   path: string,
   body?: unknown,
 ): Promise<ApiResult> {
-  const resp = await fetch(path, {
-    method,
-    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  let resp: Response;
+  try {
+    resp = await fetch(path, {
+      method,
+      headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch (e) {
+    // DNS, refused, aborted, or the route pulled out from under us. The
+    // browser deliberately gives no detail here, so say what is useful rather
+    // than echoing "Load failed".
+    return {
+      status: NETWORK_DOWN,
+      json: { error: `Cannot reach the server (${method} ${path})` },
+    };
+  }
   let json: any = null;
   try {
     json = await resp.json();
