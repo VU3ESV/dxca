@@ -412,8 +412,8 @@
           aria-label="What the band mask does to masked spots"
           title="Dim keeps every spot on the page, receded, and restores it on hover — it cannot cost you a contact. Hide removes them from the list, which is cleaner on a busy feed."
         >
-          <option value="dim">dim them</option>
-          <option value="hide">hide them</option>
+          <option value="dim">dim</option>
+          <option value="hide">hide</option>
         </select>
         <!-- What the mask is reasoning from, shown rather than trusted. The
              phase is the whole input to the model, and the two times are how
@@ -438,7 +438,7 @@
       <span
         class="count masked-count"
         title={bandMask.mode === 'hide'
-          ? 'Removed from the list by the band mask. New DXCC is never hidden — switch to "dim them" to see these again.'
+          ? 'Removed from the list by the band mask. New DXCC is never hidden — switch to "dim" to see these again.'
           : 'Dimmed, not hidden — every one of them is still in the table and still sortable. New DXCC is never dimmed.'}
         >{maskedCount} {bandMask.mode === 'hide' ? 'hidden' : 'dimmed'}</span
       >
