@@ -2,10 +2,16 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-08-29 · **Status:**
-**v2.12.0 — THE SHELL REWORK, released 2026-08-29.** The two LAN hosts
-(noderedpi4 and Windows `192.168.1.170`) run this exact code but were deployed
-from `0ea73aa`, before the version bump, so they still REPORT v2.11.1 in the
-header — a cosmetic lag, fixed by redeploying either at leisure. The two VPN hosts —
+**v2.12.0 — THE SHELL REWORK, on ALL FOUR HOSTS (2026-08-29).** noderedpi4,
+Windows `192.168.1.170`, `adersh@192.168.1.151` and `vu2wj@192.168.1.201`. The
+two VPN hosts report v2.12.0; the two LAN hosts run this exact code but were
+deployed from `0ea73aa`, before the version bump, so they still REPORT v2.11.1
+in the header — a cosmetic lag, fixed by redeploying either at leisure.
+
+The `snr_db` migration ran on all four and is confirmed working end to end:
+vu2wj recorded an alert WITH an SNR within minutes of the upgrade (87 rows, 86
+of them the pre-migration NULLs). Both VPN hosts kept their own
+`config/dxca.toml` byte-for-byte — vu2wj's md5 was checked before and after. The two VPN hosts —
 `adersh@192.168.1.151` and `vu2wj@192.168.1.201` — are **still on v2.11.1** and
 update one at a time on Manoj's prompt, both `--no-seed`. This is the UI
 cleanup pass that the previous session left as the next item, and the largest
@@ -698,14 +704,17 @@ left:
 0. **Redeploy the two LAN hosts** whenever convenient, so the version they
    report matches what they run. No functional change.
 
-1. **`vu2wj@192.168.1.201` is the last host on v2.11.1.** `adersh` went to
-   v2.12.0 on 2026-08-29 (4/4 nodes proven, 245 alert rows preserved, its own
-   `dxca.toml` untouched). Same recipe for vu2wj:
-   **`deploy/pi-deploy.sh --no-seed vu2wj@192.168.1.201`** — `--no-seed` is not
-   optional, their database carries their own ClubLog credentials and Telegram
-   token — and **copy `data/dxca.db` to `dxca.db.pre-v2.12.0` FIRST**, because
-   the `snr_db` migration runs on their first open. adersh has that backup;
-   noderedpi4 does not, which is the one thing this session got wrong.
+1. **Nothing outstanding on the fleet** — all four hosts are on v2.12.0's
+   code. Optional tidy-up: redeploy noderedpi4 and Windows so the version they
+   REPORT matches what they run. No functional change.
+
+   **The deploy recipe that worked, for next time.** Both VPN hosts:
+   `deploy/pi-deploy.sh --no-seed <user>@<ip>`, with `data/dxca.db` copied to
+   `dxca.db.pre-<version>` FIRST. `--no-seed` is not optional — their databases
+   carry their own ClubLog credentials and Telegram tokens. Verify after with
+   the version, the node count, the alert row count and an **md5 of their
+   `config/dxca.toml` taken before and after**, which is what actually proves
+   `--no-seed` did its job.
 
    **Expect the transfer to fail at least once over the VPN.** The adersh
    deploy died with `Connection closed by 192.168.1.151 port 22` part-way
