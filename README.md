@@ -367,6 +367,23 @@ the binary there and re-registers the task — `config\` and `data\` are
 already in place and are never touched, so accounts and settings carry over
 with nothing to answer.
 
+**Updating Windows from your Mac instead.** If the Windows box runs OpenSSH
+Server and you can reach it with a key, `deploy/win-deploy.sh` does the same
+job as `pi-deploy.sh`: cross-compile here, upload the exe, stop the task,
+swap the binary, restart and verify — `config\` and `data\` untouched, and
+an automatic rollback to the previous binary if the dashboard does not come
+back.
+
+```sh
+deploy/win-deploy.sh user@192.168.1.170
+```
+
+It **updates**, it does not install: it registers nothing, so the first
+install on any machine is still `install-dxca.cmd` from the release zip.
+The SSH user must be in `BUILTIN\Administrators` with the group enabled, or
+the session cannot control the task — the script checks that, and every
+other precondition, *before* it stops anything.
+
 Installs made before v2.10.0 ran from the unzipped folder, so each release
 landed in an empty new one and had to be set up from scratch. The first run
 of a 2.10.0-or-later installer on such a machine finds no install in
