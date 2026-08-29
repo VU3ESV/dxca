@@ -234,7 +234,11 @@ async fn spot_stats(State(app): State<AppState>) -> Json<serde_json::Value> {
     // this as a band plan, and 10M sorting before 160M would be noise.
     let bands: Vec<serde_json::Value> = dxca_core::bands::SELECTABLE_BANDS
         .iter()
-        .filter_map(|b| by_band.get(b).map(|n| serde_json::json!({"key": b, "count": n})))
+        .filter_map(|b| {
+            by_band
+                .get(b)
+                .map(|n| serde_json::json!({"key": b, "count": n}))
+        })
         .collect();
 
     let sorted = |m: HashMap<String, u64>| {

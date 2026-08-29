@@ -548,12 +548,11 @@ async fn handle_line(
             let auth = cfg.auth.clone();
             // argon2 is deliberately expensive; verifying it on the async
             // runtime would stall every other session's spot delivery.
-            let verdict = tokio::task::spawn_blocking(move || {
-                auth.authenticate(&callsign, &password)
-            })
-            .await
-            .ok()
-            .flatten();
+            let verdict =
+                tokio::task::spawn_blocking(move || auth.authenticate(&callsign, &password))
+                    .await
+                    .ok()
+                    .flatten();
             match verdict {
                 Some(id) => {
                     let greeting = format!(
@@ -746,11 +745,11 @@ mod login_tests {
 
         // The kind of thing a logger might blurt out on connect.
         for junk in [
-            "VU2CPL\r\n",                      // a bare callsign
-            "set/name Manoj\r\n",              // a cluster command
-            "\r\n",                            // a stray newline
-            "sh/dx\r\n",                       // a query
-            "BYE\r\n",                         // must NOT hang us up
+            "VU2CPL\r\n",         // a bare callsign
+            "set/name Manoj\r\n", // a cluster command
+            "\r\n",               // a stray newline
+            "sh/dx\r\n",          // a query
+            "BYE\r\n",            // must NOT hang us up
         ] {
             c.write_all(junk.as_bytes()).await.unwrap();
             expect_quiet(&mut c).await;
@@ -835,7 +834,9 @@ mod login_tests {
         assert!(reply.contains("Login failed."), "got {reply:?}");
         let lower = reply.to_lowercase();
         assert!(
-            !lower.contains("password") && !lower.contains("callsign") && !lower.contains("unknown"),
+            !lower.contains("password")
+                && !lower.contains("callsign")
+                && !lower.contains("unknown"),
             "must not reveal which half was wrong: {reply:?}"
         );
 
@@ -1040,13 +1041,10 @@ mod login_tests {
         let mut got = Vec::new();
         let mut buf = [0u8; 512];
         while !got.windows(3).any(|w| w == [IAC, WILL, OPT_ECHO]) {
-            let n = tokio::time::timeout(
-                std::time::Duration::from_secs(5),
-                c.read(&mut buf),
-            )
-            .await
-            .expect("timed out waiting for the echo offer")
-            .expect("read");
+            let n = tokio::time::timeout(std::time::Duration::from_secs(5), c.read(&mut buf))
+                .await
+                .expect("timed out waiting for the echo offer")
+                .expect("read");
             assert!(n > 0, "server closed");
             got.extend_from_slice(&buf[..n]);
         }

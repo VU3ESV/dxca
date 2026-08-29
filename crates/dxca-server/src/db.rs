@@ -478,11 +478,7 @@ fn db_err<E: std::fmt::Display>(e: E) -> String {
 /// drop, rename or retype belongs in a real versioned migration, not here.
 const ADDED_COLUMNS: &[(&str, &str, &str)] = &[
     // table, column, full DDL for ALTER TABLE ... ADD COLUMN
-    (
-        "alerts_sent",
-        "spotter",
-        "spotter TEXT NOT NULL DEFAULT ''",
-    ),
+    ("alerts_sent", "spotter", "spotter TEXT NOT NULL DEFAULT ''"),
     (
         "user_configs",
         "station_json",
@@ -1159,7 +1155,6 @@ impl Db {
 mod tests {
     use super::*;
 
-    #[test]
     /// An account stored before this key existed must deserialize to
     /// "off", or an upgrade would silently start suppressing alerts that
     /// used to arrive.
@@ -1196,7 +1191,10 @@ mod tests {
         assert!(n.passes_spotter(true));
         assert!(n.passes_spotter(false));
         n.notify_spotter_kind = String::new();
-        assert!(n.passes_spotter(true), "an unadopted config pings for everything");
+        assert!(
+            n.passes_spotter(true),
+            "an unadopted config pings for everything"
+        );
     }
 
     #[test]
@@ -1216,7 +1214,10 @@ mod tests {
         .unwrap();
         let cfg = db.notify_config(uid).unwrap();
         assert_eq!(cfg.notify_spotter_kind, SPOTTER_HUMAN, "adopted, not reset");
-        assert!(!cfg.passes_spotter(true), "and it still holds skimmers back");
+        assert!(
+            !cfg.passes_spotter(true),
+            "and it still holds skimmers back"
+        );
 
         // The same for an account that never set it: `all`, not `human`.
         let other = db.create_user("K1ABC", "h", "", "user").unwrap();
@@ -1285,7 +1286,6 @@ mod tests {
         assert!(!d.wants_level(AlertLevel::UnconfDxcc));
     }
 
-    #[test]
     /// The migration is the risky half of adding a column: production
     /// databases already exist, `CREATE TABLE IF NOT EXISTS` will not touch
     /// them, and the first query naming the new column would fail at
@@ -1337,7 +1337,9 @@ mod tests {
 
         // Opening it must migrate, not explode.
         let db = Db::open(&path).expect("an old database must still open");
-        let rows = db.sent_alerts(1, 10).expect("the new column must be queryable");
+        let rows = db
+            .sent_alerts(1, 10)
+            .expect("the new column must be queryable");
         assert_eq!(rows.len(), 1, "the existing row survives");
         assert_eq!(rows[0].callsign, "OLDCALL");
         assert_eq!(rows[0].spotter, "", "back-filled with the default");
@@ -1379,6 +1381,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    #[test]
     fn sent_alerts_keep_failures_and_stay_bounded_per_user() {
         let (db, _p) = temp_db();
         let a = db.create_user("VU2CPL", "h", "", "admin").unwrap();

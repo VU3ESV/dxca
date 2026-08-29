@@ -161,7 +161,10 @@ async fn a_real_wsjtx_decode_reports_ft8_not_a_tilde() {
     };
 
     assert_eq!(spot.source_name, "WSJTX");
-    assert_eq!(spot.mode, "FT8", "the `~` marker must resolve to a mode name");
+    assert_eq!(
+        spot.mode, "FT8",
+        "the `~` marker must resolve to a mode name"
+    );
     assert!(
         !spot.mode_inferred,
         "WSJT-X told us the mode; nothing was guessed from the frequency"

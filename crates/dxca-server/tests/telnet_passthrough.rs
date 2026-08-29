@@ -77,7 +77,9 @@ async fn sh_dx_history_reaches_the_asker_and_nothing_else() {
         let (mut s, _) = node.accept().await.unwrap();
         s.write_all(b"login: ").await.unwrap();
         let mut buf = [0u8; 1024];
-        s.read(&mut buf).await.unwrap();
+        // Drain the login callsign; this double never inspects it, so the
+        // byte count is deliberately discarded.
+        let _ = s.read(&mut buf).await.unwrap();
         s.write_all(b"Hello VU2CPL, welcome to the test node\r\n")
             .await
             .unwrap();
@@ -139,11 +141,15 @@ async fn sh_dx_history_reaches_the_asker_and_nothing_else() {
     .await;
 
     // --- an anonymous client, watching the shared feed -------------------
-    let mut bystander = TcpStream::connect(("127.0.0.1", telnet_port)).await.unwrap();
+    let mut bystander = TcpStream::connect(("127.0.0.1", telnet_port))
+        .await
+        .unwrap();
     read_until(&mut bystander, "DXCA").await;
 
     // --- the operator logs in and asks for history -----------------------
-    let mut op = TcpStream::connect(("127.0.0.1", telnet_port)).await.unwrap();
+    let mut op = TcpStream::connect(("127.0.0.1", telnet_port))
+        .await
+        .unwrap();
     read_until(&mut op, "DXCA").await;
     op.write_all(b"LOGIN VU2CPL\r\n").await.unwrap();
     read_until(&mut op, "Password").await;
@@ -217,7 +223,8 @@ async fn dangerous_commands_never_reach_the_node() {
         let (mut s, _) = node.accept().await.unwrap();
         s.write_all(b"login: ").await.unwrap();
         let mut buf = [0u8; 1024];
-        s.read(&mut buf).await.unwrap();
+        // Drain the login callsign; the count is deliberately discarded.
+        let _ = s.read(&mut buf).await.unwrap();
         s.write_all(b"Hello VU2CPL, welcome\r\n").await.unwrap();
         // Anything further is a command DXCA should never have sent.
         while let Ok(n) = s.read(&mut buf).await {
@@ -252,7 +259,9 @@ async fn dangerous_commands_never_reach_the_node() {
     })
     .await;
 
-    let mut op = TcpStream::connect(("127.0.0.1", telnet_port)).await.unwrap();
+    let mut op = TcpStream::connect(("127.0.0.1", telnet_port))
+        .await
+        .unwrap();
     read_until(&mut op, "DXCA").await;
     op.write_all(b"LOGIN VU2CPL\r\n").await.unwrap();
     read_until(&mut op, "Password").await;
@@ -269,7 +278,9 @@ async fn dangerous_commands_never_reach_the_node() {
         ("sysop", "refused"),
         ("frobnicate", "not a command"),
     ] {
-        op.write_all(format!("{line}\r\n").as_bytes()).await.unwrap();
+        op.write_all(format!("{line}\r\n").as_bytes())
+            .await
+            .unwrap();
         let reply = read_until(&mut op, expect).await;
         assert!(reply.contains(expect), "for {line:?} got {reply}");
     }

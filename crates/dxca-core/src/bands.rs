@@ -283,7 +283,10 @@ mod tests {
     /// Day and night, the two cases the mask exists to separate.
     #[test]
     fn the_phase_decides_which_bands_are_plausible() {
-        assert!(!plausible_in("160M", SunPhase::Day), "160m at midday is the whole point");
+        assert!(
+            !plausible_in("160M", SunPhase::Day),
+            "160m at midday is the whole point"
+        );
         assert!(!plausible_in("80M", SunPhase::Day));
         assert!(plausible_in("20M", SunPhase::Day));
         assert!(plausible_in("15M", SunPhase::Day));
@@ -318,7 +321,12 @@ mod tests {
     /// rather than the sun. Neither is ever masked.
     #[test]
     fn bands_the_model_does_not_claim_to_understand_are_never_masked() {
-        for phase in [SunPhase::Dawn, SunPhase::Day, SunPhase::Dusk, SunPhase::Night] {
+        for phase in [
+            SunPhase::Dawn,
+            SunPhase::Day,
+            SunPhase::Dusk,
+            SunPhase::Night,
+        ] {
             assert!(plausible_in("30M", phase), "30M in {phase:?}");
             assert!(plausible_in("6M", phase), "6M in {phase:?}");
             assert!(plausible_in("2M", phase), "2M in {phase:?}");
@@ -365,10 +373,15 @@ mod tests {
     #[test]
     fn no_band_is_masked_in_every_phase() {
         for (band, _) in BAND_PHASES {
-            let open = [SunPhase::Dawn, SunPhase::Day, SunPhase::Dusk, SunPhase::Night]
-                .into_iter()
-                .filter(|p| plausible_in(band, *p))
-                .count();
+            let open = [
+                SunPhase::Dawn,
+                SunPhase::Day,
+                SunPhase::Dusk,
+                SunPhase::Night,
+            ]
+            .into_iter()
+            .filter(|p| plausible_in(band, *p))
+            .count();
             assert!(open > 0, "{band} would be masked at every hour");
         }
     }

@@ -1,6 +1,16 @@
 # Convenience wrappers only — every recipe is a plain cargo/pnpm command
 # (Meridian discipline: `just` is never required).
 
+# This Mac's rustup is Homebrew's, with only the cargo/rustc proxies
+# symlinked into /usr/local/bin — `cargo fmt` and `cargo clippy` are not
+# subcommands without the full proxy set on PATH. That is why the gate went
+# unrun for the whole of v2.x: `just gate` died at its first line with "no
+# such subcommand", and what got run instead was `cargo test`, which passes.
+# A gate that cannot run is indistinguishable from a gate that passes.
+# Prepending the rustup bin directory here is a no-op on machines that do not
+# have it.
+export PATH := "/opt/homebrew/opt/rustup/bin:" + env_var("PATH")
+
 # Build all crates (debug).
 build:
     cargo build --workspace

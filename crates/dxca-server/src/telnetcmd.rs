@@ -158,7 +158,10 @@ impl TelnetCommands {
             "SET/NODE" => {
                 let want = args.trim().to_string();
                 if want.is_empty() {
-                    self.send(session, "Usage: SET/NODE <name>  (SH/NODES lists them)".into());
+                    self.send(
+                        session,
+                        "Usage: SET/NODE <name>  (SH/NODES lists them)".into(),
+                    );
                     return;
                 }
                 let statuses = self.nodes.statuses();

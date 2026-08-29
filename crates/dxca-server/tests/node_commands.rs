@@ -12,9 +12,9 @@
 
 use dxca_connect::dxcluster::{ClientConfig, ClientEvent};
 use dxca_server::cmdrouter::{CommandRouter, RouterAction, SessionId};
+use dxca_server::config::Config;
 use dxca_server::nodes::NodeManager;
 use dxca_server::pipeline;
-use dxca_server::config::Config;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
@@ -85,10 +85,7 @@ async fn command_reaches_the_node_and_its_reply_comes_back() {
     nodes.start_node("DB0SUE".into(), test_client_cfg(node_port), input_tx);
 
     wait_until("node proven live", 15, || {
-        nodes
-            .statuses()
-            .get("DB0SUE")
-            .is_some_and(|s| s.proven)
+        nodes.statuses().get("DB0SUE").is_some_and(|s| s.proven)
     })
     .await;
 
@@ -115,12 +112,12 @@ async fn command_reaches_the_node_and_its_reply_comes_back() {
     let mut closed = false;
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     while !closed {
-        assert!(std::time::Instant::now() < deadline, "reply never completed");
-        let Ok(Ok(node_line)) = tokio::time::timeout(
-            std::time::Duration::from_millis(500),
-            lines.recv(),
-        )
-        .await
+        assert!(
+            std::time::Instant::now() < deadline,
+            "reply never completed"
+        );
+        let Ok(Ok(node_line)) =
+            tokio::time::timeout(std::time::Duration::from_millis(500), lines.recv()).await
         else {
             continue;
         };
@@ -268,7 +265,10 @@ async fn telnet_login_uses_the_real_accounts_table() {
     c.write_all(b"shack-secret\r\n").await.unwrap();
     let welcome = read_until(&mut c, "Welcome").await;
     assert!(welcome.contains("VU2CPL"), "got {welcome:?}");
-    assert!(welcome.contains("admin"), "role carried through: {welcome:?}");
+    assert!(
+        welcome.contains("admin"),
+        "role carried through: {welcome:?}"
+    );
 
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -281,10 +281,10 @@ async fn telnet_login_uses_the_real_accounts_table() {
 /// filtering, nothing imposed — so it is asserted rather than assumed.
 #[tokio::test]
 async fn no_locator_means_no_band_annotation() {
-    use dxca_server::db::{Db, StationConfig};
-    use dxca_server::users::UserService;
     use dxca_connect::clublog::Endpoints;
     use dxca_connect::telegram::Telegram;
+    use dxca_server::db::{Db, StationConfig};
+    use dxca_server::users::UserService;
 
     let dir = std::env::temp_dir().join(format!("dxca-mask-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);

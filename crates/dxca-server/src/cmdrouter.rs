@@ -95,10 +95,7 @@ impl CommandRouter {
     ) -> Vec<RouterAction> {
         let slot = self.nodes.entry(node.to_string()).or_default();
         if slot.inflight.is_some() {
-            slot.queue.push_back(Pending {
-                session,
-                command,
-            });
+            slot.queue.push_back(Pending { session, command });
             let ahead = slot.queue.len();
             return vec![RouterAction::ToSession {
                 session,
@@ -108,12 +105,7 @@ impl CommandRouter {
                 ),
             }];
         }
-        vec![dispatch(
-            slot,
-            node,
-            Pending { session, command },
-            now_ms,
-        )]
+        vec![dispatch(slot, node, Pending { session, command }, now_ms)]
     }
 
     /// Offer one event from `node`'s cluster session to the router.
@@ -122,7 +114,12 @@ impl CommandRouter {
     /// the event. A consumed line belongs to somebody's reply and must not
     /// also flow onward — that is what keeps `sh/dx` output, which parses as
     /// perfectly good spots, out of the live spot pipeline.
-    pub fn on_event(&mut self, node: &str, event: &ClientEvent, now_ms: u64) -> (Vec<RouterAction>, bool) {
+    pub fn on_event(
+        &mut self,
+        node: &str,
+        event: &ClientEvent,
+        now_ms: u64,
+    ) -> (Vec<RouterAction>, bool) {
         let Some(slot) = self.nodes.get_mut(node) else {
             return (Vec::new(), false);
         };
@@ -139,9 +136,7 @@ impl CommandRouter {
                 }
                 (actions, true)
             }
-            ClientEvent::Line(text)
-            | ClientEvent::Announce(text)
-            | ClientEvent::Wwv(text) => {
+            ClientEvent::Line(text) | ClientEvent::Announce(text) | ClientEvent::Wwv(text) => {
                 f.last_line_ms = now_ms;
                 f.lines += 1;
                 (
@@ -248,9 +243,7 @@ impl CommandRouter {
 
     /// Is a command currently occupying `node`'s slot?
     pub fn is_busy(&self, node: &str) -> bool {
-        self.nodes
-            .get(node)
-            .is_some_and(|s| s.inflight.is_some())
+        self.nodes.get(node).is_some_and(|s| s.inflight.is_some())
     }
 }
 
@@ -299,7 +292,10 @@ mod tests {
         assert!(r.is_busy("DB0SUE"));
 
         let (out, consumed) = r.on_event("DB0SUE", &line("first result"), 100);
-        assert!(consumed, "a reply line belongs to the command, not the feed");
+        assert!(
+            consumed,
+            "a reply line belongs to the command, not the feed"
+        );
         assert_eq!(
             out,
             vec![RouterAction::ToSession {

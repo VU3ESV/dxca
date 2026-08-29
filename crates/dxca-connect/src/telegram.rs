@@ -37,6 +37,14 @@ impl Telegram {
     /// (bad token, unknown chat) returns at once: Telegram would only
     /// refuse it again. Callers run this on a blocking task, so the pause
     /// never stalls the pipeline.
+    //
+    // clippy::result_large_err fires on `attempt`'s `Result<_, ureq::Error>`
+    // (the Err variant is ~272 bytes). Not boxed on purpose: that Result never
+    // leaves this function — every arm below turns it into a String — so the
+    // size costs a few bytes of stack across two calls and nothing else, while
+    // boxing would add an allocation on the error path and force the
+    // `ureq::Error::Status` match through a deref just to read it.
+    #[allow(clippy::result_large_err)]
     pub fn send(&self, bot_token: &str, chat_id: &str, html_text: &str) -> Result<(), String> {
         if bot_token.is_empty() || chat_id.is_empty() {
             return Err("bot token / chat id not configured".into());
@@ -104,7 +112,9 @@ mod tests {
                 let mut req = Vec::new();
                 let mut buf = [0u8; 4096];
                 let body_len = loop {
-                    let Ok(k) = stream.read(&mut buf) else { break 0 };
+                    let Ok(k) = stream.read(&mut buf) else {
+                        break 0;
+                    };
                     if k == 0 {
                         break 0;
                     }
@@ -141,7 +151,8 @@ mod tests {
         let (port, hits) = spawn_stub(move |n| (n > 1).then_some(ok));
         let mut t = super::Telegram::with_base(&format!("http://127.0.0.1:{port}"));
         t.retry_delay = super::Duration::ZERO;
-        t.send("tok", "chat", "hello").expect("second attempt lands");
+        t.send("tok", "chat", "hello")
+            .expect("second attempt lands");
         assert_eq!(hits.load(Ordering::SeqCst), 2);
     }
 

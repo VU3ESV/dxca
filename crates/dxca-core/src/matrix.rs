@@ -241,9 +241,8 @@ mod tests {
         m.record(324, "20M", "CW", "VU2ABC", true);
         m.record(2, "20M", "CW", "OLD1", true);
 
-        let band = |st: &BandModeStats, k: &str| {
-            st.bands.iter().find(|b| b.key == k).unwrap().clone()
-        };
+        let band =
+            |st: &BandModeStats, k: &str| st.bands.iter().find(|b| b.key == k).unwrap().clone();
         assert_eq!(band(&m.by_band_and_mode(), "20M").worked, 2);
         let current = m.by_band_and_mode_excluding(&HashSet::from([2]));
         assert_eq!(band(&current, "20M").worked, 1);

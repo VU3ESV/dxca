@@ -44,8 +44,8 @@ pub fn elevation(pos: LatLon, at_unix: i64) -> f64 {
     let lambda = true_long - 0.005_69 - 0.004_78 * omega.to_radians().sin();
 
     // Obliquity of the ecliptic, corrected.
-    let eps0 = 23.0
-        + (26.0 + (21.448 - t * (46.815 + t * (0.000_59 - t * 0.001_813))) / 60.0) / 60.0;
+    let eps0 =
+        23.0 + (26.0 + (21.448 - t * (46.815 + t * (0.000_59 - t * 0.001_813))) / 60.0) / 60.0;
     let eps = (eps0 + 0.002_56 * omega.to_radians().cos()).to_radians();
 
     let declination = (eps.sin() * lambda.to_radians().sin()).asin();
@@ -169,7 +169,11 @@ pub fn phase(pos: LatLon, at_unix: i64, window_min: u32) -> SunPhase {
         // Sun is up: [sunrise pt] .. now .. [sunset nt].
         (Some((pt, Event::Sunrise)), Some((nt, Event::Sunset))) => {
             if pt + w >= nt - w {
-                if at_unix < (pt + nt) / 2 { SunPhase::Dawn } else { SunPhase::Dusk }
+                if at_unix < (pt + nt) / 2 {
+                    SunPhase::Dawn
+                } else {
+                    SunPhase::Dusk
+                }
             } else if at_unix < pt + w {
                 SunPhase::Dawn
             } else if at_unix >= nt - w {
@@ -181,7 +185,11 @@ pub fn phase(pos: LatLon, at_unix: i64, window_min: u32) -> SunPhase {
         // Sun is down: [sunset pt] .. now .. [sunrise nt].
         (Some((pt, Event::Sunset)), Some((nt, Event::Sunrise))) => {
             if pt + w >= nt - w {
-                if at_unix < (pt + nt) / 2 { SunPhase::Dusk } else { SunPhase::Dawn }
+                if at_unix < (pt + nt) / 2 {
+                    SunPhase::Dusk
+                } else {
+                    SunPhase::Dawn
+                }
             } else if at_unix < pt + w {
                 SunPhase::Dusk
             } else if at_unix >= nt - w {
@@ -254,8 +262,8 @@ fn event_ut_hours(day_of_year: f64, pos: LatLon, rising: bool) -> SunCalc {
     let t = day_of_year + ((if rising { 6.0 } else { 18.0 } - lng_hour) / 24.0);
 
     let m = 0.9856 * t - 3.289;
-    let l = (m + 1.916 * (m * DEG).sin() + 0.020 * (2.0 * m * DEG).sin() + 282.634)
-        .rem_euclid(360.0);
+    let l =
+        (m + 1.916 * (m * DEG).sin() + 0.020 * (2.0 * m * DEG).sin() + 282.634).rem_euclid(360.0);
 
     let mut ra = (0.91764 * (l * DEG).tan()).atan() / DEG;
     ra = ra.rem_euclid(360.0);
@@ -372,7 +380,10 @@ mod tests {
     #[test]
     fn the_midnight_sun_never_sets() {
         // Tromsø, well inside the Arctic circle, at the June solstice.
-        let pos = LatLon { lat: 69.65, lon: 18.96 };
+        let pos = LatLon {
+            lat: 69.65,
+            lon: 18.96,
+        };
         let solstice = 1_782_000_000;
         for hour in 0..24 {
             let t = solstice + hour * 3_600;
@@ -386,7 +397,10 @@ mod tests {
     /// ...and the same place in December never sees it rise.
     #[test]
     fn the_polar_night_never_dawns() {
-        let pos = LatLon { lat: 69.65, lon: 18.96 };
+        let pos = LatLon {
+            lat: 69.65,
+            lon: 18.96,
+        };
         // 2026-12-21.
         let solstice = 1_797_811_200;
         for hour in 0..24 {
@@ -404,7 +418,9 @@ mod tests {
     #[test]
     fn elevation_peaks_once_a_day_near_local_noon() {
         let pos = grid::parse("MK82").expect("MK82");
-        let midnight_utc = 1_782_000_000 - 1_782_000_000 % 86_400;
+        // 2026-06-21T00:00:00Z — already an exact midnight, so the
+        // round-down this used to spell out (`t - t % 86_400`) was a no-op.
+        let midnight_utc = 1_782_000_000;
         let (mut best_hour, mut best) = (0, f64::MIN);
         for hour in 0..24 {
             let el = elevation(pos, midnight_utc + hour * 3_600);
@@ -418,7 +434,10 @@ mod tests {
             (6..=8).contains(&best_hour),
             "peak elevation at {best_hour}:00 UTC, expected near 07:00"
         );
-        assert!(best > 60.0, "a tropical midsummer noon should be high: {best}");
+        assert!(
+            best > 60.0,
+            "a tropical midsummer noon should be high: {best}"
+        );
     }
 
     /// Validation against the outside world, not just against itself.
@@ -597,7 +616,10 @@ mod tests {
         let start = 1_782_000_000;
         for m in 0..(24 * 60) {
             let p = super::phase(pos, start + m * 60, 720);
-            assert!(p.is_greyline(), "a 12-hour window is grey line throughout, got {p:?}");
+            assert!(
+                p.is_greyline(),
+                "a 12-hour window is grey line throughout, got {p:?}"
+            );
         }
     }
 
@@ -610,7 +632,7 @@ mod tests {
         // sunset 21:18 local (19:18 UTC).
         let pos = grid::parse("JN58TD").unwrap();
         let t = super::sun_times(pos, 1_782_000_000);
-        let hhmm = |u: i64| ((u.rem_euclid(86_400)) / 60) as i64; // minutes into the UTC day
+        let hhmm = |u: i64| (u.rem_euclid(86_400)) / 60; // minutes into the UTC day
         assert!(
             (hhmm(t.sunrise_unix.unwrap()) - (3 * 60 + 14)).abs() <= 5,
             "sunrise {} min into the day",

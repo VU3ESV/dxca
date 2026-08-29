@@ -217,7 +217,10 @@ pub enum Classified {
     Local { canonical: String, args: String },
     /// Send `line` to the operator's current node.
     Forward { canonical: String, line: String },
-    Refused { canonical: Option<String>, why: Refusal },
+    Refused {
+        canonical: Option<String>,
+        why: Refusal,
+    },
 }
 
 /// Expand an abbreviated verb to its canonical form.
@@ -322,7 +325,9 @@ mod tests {
     use super::*;
 
     fn canon(v: &str) -> &'static str {
-        canonicalize(v).unwrap_or_else(|e| panic!("{v} did not resolve: {e:?}")).0
+        canonicalize(v)
+            .unwrap_or_else(|e| panic!("{v} did not resolve: {e:?}"))
+            .0
     }
 
     #[test]
@@ -432,7 +437,10 @@ mod tests {
         assert!(msg.contains("acc/spots"));
         assert!(msg.to_lowercase().contains("shar"), "says why: {msg}");
         let msg = Refusal::Mutate.message("set/homenode");
-        assert!(msg.to_lowercase().contains("node account"), "says why: {msg}");
+        assert!(
+            msg.to_lowercase().contains("node account"),
+            "says why: {msg}"
+        );
     }
 
     #[test]
