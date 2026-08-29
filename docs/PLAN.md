@@ -275,7 +275,9 @@ GET  /                                  # embedded Svelte UI
   enters maintenance mode with a pointer to the successor.*
 
 Phase-2 backlog (post-2.0): per-user telnet feed filtering (§5), MQTT
-status, durable SQLite spot history + search UI, Meridian integration (§6).
+status, durable SQLite spot history + search UI, Meridian integration (§6),
+and the **phase-rotation spot mask** — designed in
+[`PHASE-ROTATION-MASK.md`](PHASE-ROTATION-MASK.md), not built.
 
 **Interactive telnet with cluster-command passthrough — DONE in v2.3.0/
 v2.3.1** (milestones 1–3 of

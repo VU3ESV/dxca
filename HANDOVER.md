@@ -527,6 +527,30 @@ last *published* release, because tags can outrun releases.
 
 ## Open items → next session
 
+**Designed, not built (2026-08-29): the phase-rotation spot mask** —
+[`docs/PHASE-ROTATION-MASK.md`](docs/PHASE-ROTATION-MASK.md). Manoj's
+request, taking Meridian's locator-driven band rotation and applying it to
+the spot feed: stop showing New-DXCC 160m spots at local midday.
+
+**Nothing for this exists yet.** `wire::looks_like_grid` validates a locator
+but nothing converts one to coordinates, and there is no solar maths in the
+tree at all. Four pieces, the first three pure and golden-testable:
+Maidenhead → lat/lon, sun elevation, a band-openness model, then the
+per-user locator and settings (JSON blob, so **no migration**).
+
+**The load-bearing decisions, if you read nothing else:** use **sun
+elevation**, not clock time — a fixed local-time rule is wrong by up to six
+hours across a European year and breaks entirely above the Arctic circle.
+Default to **dim, not hide**, because the cost of concealing a workable rare
+one vastly exceeds the cost of showing an unworkable one. **Never mask New
+DXCC** by default. And always show a **count of what was masked** — today's
+finding about the alert-level filter is the direct precedent: a filter that
+silently empties the screen reads as broken.
+
+Stopping after milestone 3 (dim mode on the Spots screen) is a good outcome;
+the threshold tuning it produces matters more than the remaining code.
+
+
 **SHIPPED as v2.8.0 (2026-08-29): WSJT-X mode names, and telnet ECHO
 negotiation.** On all three Pis,
 [released](https://github.com/vu2cpl/dxca/releases/tag/v2.8.0) with the
