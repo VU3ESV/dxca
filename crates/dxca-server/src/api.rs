@@ -36,6 +36,7 @@ pub fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/api/status", get(status))
         .route("/api/spots", get(spots))
+        .route("/api/spot-stats", get(spot_stats))
         .route("/api/stream", get(stream))
         .route("/api/setup", post(setup))
         .route("/api/login", post(login))
@@ -179,6 +180,69 @@ async fn spots(
         .map(|s| annotate_spot(&app, user.as_ref(), s, sun))
         .collect();
     Json(serde_json::json!({ "spots": annotated }))
+}
+
+/// What the spot feed is actually made of: totals by band, by mode class,
+/// and by the source that carried it.
+///
+/// Aggregated **server-side over the whole ring** rather than in the
+/// browser. The Spots screen holds the last 500 spots, which on a busy feed
+/// is about five minutes — counting those would answer a much smaller
+/// question than the one being asked, and would change every time the page
+/// reloaded. The ring is 5000, closer to an hour.
+///
+/// Band comes from the frequency and mode from the spot itself, so none of
+/// this depends on which account is asking; it is the same feed for
+/// everyone and needs no session.
+async fn spot_stats(State(app): State<AppState>) -> Json<serde_json::Value> {
+    use std::collections::HashMap;
+    let spots = app.pipeline.recent_spots(usize::MAX);
+
+    let mut by_band: HashMap<&'static str, u64> = HashMap::new();
+    let mut by_mode: HashMap<String, u64> = HashMap::new();
+    let mut by_source: HashMap<String, u64> = HashMap::new();
+    let (mut oldest, mut newest) = (i64::MAX, i64::MIN);
+
+    for s in &spots {
+        if let Some(b) = dxca_core::bands::band_from_hz(s.frequency_hz()) {
+            *by_band.entry(b).or_default() += 1;
+        }
+        // The mode as reported, not the award bucket: "which bands and modes
+        // is my feed actually carrying" is a question about FT8 versus FT4,
+        // and collapsing both into DATA would erase the answer.
+        let mode = s.mode.trim().to_uppercase();
+        if !mode.is_empty() {
+            *by_mode.entry(mode).or_default() += 1;
+        }
+        *by_source.entry(s.source_name.clone()).or_default() += 1;
+        oldest = oldest.min(s.time_unix);
+        newest = newest.max(s.time_unix);
+    }
+
+    // Bands in band order, not alphabetical or by count: an operator reads
+    // this as a band plan, and 10M sorting before 160M would be noise.
+    let bands: Vec<serde_json::Value> = dxca_core::bands::SELECTABLE_BANDS
+        .iter()
+        .filter_map(|b| by_band.get(b).map(|n| serde_json::json!({"key": b, "count": n})))
+        .collect();
+
+    let sorted = |m: HashMap<String, u64>| {
+        let mut v: Vec<(String, u64)> = m.into_iter().collect();
+        // Commonest first, ties by name so the order never jitters between
+        // refreshes when two sources are level.
+        v.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+        v.into_iter()
+            .map(|(k, n)| serde_json::json!({"key": k, "count": n}))
+            .collect::<Vec<_>>()
+    };
+
+    Json(serde_json::json!({
+        "total": spots.len(),
+        "span_secs": if spots.is_empty() { 0 } else { newest - oldest },
+        "bands": bands,
+        "modes": sorted(by_mode),
+        "sources": sorted(by_source),
+    }))
 }
 
 // --- live stream ---------------------------------------------------------

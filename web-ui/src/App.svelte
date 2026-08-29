@@ -7,6 +7,7 @@
   import Dashboard from './views/Dashboard.svelte';
   import ClubLog from './views/ClubLog.svelte';
   import Alerts from './views/Alerts.svelte';
+  import Stats from './views/Stats.svelte';
   import Users from './views/Users.svelte';
   import Blacklist from './views/Blacklist.svelte';
   import System from './views/System.svelte';
@@ -47,6 +48,7 @@
     ['spots', 'Spots'],
     ['clublog', 'My ClubLog'],
     ['alerts', 'My Alerts'],
+    ['stats', 'Stats'],
     ...(me?.role === 'admin' ? [['users', 'Users'], ['blacklist', 'Blacklist']] : []),
     ['system', 'System'],
   ] as [string, string][]);
@@ -79,6 +81,8 @@
     <ClubLog />
   {:else if tab === 'alerts'}
     <Alerts />
+  {:else if tab === 'stats'}
+    <Stats />
   {:else if tab === 'users'}
     <Users />
   {:else if tab === 'blacklist'}

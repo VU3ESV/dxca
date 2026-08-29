@@ -527,6 +527,30 @@ last *published* release, because tags can outrun releases.
 
 ## Open items → next session
 
+**Built, NOT deployed (2026-08-29): the Stats tab.** All three Pis are on
+v2.8.0; this is unreleased.
+
+Total spots held, plus breakdowns by band, mode and source.
+`GET /api/spot-stats` aggregates across the **whole ring**, not the 500 the
+Spots screen holds — on a busy feed that is five minutes, which would answer
+a far smaller question than the one asked, and would change on every reload.
+Band comes from the frequency and mode from the spot, so the aggregation is
+user-independent and needs no session.
+
+**Bars, not pie charts, on purpose.** The job is magnitude comparison across
+up to fifteen categories with long names; a fifteen-slice pie cannot be
+compared by eye or hold its labels. Each chart is a single series, so there
+is no legend — the heading names it, and colour carries no meaning beyond
+"this is the bar". Fifteen hues for fifteen bands would encode identity the
+labels already carry and fail on colour-vision grounds for nothing.
+
+One layout detail worth keeping: the grid lives on the **chart**, with rows
+as `display: contents`, so the label column sizes to the longest name in
+that chart. A fixed width truncated `UberSDR CWskim` to `UberSDR C…` — in a
+chart about which node carried what, losing the node's name is exactly the
+wrong thing to lose. Caught by looking at the render, not by a test.
+
+
 **NEEDS TESTING ON WINDOWS (2026-08-29): the installer now imports a
 previous install's config and database.** Written but **not run** — there is
 no Windows machine in this workflow, so the batch is unverified beyond a

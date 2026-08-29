@@ -526,6 +526,22 @@ the history answers the same question after the fact. Alerts sent before
 this shipped show `—`: the column was added to existing databases on
 upgrade, and there was nothing to back-fill it with.
 
+### Stats
+
+A **Stats** tab answers what the feed is actually made of: the total spots
+held in memory, then breakdowns by band, by mode and by source. Counted
+server-side across the **whole** spot ring rather than the 500 the Spots
+screen holds — that is about five minutes on a busy feed, which would
+answer a much smaller question than the one being asked.
+
+Bands stay in band order so the chart reads as a band plan; modes and
+sources sort by count. Percentages are of the ring, so each breakdown sums
+to 100.
+
+Deliberately **bars, not pie charts**: the job is comparing magnitudes
+across up to fifteen categories with names like `UberSDR CWskim`, and a
+fifteen-slice pie can neither be compared by eye nor hold its own labels.
+
 ### Deleted entities
 
 DXCC has a **deleted** list — Abu Ail, Blenheim Reef, British North Borneo
