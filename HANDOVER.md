@@ -836,41 +836,48 @@ answer ICMP (Windows blocks it), and a first check read as "no answer" while
 the host was up and serving. Probe a port instead — 22, 7580 and 7575 were
 all open. Do not conclude that box is down from a failed ping.
 
-### NEXT: the gate has never passed — and it is not the toolchain (2026-08-30)
+### DONE: the gate passes, for the first time in this project (2026-08-30)
 
-`cargo test` is fine: 205 pass. **`cargo fmt --check` and `cargo clippy` both
-fail on `main`** — 43 rustfmt sites across `dxca-connect` and `dxca-core`, and
-`result_large_err` on the ureq calls in `telegram.rs` (`ureq::Error` is ≥272
-bytes).
+`just gate` is green end to end — fmt, clippy with warnings denied, **204**
+tests, web build (`1efe388`). Everything below is closed; it is kept because
+the *reason* it went unnoticed is the reusable part.
 
-**An earlier version of this entry blamed a toolchain move. That was wrong**,
-and the correction is the useful part: rustc **1.96.1 was installed
-2026-07-08**, and this repo's **first commit is 2026-08-26**. dxca has only
-ever been built on this one compiler, so nothing drifted — the 43 sites and
-the lint have been there since the beginning.
+**It was never toolchain drift.** An earlier version of this entry said
+`channel = "stable"` had moved to 1.96 and broken the gate. Wrong: rustc
+**1.96.1 was installed 2026-07-08** and this repo's **first commit is
+2026-08-26**, so dxca has only ever been built on one compiler. The failures
+were there from the beginning.
 
-Why nobody saw them: `cargo fmt` and `cargo clippy` need the Homebrew rustup
-PATH prefix that Known gotchas already documents. Without it they are not
-subcommands at all, so `just gate` dies at step one instead of reporting real
-failures, and what actually gets run is `cargo test`. **A gate that cannot
-run is indistinguishable from a gate that passes**, which is the lesson worth
-keeping.
+**Why nobody saw them, which is the lesson.** `cargo fmt` and `cargo clippy`
+need the Homebrew rustup PATH prefix that Known gotchas already documents.
+Without it they are not subcommands at all, so `just gate` died on its first
+line and what actually got run was `cargo test`, which passed. **A gate that
+cannot run is indistinguishable from a gate that passes.** The Justfile now
+exports that PATH itself, so the gate runs wherever it is invoked from.
 
-The toolchain is now pinned to `1.96.1` (`rust-toolchain.toml`, 2026-08-30)
-so the ground stops shifting — but **the pin does not fix this**; 1.96.1 is
-the compiler that fails. What remains is one dedicated commit:
+What the reformat turned up, none of it cosmetic:
 
-- `cargo fmt --all` for the 43 sites — mechanical, but large, which is why it
-  was kept out of the v2.12.2 release.
-- Then `result_large_err`: either box the ureq error, or
-  `#[allow(clippy::result_large_err)]` with a comment saying why the error
-  size is acceptable here.
-- Then make `just gate` runnable without the PATH dance — either symlink the
-  missing rustup proxies, or have the Justfile set `PATH` itself. Otherwise
-  this recurs the moment anyone trusts a green `just test` for a green gate.
+- **A test that had never run.** `db.rs`'s
+  `sent_alerts_keep_failures_and_stay_bounded_per_user` had no `#[test]`
+  attribute. It passes now that it runs, so nothing was broken behind it —
+  but nothing was being checked either.
+- **Two tests that ran twice.** `db.rs:1162` and `:1297` each carried
+  `#[test]` before *and* after their doc comment. That is why the total moves
+  from 205 to 204 while a test is added: −2 duplicates, +1 revival. The 205
+  this file used to quote was inflated.
+- `solar.rs` had a round-to-midnight that did nothing (its constant is
+  already an exact midnight) and an `i64 -> i64` cast.
+- Two fake telnet nodes discarded a read count implicitly; now explicit.
+- `telegram.rs` keeps `result_large_err` with a written reason — the Result
+  never leaves the function, so boxing would buy stack nothing is short of.
 
-The published v2.12.2 release notes carry the same wrong toolchain-drift
-explanation, unedited as of this writing.
+The toolchain is pinned to `1.96.1` (`rust-toolchain.toml`) so the ground
+stops shifting under the fleet. Bumping it is now a deliberate act: raise the
+pin, run `just gate`, fix what the new rustfmt and clippy think, same commit.
+
+The published v2.12.2 release notes originally carried the wrong
+toolchain-drift explanation; corrected 2026-08-30, with a note that the fixes
+land after the tag and touch no shipped code.
 
 ### NEXT: a detailed help file — setup and use (Manoj, 2026-08-29)
 
