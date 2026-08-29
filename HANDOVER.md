@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.7.0 on BOTH Pis** (noderedpi4 and adersh@192.168.1.151). Every tag from v2.4.0 onward has a published GitHub release with a Windows zip (v2.3.0 and v2.3.1 remain bare tags, superseded by v2.4.0's release notes). **v2.3.0–v2.7.0 all shipped on 2026-08-28**, in order: the interactive telnet gate and read-only command passthrough (`telnet_interactive = true` on noderedpi4, still **false** on adersh); spotter attribution — Source is the feed that carried a spot, Spotter is the station that heard it — carried into Telegram and the My Alerts history, with the **first schema migration** this database has had; a spots search over call/spotter; award totals that count **current DXCC entities by default**, with an *include deleted* tickbox; skimmer identification with a **Manual only** display filter; and Telegram's own *human spots only* narrowing. Both migrations were verified against real data (91 and 102 alert rows preserved), and skimmer/spotter attribution was confirmed live on both stations.
+**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.7.0 on ALL THREE Pis** — noderedpi4, `adersh@192.168.1.151` and `vu2wj@192.168.1.201`. Every tag from v2.4.0 onward has a published GitHub release with a Windows zip (v2.3.0 and v2.3.1 remain bare tags, superseded by v2.4.0's release notes). **v2.3.0–v2.7.0 all shipped on 2026-08-28**, in order: the interactive telnet gate and read-only command passthrough (`telnet_interactive = true` on noderedpi4, still **false** on adersh); spotter attribution — Source is the feed that carried a spot, Spotter is the station that heard it — carried into Telegram and the My Alerts history, with the **first schema migration** this database has had; a spots search over call/spotter; award totals that count **current DXCC entities by default**, with an *include deleted* tickbox; skimmer identification with a **Manual only** display filter; and Telegram's own *human spots only* narrowing. Both migrations were verified against real data (91 and 102 alert rows preserved), and skimmer/spotter attribution was confirmed live on both stations.
 **Repo:** https://github.com/vu2cpl/dxca (**public** — verified via
 `gh repo view` 2026-08-27; the doc said "private" until then, and the
 "Open items" release checklist still lists the public flip as pending)
@@ -478,6 +478,33 @@ alert history grew from 102 rows at v2.4.0 to 109 by the v2.5.0 deploy, and
 **all 7 new rows carry a spotter** while the 102 older ones are correctly
 empty. The migration's back-fill boundary is exactly where it should be, and
 the recording path works in production, not only in tests.*
+
+## The three installs (2026-08-28)
+
+| Host | Account | Notes |
+|---|---|---|
+| `noderedpi4.local` / `192.168.1.169` | `vu2cpl` | The shack. Seeded deploys; `telnet_interactive = true`. |
+| `192.168.1.151` | `adersh` | Third party, over the VPN. `--no-seed` always. |
+| `192.168.1.201` (hostname `rpi`) | `vu2wj` | Third party. `--no-seed` always. |
+
+All three are aarch64 Debian 13 (trixie). **The VPN and the shack LAN cannot
+both be reachable** — both are `192.168.1.0/24` — so a deploy to the
+third-party boxes is its own pass; see Known gotchas.
+
+**VU2WJ's Pi joined the fleet 2026-08-28**, having sat on **v2.1.0** since
+its install — nine releases behind, and the only box whose database predated
+`alerts_sent` and `blacklist` entirely. The jump to v2.7.0 exercised the
+path the migration test was written for and confirmed it: `Db::open` runs
+the schema first, so those tables were **created fresh with `spotter`
+already in them**, and `migrate()` then found the column present and did
+nothing. His account, matrix, cty and LoTW data came through untouched and
+both his nodes are Live. Backup at `dxca.db.pre-v2.7.0` on the box.
+
+Its `vu2wj` account had **password-prompting sudo**, which blocks
+`pi-deploy.sh` (the installer needs sudo and there is no terminal for the
+prompt in a non-interactive run). Manoj granted passwordless sudo via a
+validated `/etc/sudoers.d/010-vu2wj-nopasswd` drop-in, matching the other
+two boxes. Reversible with `sudo rm` of that file.
 
 ## Release convention (2026-08-28, standing)
 
