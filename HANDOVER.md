@@ -743,9 +743,9 @@ redesign.
 2. **Stop echoing the key from `/api/config`.** `api.rs:1030` returns
    `clublog_api_key` in plaintext. That is correct while the key is the
    admin's own — they typed it in. It is wrong the moment the key is **ours**,
-   because then every admin on every install (the second station's Pi, both
-   third-party boxes, any shared server) reads our credential out with one
-   curl. Return `has_key` plus `key_source: "built-in" | "admin"`, and echo
+   because then every admin on every install — adersh's Pi and vu2wj's Pi
+   today, whoever else installs it tomorrow — reads our credential out with
+   one curl. Return `has_key` plus `key_source: "built-in" | "admin"`, and echo
    back only a key an admin actually set. Read side only — the write path's
    absent-vs-empty `Option<String>` contract (`api.rs:1048`) already behaves.
 
