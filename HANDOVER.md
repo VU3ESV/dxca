@@ -2,10 +2,12 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-08-29 · **Status:**
-**THE SHELL REWORK — committed, on the two LAN hosts, NOT YET RELEASED**
-(2026-08-29). The version string still reads **v2.11.1** everywhere because no
-tag has been cut: this is the UI cleanup pass that the previous session left as
-the next item, and it is the largest single change the web UI has had. Three
+**v2.12.0 — THE SHELL REWORK, released 2026-08-29**, on the two LAN hosts
+(noderedpi4 and Windows `192.168.1.170`). The two VPN hosts —
+`adersh@192.168.1.151` and `vu2wj@192.168.1.201` — are **still on v2.11.1** and
+update one at a time on Manoj's prompt, both `--no-seed`. This is the UI
+cleanup pass that the previous session left as the next item, and the largest
+single change the web UI has had. Three
 tabs (**Spots · Alerts · Stats**) plus a **gear** into Settings, Meridian's
 arrangement; every setup screen moved behind it; the Spots and Alerts feeds
 rebuilt on a fixed measured grid with a collapsible filter rail. Four Rust
@@ -685,18 +687,29 @@ now a collapsible rail, My ClubLog's three unrelated things are three separate
 places, and the whole pass was driven in front of the rendered app rather than
 from tests — which is again where every defect came from.
 
-### NEXT: cut a release for the shell rework
+### NEXT: the two VPN hosts, and an unfinished network-failure fix
 
-The work is **committed and running on the two LAN hosts, but unreleased** —
-every host still reports **v2.11.1**, which is now a lie about what they are
-running. To finish it:
+**v2.12.0 is released and on both LAN hosts.** What is left:
 
-1. **Bump the version** (this is a 2.12.0 — new screens, a schema change and a
-   new config field, all backward compatible).
-2. **Tag, and publish a GitHub release with the Windows zip.** A tag is not a
-   release; see the release convention above.
-3. **Then the two VPN hosts**, one at a time on Manoj's prompt —
-   `adersh@192.168.1.151` and `vu2wj@192.168.1.201`, both `--no-seed`.
+1. **`adersh@192.168.1.151` then `vu2wj@192.168.1.201`**, one at a time on
+   Manoj's prompt, both **`--no-seed`** — their databases carry their own
+   ClubLog credentials and Telegram tokens, and seeding would hand this
+   station's over. **Take a pre-migration copy of each `data/dxca.db` first**:
+   the `snr_db` migration runs on their first open, and I failed to do that on
+   noderedpi4 (see below).
+2. **An unfinished fix is STASHED, not committed** —
+   `git stash list` → `configgate-wip-2026-08-29` (`1f1da1d`). It addresses a
+   real defect found on 2026-08-29 when a VPN came up and took the
+   192.168.1.0/24 route: every Settings › Server page renders nothing until its
+   config arrives, so all five went blank at once and the honest reading was
+   *"all settings have vanished"*. Nothing was wrong with the data.
+   The stash contains `lib/api.ts` made to fail soft (a route disappearing
+   makes `fetch` **throw**, and only non-200 replies were handled — that is the
+   root cause) plus a `ConfigGate` component giving those pages a real error
+   state. **It is not verified**: the browser check that appeared to pass was
+   measuring the wrong things, and the dynamically-imported module was probably
+   a different instance from the app's. Verify by actually pulling the network,
+   not by stubbing `fetch` from the console.
 
 **Two things a reviewer should look at first**, because they are the parts that
 touch existing data:
