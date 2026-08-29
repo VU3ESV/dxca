@@ -251,6 +251,19 @@ impl UserService {
         )
     }
 
+    /// The sun's elevation at this user's QTH, right now.
+    ///
+    /// `None` when they have set no locator, or one that will not parse —
+    /// which is what keeps the phase-rotation mask opt-in. Computed **once
+    /// per request** and handed to `annotate_spot`, never per spot: the sun
+    /// does not move across a spot list, and a database read per row would
+    /// be absurd.
+    pub fn sun_elevation(&self, user_id: i64) -> Option<f64> {
+        let cfg = self.db.station_config(user_id).ok()?;
+        let pos = dxca_core::grid::parse(&cfg.locator)?;
+        Some(dxca_core::solar::elevation(pos, now_unix()))
+    }
+
     /// Classify one spot for one user (their matrix + alert toggles).
     /// None when the user has no matrix yet.
     pub fn classify(&self, user_id: i64, spot: &Spot) -> Option<Classification> {

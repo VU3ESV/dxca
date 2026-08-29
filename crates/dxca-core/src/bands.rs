@@ -58,6 +58,50 @@ pub const CHALLENGE_BANDS: &[&str] = &[
     "160M", "80M", "40M", "30M", "20M", "17M", "15M", "12M", "10M", "6M",
 ];
 
+/// Sun-elevation window in which a band is plausibly workable from the
+/// operator's own QTH — the model behind the phase-rotation spot mask
+/// (`docs/PHASE-ROTATION-MASK.md`).
+///
+/// `(min, max)` in degrees of solar elevation. A band with no entry is
+/// **never masked**, which is the deliberate default for everything this
+/// model does not claim to understand.
+///
+/// These numbers are a starting point to be tuned against a real feed, not
+/// settled physics. They describe only the *operator's* end: a genuine 160m
+/// opening needs darkness at both ends of the path, and this knows about
+/// one. It is a plausibility filter, not a prediction.
+const BAND_WINDOWS: &[(&str, f64, f64)] = &[
+    // Darkness bands: LF/MF absorption collapses after sunset.
+    ("160M", -90.0, -6.0),
+    ("80M", -90.0, -6.0),
+    // Best at night, still usable around dawn and dusk.
+    ("60M", -90.0, 5.0),
+    ("40M", -90.0, 5.0),
+    // 30M is the band that works day and night — never masked.
+    // 20M opens well past sunset on long paths, so it survives deep dusk.
+    ("20M", -12.0, 90.0),
+    ("17M", 0.0, 90.0),
+    ("15M", 0.0, 90.0),
+    // The high bands want real daylight and a MUF to match.
+    ("12M", 10.0, 90.0),
+    ("10M", 10.0, 90.0),
+    // 6M and up obey sporadic-E and tropo, not the sun. Never masked.
+];
+
+/// Is `band` plausibly workable with the sun at `elevation_deg`?
+///
+/// **Fails open**: an unknown band, or one the model says nothing about
+/// (30M, 6M and up), is always plausible. The asymmetry is deliberate and
+/// runs through this whole feature — hiding a workable rare one costs far
+/// more than showing an unworkable one.
+pub fn plausible_at(band: &str, elevation_deg: f64) -> bool {
+    let band = band.trim().to_ascii_uppercase();
+    match BAND_WINDOWS.iter().find(|(b, _, _)| *b == band) {
+        Some((_, min, max)) => elevation_deg >= *min && elevation_deg <= *max,
+        None => true,
+    }
+}
+
 /// Does a band score for the DXCC Challenge?
 pub fn is_challenge_band(band: &str) -> bool {
     CHALLENGE_BANDS.contains(&band)
@@ -223,6 +267,68 @@ mod tests {
     }
 
     #[test]
+    /// Midday and midnight, the two cases the mask exists to separate.
+    #[test]
+    fn the_sun_decides_which_bands_are_plausible() {
+        // Local midday: high sun.
+        let noon = 60.0;
+        assert!(!plausible_at("160M", noon), "160m at midday is the whole point");
+        assert!(!plausible_at("80M", noon));
+        assert!(plausible_at("20M", noon));
+        assert!(plausible_at("15M", noon));
+        assert!(plausible_at("10M", noon));
+
+        // Deep night.
+        let night = -40.0;
+        assert!(plausible_at("160M", night));
+        assert!(plausible_at("80M", night));
+        assert!(plausible_at("40M", night));
+        assert!(!plausible_at("15M", night));
+        assert!(!plausible_at("10M", night));
+    }
+
+    /// 30M works day and night, and the VHF bands answer to sporadic-E
+    /// rather than the sun. Neither is ever masked.
+    #[test]
+    fn bands_the_model_does_not_claim_to_understand_are_never_masked() {
+        for elev in [-80.0, -10.0, 0.0, 45.0, 89.0] {
+            assert!(plausible_at("30M", elev), "30M at {elev}");
+            assert!(plausible_at("6M", elev), "6M at {elev}");
+            assert!(plausible_at("2M", elev), "2M at {elev}");
+            assert!(plausible_at("70CM", elev), "70CM at {elev}");
+        }
+    }
+
+    /// Fail open: anything unrecognised is plausible. The cost of hiding a
+    /// workable rare one far exceeds the cost of showing an unworkable one,
+    /// so ignorance must never mask.
+    #[test]
+    fn an_unknown_band_is_never_masked() {
+        for elev in [-60.0, 0.0, 60.0] {
+            assert!(plausible_at("", elev));
+            assert!(plausible_at("2200M", elev), "a band the table omits");
+            assert!(plausible_at("nonsense", elev));
+        }
+    }
+
+    #[test]
+    fn band_names_are_matched_case_insensitively() {
+        assert_eq!(plausible_at("160m", -40.0), plausible_at("160M", -40.0));
+        assert!(!plausible_at("160m", 60.0));
+    }
+
+    /// Every band in the window table must be a band the rest of DXCA
+    /// knows, or the mask would silently never fire for it.
+    #[test]
+    fn every_windowed_band_is_a_real_band() {
+        for (band, _, _) in BAND_WINDOWS {
+            assert!(
+                SELECTABLE_BANDS.contains(band),
+                "{band} is not in SELECTABLE_BANDS"
+            );
+        }
+    }
+
     fn challenge_bands_are_the_ten_that_score() {
         assert_eq!(CHALLENGE_BANDS.len(), 10);
         for name in CHALLENGE_BANDS {

@@ -527,18 +527,25 @@ last *published* release, because tags can outrun releases.
 
 ## Open items → next session
 
-**Milestone 1 BUILT (2026-08-29), 2–4 designed only: the phase-rotation
+**Milestones 1–2 BUILT (2026-08-29), 3–4 designed only: the phase-rotation
 spot mask** —
 [`docs/PHASE-ROTATION-MASK.md`](docs/PHASE-ROTATION-MASK.md). Manoj's
 request, taking Meridian's locator-driven band rotation and applying it to
 the spot feed: stop showing New-DXCC 160m spots at local midday.
 
-**M1 shipped the pure maths**: `dxca_core::grid::parse` (Maidenhead → the
-centre of the square) and `dxca_core::solar::elevation` (NOAA solar
-position). **Nothing is filtered and nothing is user-facing** — Manoj's
-standing requirement is that this stays an opt-in tickbox, default off, no
-imposing. Remaining: the band-openness model, the per-user locator and
-settings (JSON blob, so **no migration**), and the UI.
+**M1** shipped the pure maths: `grid::parse` (Maidenhead → the centre of the
+square) and `solar::elevation` (NOAA solar position). **M2** added
+`bands::plausible_at`, which **fails open** — unknown bands and the ones the
+model says nothing about (30M, 6M up) are never masked — plus a
+`station_json` per-user blob for the locator (added via the migration
+mechanism), a validating `PUT /api/config/me/station`, and a `band_open`
+annotation on spots.
+
+**Nothing is filtered, dimmed or hidden.** The server offers advice; no
+client acts on it. `band_open` appears only for an account with a valid
+locator, and an unparseable one behaves as none — asserted, because Manoj's
+standing requirement is that this stays an opt-in tickbox, default off,
+nothing imposed. Remaining: the UI (M3) and the Telegram narrowing (M4).
 
 Sunrise agrees with published times to within 5–8 minutes, consistently
 late, which is atmospheric refraction — almanacs quote apparent sunrise,

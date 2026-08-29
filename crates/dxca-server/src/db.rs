@@ -154,6 +154,22 @@ impl Default for MqttDestination {
     }
 }
 
+/// Where the operator is — the one thing the phase-rotation spot mask
+/// needs that DXCA did not already know (`docs/PHASE-ROTATION-MASK.md`).
+///
+/// Its own blob rather than a field on the ClubLog credentials: a locator
+/// is station data, not a credential, and it will gain company as the mask
+/// grows. Empty means **no mask at all** — the feature is opt-in and an
+/// account that never sets a locator behaves exactly as it always has.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct StationConfig {
+    /// Maidenhead locator, 4 or 6 characters. Validated on write; an
+    /// unparseable value simply disables the mask rather than guessing a
+    /// position.
+    pub locator: String,
+}
+
 /// Per-user notification settings — the 1.x `NotificationConfig` minus the
 /// macOS system notifications (headless server).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -320,7 +336,8 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE TABLE IF NOT EXISTS user_configs (
     user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     clublog_json TEXT NOT NULL DEFAULT '{}',
-    notify_json TEXT NOT NULL DEFAULT '{}'
+    notify_json TEXT NOT NULL DEFAULT '{}',
+    station_json TEXT NOT NULL DEFAULT '{}'
 );
 CREATE TABLE IF NOT EXISTS matrices (
     user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -385,6 +402,11 @@ const ADDED_COLUMNS: &[(&str, &str, &str)] = &[
         "alerts_sent",
         "spotter",
         "spotter TEXT NOT NULL DEFAULT ''",
+    ),
+    (
+        "user_configs",
+        "station_json",
+        "station_json TEXT NOT NULL DEFAULT '{}'",
     ),
 ];
 
@@ -810,6 +832,14 @@ impl Db {
 
     pub fn notify_config(&self, user_id: i64) -> DbResult<NotifyUserConfig> {
         self.config_json(user_id, "notify_json")
+    }
+
+    pub fn station_config(&self, user_id: i64) -> DbResult<StationConfig> {
+        self.config_json(user_id, "station_json")
+    }
+
+    pub fn set_station_config(&self, user_id: i64, cfg: &StationConfig) -> DbResult<()> {
+        self.set_config_json(user_id, "station_json", cfg)
     }
 
     pub fn set_notify_config(&self, user_id: i64, cfg: &NotifyUserConfig) -> DbResult<()> {

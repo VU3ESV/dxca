@@ -272,3 +272,88 @@ async fn telnet_login_uses_the_real_accounts_table() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// --- phase-rotation mask milestone 2 -----------------------------------
+
+/// The mask is **opt-in**: an account with no locator gets no `band_open`
+/// annotation at all, so nothing anywhere can decide to hide its spots.
+/// This is the property Manoj asked for explicitly — default is no
+/// filtering, nothing imposed — so it is asserted rather than assumed.
+#[tokio::test]
+async fn no_locator_means_no_band_annotation() {
+    use dxca_server::db::{Db, StationConfig};
+    use dxca_server::users::UserService;
+    use dxca_connect::clublog::Endpoints;
+    use dxca_connect::telegram::Telegram;
+
+    let dir = std::env::temp_dir().join(format!("dxca-mask-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let db = Arc::new(Db::open(&dir.join("dxca.db")).unwrap());
+    let uid = db.create_user("VU2CPL", "Manoj", "hash", "admin").unwrap();
+    let users = UserService::new(
+        db.clone(),
+        dir.to_str().unwrap(),
+        Telegram::default(),
+        Endpoints::default(),
+    );
+
+    assert_eq!(
+        users.sun_elevation(uid),
+        None,
+        "no locator set: the mask must be unavailable"
+    );
+
+    // A locator that cannot be parsed is the same as none — it disables the
+    // mask rather than guessing a position.
+    db.set_station_config(
+        uid,
+        &StationConfig {
+            locator: "NONSENSE".into(),
+        },
+    )
+    .unwrap();
+    assert_eq!(users.sun_elevation(uid), None, "unparseable locator");
+
+    // A real one switches it on.
+    db.set_station_config(
+        uid,
+        &StationConfig {
+            locator: "MK82".into(),
+        },
+    )
+    .unwrap();
+    let elev = users.sun_elevation(uid).expect("locator set");
+    assert!(
+        (-90.0..=90.0).contains(&elev),
+        "elevation out of range: {elev}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The band model, applied through the same call the API makes: at
+/// Bengaluru's local midday 160m is implausible and 15m is fine, and at
+/// local midnight the reverse. This is the feature in one assertion.
+#[tokio::test]
+async fn the_mask_follows_the_sun_at_a_real_qth() {
+    use dxca_core::{bands, grid, solar};
+
+    let pos = grid::parse("MK82").expect("MK82");
+    // 2026-06-21; MK82 is near 77E, so local noon is about 0700 UTC and
+    // local midnight about 1900 UTC.
+    let midnight_utc = 1_782_000_000;
+    let local_noon = midnight_utc + 7 * 3_600;
+    let local_midnight = midnight_utc + 19 * 3_600;
+
+    let day = solar::elevation(pos, local_noon);
+    let night = solar::elevation(pos, local_midnight);
+    assert!(day > 0.0 && night < 0.0, "day {day}, night {night}");
+
+    assert!(!bands::plausible_at("160M", day), "160m at local midday");
+    assert!(bands::plausible_at("15M", day), "15m at local midday");
+    assert!(bands::plausible_at("160M", night), "160m at local midnight");
+    assert!(!bands::plausible_at("15M", night), "15m at local midnight");
+    // 30M is the band that does not care.
+    assert!(bands::plausible_at("30M", day) && bands::plausible_at("30M", night));
+}

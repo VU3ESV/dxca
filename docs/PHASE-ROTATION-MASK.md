@@ -1,7 +1,9 @@
 # Phase-rotation spot mask
 
-**Status:** **milestone 1 built** (the pure maths); milestones 2–4 designed,
-not built. Nothing user-facing yet, and **nothing is filtered** ·
+**Status:** **milestones 1–2 built** — the maths, the band model, the
+per-user locator and the API annotation. Milestones 3–4 (any UI at all)
+designed, not built. **Nothing is filtered and nothing is dimmed**; the
+server offers advice and no client acts on it yet ·
 **Drafted:** 2026-08-29 · **Phase:** 2
 
 Bands rotate through the day. At local midday 160m is dead for anything but
@@ -172,8 +174,32 @@ both, use what is given, do not ask for more.
    One correction worth recording: MK68 is **not** Bengaluru — it is 18.5N
    73.0E. Bengaluru is MK82. Transposing the two square digits moves you
    several hundred kilometres, and both are now pinned in the tests.
-2. **The band model and the locator field.** `band_plausible(band, elev)`,
-   the per-user setting, and the API annotation. Still nothing visible.
+2. ~~**The band model and the locator field.**~~ **DONE 2026-08-29.**
+   `bands::plausible_at(band, elevation)` implements the §2 table and
+   **fails open** — an unknown band, or one the model says nothing about
+   (30M, 6M and up), is always plausible. That default is the asymmetry at
+   the top of this document expressed in code: ignorance must never mask.
+
+   The locator lives in a new `station_json` per-user blob, added to
+   `user_configs` through the migration mechanism built earlier the same day
+   — its own blob rather than a field on the ClubLog credentials, because a
+   locator is station data and will gain company as the mask grows.
+   `PUT /api/config/me/station` **validates** it and rejects a typo with a
+   message naming the format, rather than accepting it and silently
+   disabling the mask: an operator who sets a locator and sees nothing
+   happen cannot tell a rejected value from a broken feature.
+
+   Spots now carry `band_open` — but **only** when the account has a valid
+   locator, and it is advice the server never acts on. Nothing is withheld,
+   nothing is dimmed; the client decides, which is what keeps the feature
+   opt-in and default-off. `no_locator_means_no_band_annotation` asserts
+   exactly that, including that an unparseable locator behaves as none.
+
+   Computed **once per request**, not per spot — the sun does not move
+   across a spot list, and a config read per row would be absurd. The
+   WebSocket recomputes per frame instead, because a session can stay open
+   across a sunset and a stale elevation would mask the wrong bands for the
+   rest of the evening.
 3. **Dim mode, with the masked count.** The Spots screen only. This is the
    milestone worth stopping at to live with for a week before going further.
 4. **Hide mode and the Telegram narrowing.** Only once the model has been

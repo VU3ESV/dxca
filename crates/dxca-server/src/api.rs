@@ -4,7 +4,7 @@
 
 use crate::auth;
 use crate::config::{BroadcastDestination, ClusterNode, Config, UdpSource};
-use crate::db::{ClubLogUserConfig, NotifyUserConfig, User};
+use crate::db::{ClubLogUserConfig, NotifyUserConfig, StationConfig, User};
 use crate::nodes::NodeManager;
 use crate::pipeline::{PipelineInput, PipelineState};
 use crate::users::UserService;
@@ -48,6 +48,7 @@ pub fn build_router(state: AppState) -> Router {
             "/api/config/me/notifications",
             get(get_notify).put(put_notify),
         )
+        .route("/api/config/me/station", get(get_station).put(put_station))
         .route("/api/clublog/refresh", post(refresh))
         .route("/api/config/global", get(get_global).put(put_global))
         .route("/api/telegram/test", post(telegram_test))
@@ -132,7 +133,12 @@ fn default_limit() -> usize {
 /// the LoTW marker, and — when a session is present — that user's
 /// classification (alert level, DXCC name, band): plan §5's per-user
 /// highlighting.
-fn annotate_spot(app: &AppState, user: Option<&User>, s: &dxca_core::Spot) -> serde_json::Value {
+fn annotate_spot(
+    app: &AppState,
+    user: Option<&User>,
+    s: &dxca_core::Spot,
+    sun_elev: Option<f64>,
+) -> serde_json::Value {
     let mut v = serde_json::to_value(s).expect("spot serializes");
     let dx_call = s.dx_callsign();
     v["dx_call"] = serde_json::to_value(&dx_call).unwrap();
@@ -144,6 +150,17 @@ fn annotate_spot(app: &AppState, user: Option<&User>, s: &dxca_core::Spot) -> se
         v["dxcc_name"] = serde_json::to_value(&c.dxcc_name).unwrap();
         v["band"] = serde_json::to_value(c.band).unwrap();
         v["is_beacon"] = serde_json::Value::Bool(c.is_beacon);
+        // Phase-rotation mask (docs/PHASE-ROTATION-MASK.md): is this band
+        // plausibly workable from the operator's QTH at this moment?
+        //
+        // Present only when they have set a locator, and it is advice, not
+        // an instruction — the server never withholds a spot on this basis.
+        // Whether anything is dimmed or hidden is the client's decision, so
+        // the mask stays opt-in and off by default.
+        if let (Some(elev), Some(band)) = (sun_elev, c.band) {
+            v["band_open"] =
+                serde_json::Value::Bool(dxca_core::bands::plausible_at(band, elev));
+        }
     }
     v
 }
@@ -154,10 +171,12 @@ async fn spots(
     Query(q): Query<SpotsQuery>,
 ) -> Json<serde_json::Value> {
     let user = auth::user_from_headers(&app.users.db, &headers);
+    // Once per request, not once per spot.
+    let sun = user.as_ref().and_then(|u| app.users.sun_elevation(u.id));
     let spots = app.pipeline.recent_spots(q.limit.min(2000));
     let annotated: Vec<serde_json::Value> = spots
         .iter()
-        .map(|s| annotate_spot(&app, user.as_ref(), s))
+        .map(|s| annotate_spot(&app, user.as_ref(), s, sun))
         .collect();
     Json(serde_json::json!({ "spots": annotated }))
 }
@@ -189,7 +208,16 @@ async fn stream_socket(
                 Ok(spot) => {
                     let frame = serde_json::json!({
                         "type": "spot",
-                        "spot": annotate_spot(&app, user.as_ref(), &spot),
+                        // Recomputed per frame rather than per connection:
+                        // a WebSocket can stay open for hours, across a
+                        // sunset, and a stale elevation would mask the
+                        // wrong bands for the rest of the session.
+                        "spot": annotate_spot(
+                            &app,
+                            user.as_ref(),
+                            &spot,
+                            user.as_ref().and_then(|u| app.users.sun_elevation(u.id)),
+                        ),
                     });
                     if socket.send(WsMessage::Text(frame.to_string().into())).await.is_err() {
                         return;
@@ -806,6 +834,35 @@ async fn put_notify(
             Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e),
         },
         Err(resp) => resp,
+    }
+}
+
+async fn get_station(State(app): State<AppState>, headers: HeaderMap) -> Response {
+    with_user_config(&app, &headers, |db, uid| db.station_config(uid))
+}
+
+async fn put_station(
+    State(app): State<AppState>,
+    headers: HeaderMap,
+    Json(mut cfg): Json<StationConfig>,
+) -> Response {
+    let user = match require_user(&app, &headers) {
+        Ok(u) => u,
+        Err(resp) => return resp,
+    };
+    // Validate here rather than letting a typo silently disable the mask:
+    // an operator who sets a locator and sees nothing happen has no way to
+    // tell a rejected value from a feature that is not working.
+    cfg.locator = cfg.locator.trim().to_uppercase();
+    if !cfg.locator.is_empty() && dxca_core::grid::parse(&cfg.locator).is_none() {
+        return err(
+            StatusCode::BAD_REQUEST,
+            "not a Maidenhead locator — expected 4 or 6 characters like MK82 or JN58TD",
+        );
+    }
+    match app.users.db.set_station_config(user.id, &cfg) {
+        Ok(()) => Json(serde_json::json!({"ok": true})).into_response(),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e),
     }
 }
 
