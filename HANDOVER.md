@@ -566,6 +566,32 @@ last *published* release, because tags can outrun releases.
 
 ## Open items → next session
 
+### NEXT: a UI cleanup pass (Manoj, 2026-08-29)
+
+**The next piece of work is a UI cleanup**, asked for at the close of the
+2026-08-29 session with no further detail — so treat the scope as open and
+**ask before designing**, rather than assuming this list is it.
+
+What this session already learned about the screens, which is the obvious
+place to start looking:
+
+- Every UI defect fixed today was found by **looking at the running app**,
+  never by a test: `include deleted entities` orphaned at the card's right
+  edge, the three Stats charts starting their bars at three different x
+  positions, `in memory— about 32 min` missing its space, `about 0 min of
+  feed` on a fresh instance. A cleanup pass should therefore be **done in
+  front of the rendered pages**, at more than one width, in both themes.
+- The **Spots filter row is crowded** — search, four tickboxes, a mask mode
+  selector, a phase badge and two counts, all on one line that wraps
+  unpredictably. It is the densest part of the app and the likeliest thing
+  Manoj means.
+- **My ClubLog now carries three unrelated things** (ClubLog credentials, My
+  station, Alert levels) under one Save button. That was deliberate — one
+  card, one Save — but the page has grown.
+- **Hard-refresh before judging any UI change.** Browser cache cost this
+  session a wrong diagnosis; see the stale-asset note further down.
+
+
 **SHIPPED as v2.9.0, then v2.9.1 (2026-08-29): the Stats tab** (coloured in
 2.9.1), the Windows config import (with sibling detection in 2.9.1), and the
 mask groundwork. On all three Pis,
