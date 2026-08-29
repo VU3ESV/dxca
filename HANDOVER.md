@@ -2,6 +2,19 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-08-29 · **Status:**
+**noderedpi4 is RUNNING AHEAD OF THE TAG (2026-08-29 evening).** Three changes
+landed after v2.12.0 and are deployed to the shack Pi only: the
+network-failure fix (`afc9fd0`), the ClubLog DX Dashboard embedded under
+*Stats › My ClubLog*, and Stats losing its 56rem width cap. The other three
+hosts are on v2.12.0 proper. **These want a v2.12.1** — see "Open items".
+
+**The ClubLog embed is confirmed working in a real browser** (Manoj, Safari).
+It rendered BLANK in the sandboxed preview pane with no console error and
+clublog.org reachable, which was the sandbox blocking the dashboard's own
+subresources (`cdn.clublog.org`, `unpkg.com`) — not a defect. **Lesson worth
+keeping: the preview pane cannot verify third-party iframes.** A blank embed
+there is not evidence of anything; check it in Safari against the Pi.
+
 **v2.12.0 — THE SHELL REWORK, on ALL FOUR HOSTS (2026-08-29).** noderedpi4,
 Windows `192.168.1.170`, `adersh@192.168.1.151` and `vu2wj@192.168.1.201`. The
 two VPN hosts report v2.12.0; the two LAN hosts run this exact code but were
@@ -704,9 +717,15 @@ left:
 0. **Redeploy the two LAN hosts** whenever convenient, so the version they
    report matches what they run. No functional change.
 
-1. **Nothing outstanding on the fleet** — all four hosts are on v2.12.0's
-   code. Optional tidy-up: redeploy noderedpi4 and Windows so the version they
-   REPORT matches what they run. No functional change.
+1. **Cut a v2.12.1 and level the fleet.** noderedpi4 carries three changes
+   past the tag (network-failure fix, ClubLog embed, Stats width); the other
+   three hosts do not. Same ritual as before: bump, tag, `win-bundle.sh`,
+   `gh release create` with the zip, then Windows, then the two VPN hosts one
+   at a time with `--no-seed` and a pre-migration DB copy. There is no schema
+   change in these three, so the migration step is a formality this time.
+
+   Windows also still REPORTS v2.11.1 — it was deployed from `0ea73aa`, before
+   the version bump. It runs v2.12.0's code; only the string lags.
 
    **The deploy recipe that worked, for next time.** Both VPN hosts:
    `deploy/pi-deploy.sh --no-seed <user>@<ip>`, with `data/dxca.db` copied to
