@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.8.0 on ALL THREE Pis** — noderedpi4, `adersh@192.168.1.151` and `vu2wj@192.168.1.201`. Every tag from v2.4.0 onward has a published GitHub release with a Windows zip (v2.3.0 and v2.3.1 remain bare tags, superseded by v2.4.0's release notes). **v2.3.0–v2.7.0 all shipped on 2026-08-28**, in order: the interactive telnet gate and read-only command passthrough (`telnet_interactive = true` on noderedpi4, still **false** on adersh); spotter attribution — Source is the feed that carried a spot, Spotter is the station that heard it — carried into Telegram and the My Alerts history, with the **first schema migration** this database has had; a spots search over call/spotter; award totals that count **current DXCC entities by default**, with an *include deleted* tickbox; skimmer identification with a **Manual only** display filter; and Telegram's own *human spots only* narrowing. Both migrations were verified against real data (91 and 102 alert rows preserved), and skimmer/spotter attribution was confirmed live on both stations.
+**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.9.0 on ALL THREE Pis** — noderedpi4, `adersh@192.168.1.151` and `vu2wj@192.168.1.201`. Every tag from v2.4.0 onward has a published GitHub release with a Windows zip (v2.3.0 and v2.3.1 remain bare tags, superseded by v2.4.0's release notes). **v2.3.0–v2.7.0 all shipped on 2026-08-28**, in order: the interactive telnet gate and read-only command passthrough (`telnet_interactive = true` on noderedpi4, still **false** on adersh); spotter attribution — Source is the feed that carried a spot, Spotter is the station that heard it — carried into Telegram and the My Alerts history, with the **first schema migration** this database has had; a spots search over call/spotter; award totals that count **current DXCC entities by default**, with an *include deleted* tickbox; skimmer identification with a **Manual only** display filter; and Telegram's own *human spots only* narrowing. Both migrations were verified against real data (91 and 102 alert rows preserved), and skimmer/spotter attribution was confirmed live on both stations.
 **Repo:** https://github.com/vu2cpl/dxca (**public** — verified via
 `gh repo view` 2026-08-27; the doc said "private" until then, and the
 "Open items" release checklist still lists the public flip as pending)
@@ -479,6 +479,23 @@ alert history grew from 102 rows at v2.4.0 to 109 by the v2.5.0 deploy, and
 empty. The migration's back-fill boundary is exactly where it should be, and
 the recording path works in production, not only in tests.*
 
+## Known gotcha: `noderedpi4.local` costs a 5-second mDNS timeout
+
+Noticed 2026-08-29 while timing the new `/api/spot-stats`, and worth
+recording because it looks exactly like "DXCA got slow" and is not:
+
+| From | To | Time |
+|---|---|---|
+| the Mac | `noderedpi4.local` | **5.008 s** |
+| the Mac | `192.168.1.169` | 0.004 s |
+| the Pi | `127.0.0.1` | 0.001 s |
+
+**Every** endpoint pays it, not just the new one, so it is name resolution
+rather than the server — the service answers in a millisecond on the box.
+The VPN was **down** at the time, so this is not the subnet clash. It
+resolved quickly earlier the same day, so something changed on the network
+or in mDNS. Use the IP to avoid it; not investigated further.
+
 ## Deploy sequence (2026-08-29, standing)
 
 **Local first, then one VPN host at a time.** noderedpi4 is reachable while
@@ -527,8 +544,12 @@ last *published* release, because tags can outrun releases.
 
 ## Open items → next session
 
-**Built, NOT deployed (2026-08-29): the Stats tab.** All three Pis are on
-v2.8.0; this is unreleased.
+**SHIPPED as v2.9.0 (2026-08-29): the Stats tab**, the Windows config
+import, and the mask groundwork. On all three Pis,
+[released](https://github.com/vu2cpl/dxca/releases/tag/v2.9.0) with the
+Windows zip. The `station_json` migration ran cleanly on every box —
+alert histories preserved (189 on noderedpi4, 215 on adersh), accounts and
+matrices intact, `dxca.db.pre-v2.9.0` left on each as a rollback.
 
 Total spots held, plus breakdowns by band, mode and source.
 `GET /api/spot-stats` aggregates across the **whole ring**, not the 500 the
