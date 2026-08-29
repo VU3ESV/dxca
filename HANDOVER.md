@@ -879,6 +879,49 @@ The published v2.12.2 release notes originally carried the wrong
 toolchain-drift explanation; corrected 2026-08-30, with a note that the fixes
 land after the tag and touch no shipped code.
 
+### NEXT: My ClubLog stats need a band × mode grid, RUMlog-style (Manoj, 2026-08-30)
+
+**Today the Stats › My ClubLog screen shows two separate one-dimensional
+tables** — *Entities per band* (mode-agnostic) and *Entities per mode*
+(band-agnostic). RUMlog shows the **cross product**, and that is the ask: for
+every band, the worked/confirmed split per mode.
+
+RUMlog's shape, for reference — rows `CW wkd/cfd`, `Data wkd/cfd`,
+`Phone wkd/cfd`, `Mixed wkd/cfd`; columns `Total`, then 160m…70cm, then `Sat`.
+
+**The data is already there; this is mostly presentation.**
+`DxccStatus.slots` and `.confirmed_slots` (`crates/dxca-core/src/matrix.rs`)
+are `HashSet<String>` of `"20M-DATA"`-style band-mode keys, per entity. A cell
+is one `count(|s| s.slots.contains("20M-CW"))` — the same closure
+`by_band_and_mode_excluding` already uses for its two projections.
+
+What has to change:
+
+- **`by_band_and_mode` does not do what its name says.** It returns
+  `BandModeStats { bands, modes }` — two independent projections, never a
+  cross product. Add a third field of per-(band, mode) cells rather than
+  reinterpreting either existing one; both are still needed, because they are
+  exactly RUMlog's `Mixed` row and `Total` column.
+- The cells iterate `bands::SELECTABLE_BANDS` × `modes::CLASSES` (`CW`,
+  `PHONE`, `DATA`) — the three already match RUMlog's three, with `Mixed`
+  being the mode-agnostic row we have.
+- `Stats.svelte` renders the grid. Keep the "empty rows stay visible" rule
+  `by_band_and_mode` already documents — a band with nothing on it is the
+  most interesting row on the page, and that applies doubly per mode.
+- The `exclude deleted entities` toggle must flow through, as it does now
+  (`*_excluding`).
+
+**Two things in that RUMlog screenshot are adjacent features, not this one.**
+Do not let them ride along silently:
+
+- **A `Sat` column.** Satellite is not in `SELECTABLE_BANDS` and is not a
+  band — it is a propagation path. Supporting it needs a decision about where
+  it lives in the slot key, and touches alerting, not just stats.
+- **The band-count award row** — `5 Band`, `6 Band`, `9 Band`, `10 Band`,
+  `WARC`, `Slot 26`, each worked and confirmed. These are DXCC award
+  categories (entities worked on ≥N bands, WARC-only counts), a different
+  computation from any cell in the grid. Worth having, separately.
+
 ### NEXT: a detailed help file — setup and use (Manoj, 2026-08-29)
 
 **The next piece of work is a proper help document for DXCA**, covering both
