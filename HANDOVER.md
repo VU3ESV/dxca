@@ -753,15 +753,29 @@ third-party box is; ping each before deploying to it.
 | `192.168.1.170` | `manoj` | The shack's Windows box. `win-deploy.sh`, update only. |
 | `192.168.1.151` | `adersh` | Third party, over the VPN. `--no-seed` always. |
 | `192.168.1.201` (hostname `rpi`) | `vu2wj` | Third party. `--no-seed` always. |
-| `192.168.220.51` | *unknown from here* | **VU2OY (Ranjith).** Third party, over the PiVPN tunnel added 2026-08-30. |
+| `192.168.220.51` (hostname `raspberrypi`) | `vu2oy` | **VU2OY (Ranjith).** Third party, over the PiVPN tunnel added 2026-08-30. **Debian 12 bookworm**, self-built. Key auth + NOPASSWD sudo since 2026-08-30. `--no-seed` always. |
 
-**VU2OY's box was not deployed from this Mac.** Found running **v2.13.0 with
-2 nodes** within the hour of that release, over a tunnel that had just been
-built — and there is no trace of it in this Mac's `known_hosts`, `ssh/config`
-or shell history, so it did not come from `pi-deploy.sh` here. Most likely
-Ranjith installed it himself from the release or from source. **Confirm who
-administers it and on what account before ever deploying to it**, and treat
-`--no-seed` as mandatory when that day comes: its database is his.
+**VU2OY builds his own, and tracks `main`.** His box was never deployed from
+this Mac — no `~/dxca-deploy` staging directory, no `known_hosts` entry
+before 2026-08-30. There is a source tree at `~/dxca` on the public remote,
+on branch `main`, and it was at `v2.13.0-1-g2928de8` within the hour of that
+release. He pulls and runs `install.sh`.
+
+Two things follow, and both are easy to trip over:
+
+- **`main` is somebody else's production input now.** Anything pushed there
+  reaches a third party's live aggregator on his next pull, tag or no tag.
+  Push to `main` accordingly.
+- **The aarch64 target must stay at `.2.36`.** He is on **bookworm, glibc
+  2.36 exactly** — the floor `Justfile`'s `aarch64-unknown-linux-gnu.2.36`
+  names, with zero headroom. The other three Pis are trixie and would not
+  notice the target being raised; his box would stop starting. If it is ever
+  raised, his install has to move to trixie first.
+
+Deploying to him from here now works (key + NOPASSWD are in place) but would
+replace his source build with a shipped binary. **Coordinate rather than
+surprise him**, and `--no-seed` is mandatory whatever happens: the database is
+his.
 
 The three Pis under `pi-deploy.sh` are aarch64 Debian 13 (trixie). The VPN
 hosts were long recorded as un-coexisting with the shack LAN; that was
