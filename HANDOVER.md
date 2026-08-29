@@ -814,14 +814,49 @@ Request volume is not a worry: weekly per install, and `refresh.rs:118` stamps
 the attempt timestamp *before* the call, so a failure waits the full interval
 rather than retrying hot.
 
-### NEXT: the two VPN hosts, and an unfinished network-failure fix
+### DONE: v2.12.2 on all four hosts, in one pass (2026-08-30)
 
-**v2.12.0 is released**, with the Windows zip attached, and both LAN hosts run
-its code (reporting v2.11.1 until redeployed — see the status block). What is
-left:
+**Nothing outstanding on the fleet.** v2.12.2 is released with the Windows zip
+attached, and all four hosts run and report it: noderedpi4 (9 nodes), the
+Windows box (2), adersh (4), vu2wj (2). Both third-party `config/dxca.toml`
+md5s are byte-identical before and after, which is what proves `--no-seed`
+did its job. The redeploy this section used to ask for is done — no host
+reports a version it is not running.
 
-0. **Redeploy the two LAN hosts** whenever convenient, so the version they
-   report matches what they run. No functional change.
+**This was the first deploy that never touched a tunnel switch**, and the
+first real test of the fix in *Both VPN tunnels and the shack LAN, at once*:
+shack, Windows and both third-party Pis were reachable throughout, in one
+sitting, with no disconnect-reconnect and no prompting. The recipe held —
+`dxca.db` copied to `dxca.db.pre-v2.12.2` on each third-party box first,
+`--no-seed` on both, md5 verified after — and, unlike every prior VPN deploy
+recorded here, **no transfer failed and nothing needed retrying**.
+
+**Ping is not a liveness test for the Windows box.** `192.168.1.170` does not
+answer ICMP (Windows blocks it), and a first check read as "no answer" while
+the host was up and serving. Probe a port instead — 22, 7580 and 7575 were
+all open. Do not conclude that box is down from a failed ping.
+
+### NEXT: the gate no longer passes, and it is the toolchain (2026-08-30)
+
+`cargo test` is fine — 205 pass. **`cargo fmt --check` and `cargo clippy` both
+fail on `main`, and neither failure comes from any recent change.**
+`rust-toolchain.toml` pins `channel = "stable"`, which has now moved to Rust
+1.96: rustfmt changed its mind about 43 sites, and the new
+`result_large_err` lint fires on `dxca-connect`'s ureq calls (`ureq::Error`
+is ≥272 bytes). Every affected file is untouched since v2.12.1.
+
+A 43-file reformat was deliberately kept out of the v2.12.2 release commit,
+so this is still open. Two ways out, and it is worth picking deliberately
+rather than letting the next `stable` move it again:
+
+- **Pin the toolchain to a version** (`channel = "1.95"` or whatever was in
+  use when the gate last passed), so the fleet's builds stop shifting under
+  it. Costs: manual bumps, and `install.sh`'s `MIN_RUSTC` has to stay in
+  step.
+- **Take the reformat and silence the lint** in one dedicated commit —
+  `cargo fmt --all`, plus either boxing the ureq error or an
+  `#[allow(clippy::result_large_err)]` with a note saying why. Keeps
+  floating `stable`, and accepts this recurring on future releases.
 
 ### NEXT: a detailed help file — setup and use (Manoj, 2026-08-29)
 
