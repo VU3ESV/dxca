@@ -157,7 +157,28 @@ impl LogMatrix {
             })
             .collect();
 
-        BandModeStats { bands, modes }
+        // The cells the two projections above only ever summarise: entities
+        // holding the "20M-CW"-shaped slot itself. `record` builds that key
+        // as `{band}-{mode}`, so the lookup is the same string.
+        let grid = crate::modes::CLASSES
+            .iter()
+            .map(|m| ModeRow {
+                mode: (*m).to_string(),
+                bands: crate::bands::SELECTABLE_BANDS
+                    .iter()
+                    .map(|b| {
+                        let slot = format!("{b}-{m}");
+                        SliceCount {
+                            key: (*b).to_string(),
+                            worked: count(&|s: &DxccStatus| s.slots.contains(&slot)),
+                            confirmed: count(&|s: &DxccStatus| s.confirmed_slots.contains(&slot)),
+                        }
+                    })
+                    .collect(),
+            })
+            .collect();
+
+        BandModeStats { bands, modes, grid }
     }
 }
 
@@ -169,6 +190,17 @@ pub struct SliceCount {
     pub confirmed: usize,
 }
 
+/// One mode's row of the band × mode grid — entities worked/confirmed on
+/// each band *in that mode*.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModeRow {
+    /// One of `modes::CLASSES`.
+    pub mode: String,
+    /// In `bands::SELECTABLE_BANDS` order, one cell per band. Empty cells are
+    /// kept for the same reason empty band rows are.
+    pub bands: Vec<SliceCount>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BandModeStats {
     /// In `bands::SELECTABLE_BANDS` order — 160M first, the operator's
@@ -176,6 +208,15 @@ pub struct BandModeStats {
     pub bands: Vec<SliceCount>,
     /// In `modes::CLASSES` order: CW, PHONE, DATA.
     pub modes: Vec<SliceCount>,
+    /// The full cross product, one row per mode class.
+    ///
+    /// **`bands` and `modes` are not derivable from this by summing**, and
+    /// that is the whole reason all three are carried. An entity worked on
+    /// 20M in both CW and DATA is *one* entity on 20M but occupies *two*
+    /// cells in the 20M column — adding the column up double-counts it.
+    /// `bands` is this grid's mode-agnostic summary (RUMlog's "Mixed" row)
+    /// and `modes` its band-agnostic one (RUMlog's "Total" column).
+    pub grid: Vec<ModeRow>,
 }
 
 /// What the Spots screen's station card reports.
@@ -307,6 +348,86 @@ mod tests {
             s.modes.iter().map(|m| m.key.as_str()).collect::<Vec<_>>(),
             vec!["CW", "PHONE", "DATA"]
         );
+    }
+
+    /// The band × mode grid, and the reason its columns must not be summed.
+    #[test]
+    fn grid_splits_every_band_by_mode() {
+        let mut m = LogMatrix::default();
+        // India on 20M in two modes, two calls — ONE entity on 20M, but a
+        // cell in each of two modes.
+        m.record(324, "20M", "DATA", "VU2ABC", true);
+        m.record(324, "20M", "CW", "VU2XYZ", false);
+        // USA on 20M CW (confirmed) and 40M CW (not).
+        m.record(291, "20M", "CW", "K1ABC", true);
+        m.record(291, "40M", "CW", "K9XYZ", false);
+
+        let s = m.by_band_and_mode();
+        let cell = |mode: &str, band: &str| {
+            s.grid
+                .iter()
+                .find(|r| r.mode == mode)
+                .unwrap()
+                .bands
+                .iter()
+                .find(|b| b.key == band)
+                .unwrap()
+                .clone()
+        };
+
+        assert_eq!(cell("CW", "20M").worked, 2, "India and the USA, both in CW");
+        assert_eq!(cell("CW", "20M").confirmed, 1, "only the US CW slot");
+        assert_eq!(cell("DATA", "20M").worked, 1);
+        assert_eq!(cell("DATA", "20M").confirmed, 1);
+        assert_eq!(
+            cell("PHONE", "20M").worked,
+            0,
+            "an empty cell is still a cell"
+        );
+        assert_eq!(cell("CW", "40M").worked, 1);
+        assert_eq!(cell("CW", "40M").confirmed, 0, "worked but unconfirmed");
+        assert_eq!(
+            cell("CW", "15M").worked,
+            0,
+            "and an empty band keeps its row"
+        );
+
+        // The mode-agnostic row is NOT the column sum: India is one entity on
+        // 20M yet fills two cells there. This is why `bands` is carried
+        // alongside the grid rather than computed from it.
+        let column: usize = s.grid.iter().map(|r| cell(&r.mode, "20M").worked).sum();
+        assert_eq!(column, 3, "the column double-counts India");
+        assert_eq!(
+            s.bands.iter().find(|b| b.key == "20M").unwrap().worked,
+            2,
+            "while the entity count on 20M is two"
+        );
+
+        // Same orderings as the projections.
+        assert_eq!(
+            s.grid.iter().map(|r| r.mode.as_str()).collect::<Vec<_>>(),
+            vec!["CW", "PHONE", "DATA"]
+        );
+        assert_eq!(s.grid[0].bands.first().unwrap().key, "160M");
+    }
+
+    /// `Stats.svelte` reads these three by name. A rename here would empty
+    /// the table on screen without failing a single Rust assertion, so the
+    /// wire names are pinned.
+    #[test]
+    fn band_mode_stats_keeps_its_wire_names() {
+        let mut m = LogMatrix::default();
+        m.record(324, "20M", "CW", "VU2ABC", true);
+        let v = serde_json::to_value(m.by_band_and_mode()).unwrap();
+
+        assert!(v.get("bands").is_some(), "the Mixed row");
+        assert!(v.get("modes").is_some(), "the Total column");
+        assert!(v.get("grid").is_some(), "the cells");
+
+        let row = &v["grid"][0];
+        assert_eq!(row["mode"], "CW");
+        assert!(row["bands"].is_array(), "one cell per band, in band order");
+        assert_eq!(row["bands"][0]["key"], "160M");
     }
 
     #[test]

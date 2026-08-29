@@ -105,6 +105,14 @@
     station ? pick(station.by_band_mode, station.by_band_mode_current) : null,
   );
 
+  /// The grid's "Total" column for one mode row — that mode's entity count
+  /// across every band. Deliberately read from `modes` rather than summed
+  /// from the row: an entity worked on 20M and 40M in CW fills two cells but
+  /// is one CW entity, so the row's sum would overcount it.
+  function modeTotal(mode: string) {
+    return shownBandMode?.modes.find((m) => m.key === mode) ?? { worked: 0, confirmed: 0 };
+  }
+
   /// The callsign to embed: **the one set in Settings › My station › ClubLog
   /// account**, which the server returns as `log_callsign`. It can differ
   /// from the login — a /P, or a club log — and the log is what this card is
@@ -237,32 +245,64 @@
     {#if shownBandMode}
       <div class="card">
         <h2>
-          Entities per band
-          <HelpTip label="Entities per band">
-            Counts are <b>entities</b>, not QSOs: a band's figure is how many
-            DXCC entities you have at least one contact with there. A zero is
-            left visible — an empty band is the most useful row here.
+          Entities per band and mode
+          <HelpTip label="Entities per band and mode">
+            Counts are <b>entities</b>, not QSOs: a cell is how many DXCC
+            entities you have at least one contact with on that band, in that
+            mode. Zeros are left visible — an empty cell is the most useful
+            one here. Digital modes share one DATA bucket, matching the DXCC
+            award rules.
+            <br /><br />
+            <b>Mixed is not the column added up.</b> An entity worked on 20M
+            in both CW and DATA fills two cells but is still one entity on
+            20M. Mixed counts entities per band whatever the mode; Total
+            counts them per mode whatever the band.
           </HelpTip>
         </h2>
-        <!-- Sixteen columns; it scrolls inside the card rather than widening
-             the page, the same rule the Settings editors follow. -->
+        <!-- Seventeen columns; it scrolls inside the card rather than
+             widening the page, the same rule the Settings editors follow. -->
         <div class="editor-scroll">
           <table class="slices">
             <thead>
               <tr>
                 <th>Band</th>
+                <th class="num">Total</th>
                 {#each shownBandMode.bands as b (b.key)}<th class="num">{b.key}</th>{/each}
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td>Worked</td>
+              {#each shownBandMode.grid as row (row.mode)}
+                <tr>
+                  <td>{row.mode} worked</td>
+                  <td class="num" class:zero={!modeTotal(row.mode).worked}
+                    >{modeTotal(row.mode).worked}</td
+                  >
+                  {#each row.bands as b (b.key)}
+                    <td class="num" class:zero={!b.worked}>{b.worked}</td>
+                  {/each}
+                </tr>
+                <tr>
+                  <td>{row.mode} confirmed</td>
+                  <td class="num ok-num" class:zero={!modeTotal(row.mode).confirmed}
+                    >{modeTotal(row.mode).confirmed}</td
+                  >
+                  {#each row.bands as b (b.key)}
+                    <td class="num ok-num" class:zero={!b.confirmed}>{b.confirmed}</td>
+                  {/each}
+                </tr>
+              {/each}
+              <tr class="mixed">
+                <td>Mixed worked</td>
+                <td class="num" class:zero={!shownStats.dxcc_worked}>{shownStats.dxcc_worked}</td>
                 {#each shownBandMode.bands as b (b.key)}
                   <td class="num" class:zero={!b.worked}>{b.worked}</td>
                 {/each}
               </tr>
-              <tr>
-                <td>Confirmed</td>
+              <tr class="mixed">
+                <td>Mixed confirmed</td>
+                <td class="num ok-num" class:zero={!shownStats.dxcc_confirmed}
+                  >{shownStats.dxcc_confirmed}</td
+                >
                 {#each shownBandMode.bands as b (b.key)}
                   <td class="num ok-num" class:zero={!b.confirmed}>{b.confirmed}</td>
                 {/each}
@@ -270,36 +310,6 @@
             </tbody>
           </table>
         </div>
-
-        <h2 class="sub-head">
-          Entities per mode
-          <HelpTip label="Entities per mode">
-            Counted the same way as the band table — <b>entities</b>, not QSOs.
-            Digital modes share one DATA bucket, matching the DXCC award rules.
-          </HelpTip>
-        </h2>
-        <table class="slices">
-          <thead>
-            <tr>
-              <th>Mode</th>
-              {#each shownBandMode.modes as m (m.key)}<th class="num">{m.key}</th>{/each}
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Worked</td>
-              {#each shownBandMode.modes as m (m.key)}
-                <td class="num" class:zero={!m.worked}>{m.worked}</td>
-              {/each}
-            </tr>
-            <tr>
-              <td>Confirmed</td>
-              {#each shownBandMode.modes as m (m.key)}
-                <td class="num ok-num" class:zero={!m.confirmed}>{m.confirmed}</td>
-              {/each}
-            </tr>
-          </tbody>
-        </table>
       </div>
     {/if}
 
@@ -589,6 +599,14 @@
      and blanking it would hide the gap worth working. */
   .zero {
     opacity: 0.35;
+  }
+
+  /* Mixed is the mode-agnostic summary of the rows above it, not another
+     mode, so it gets a rule above it and a little more weight — the same
+     separation RUMlog draws. */
+  .slices tr.mixed td {
+    border-top: 1px solid var(--border);
+    font-weight: 600;
   }
 
   /* --- The ClubLog embed ---
