@@ -716,6 +716,60 @@ now a collapsible rail, My ClubLog's three unrelated things are three separate
 places, and the whole pass was driven in front of the rendered app rather than
 from tests — which is again where every defect came from.
 
+### NEXT: ship DXCA's own ClubLog API key (Manoj, 2026-08-29)
+
+**Decided: DXCA embeds its own ClubLog API key and ships it.** This closes the
+open question left in *The ClubLog API key is a SERVER setting (2026-08-27)*
+below. The reason is not convenience — ClubLog issues API keys to **software
+developers, not to ordinary operators**, so the per-install key field is one
+almost no user can ever fill. Asking every operator for a key they cannot
+obtain is not a configuration step, it is a dead end.
+
+Scope is narrower than it sounds, and the plumbing already exists. The key is
+only ever used for `cty.php` (`crates/dxca-connect/src/clublog.rs:39`) — never
+for anyone's log, which goes through `getadif.php` with the operator's own
+email + app password. And it has been a single server-wide setting since 2.1
+(`Db::clublog_api_key`, `db.rs:1051`). This is a fallback default, not a
+redesign.
+
+1. **Build-time injection — never a commit.**
+   `const BUILT_IN_KEY: Option<&str> = option_env!("DXCA_CLUBLOG_API_KEY");`,
+   consulted when the admin setting is empty. **The repo is public:** a
+   committed key lives in the history forever and in every clone and fork, and
+   it will be found. `strings dxca` still reveals it in a release binary —
+   unavoidable and accepted (see "treat any shipped key as public" below); the
+   point is only to keep it out of the source.
+
+2. **Stop echoing the key from `/api/config`.** `api.rs:1030` returns
+   `clublog_api_key` in plaintext. That is correct while the key is the
+   admin's own — they typed it in. It is wrong the moment the key is **ours**,
+   because then every admin on every install (the second station's Pi, both
+   third-party boxes, any shared server) reads our credential out with one
+   curl. Return `has_key` plus `key_source: "built-in" | "admin"`, and echo
+   back only a key an admin actually set. Read side only — the write path's
+   absent-vs-empty `Option<String>` contract (`api.rs:1048`) already behaves.
+
+3. **Bundle a `cty.xml` in the release.** `deploy/win-bundle.sh` ships binary
+   + installers + LICENSE only, so a fresh Windows install has no prefix
+   database until a download succeeds. With one shared key, a revocation
+   becomes a **release** to fix rather than a settings edit — users cannot
+   substitute their own, which is the entire premise of this change. A bundled
+   file degrades that failure to stale entities instead of a broken install.
+   Keep the admin override as the escape hatch for the few who do hold a key.
+
+4. **Set a User-Agent, and tell G7VJR.** Nothing sets one today — ureq's
+   default goes out. `DXCA/<version> (+https://github.com/vu2cpl/dxca)` lets
+   ClubLog attribute the traffic, which is most of what keeps one key arriving
+   from N addresses from reading as abuse. Mail Michael that DXCA is open
+   source and the key ships in the binary; the 2026-08-27 note already said to
+   ask him first and that still stands. If mirroring cty.xml ourselves ever
+   looks attractive (rotation without a release), **ask** — do not assume
+   redistribution is permitted.
+
+Request volume is not a worry: weekly per install, and `refresh.rs:118` stamps
+the attempt timestamp *before* the call, so a failure waits the full interval
+rather than retrying hot.
+
 ### NEXT: the two VPN hosts, and an unfinished network-failure fix
 
 **v2.12.0 is released**, with the Windows zip attached, and both LAN hosts run
@@ -1727,7 +1781,11 @@ row on the next restart, silently undoing them forever. Test:
 A server with no key simply keeps the cty.xml it has; the scheduler stays
 quiet rather than logging a failure every 15 minutes.
 
-**Open question (worth deciding before any public release):** the key is an
+**DECIDED 2026-08-29 — DXCA will ship its own key.** See *NEXT: ship DXCA's
+own ClubLog API key* under Open items for the four things that has to carry.
+The deciding fact was not on this list: ClubLog issues keys to software
+developers only, so the per-install field is one an ordinary operator has no
+route to fill. The original reasoning, which still holds: the key is an
 *application* credential, not a user one, so DXCA could ship a default. Two
 caveats. Technically, an embedded key cannot be kept secret — the binary
 must carry its own decryption key, and dxca passes it as a URL query

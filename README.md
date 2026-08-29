@@ -25,7 +25,7 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
-**v2.7.1** (2026-08-29): dxca is the
+**v2.12.1** (2026-08-29): dxca is the
 live shack aggregator with a real web GUI, and **runs on
 Windows**, with a prebuilt `.exe` and installer as a release asset (read
 [Windows](#windows) first; it is the least proven of the four platforms). Decoder UDP sources and
@@ -51,7 +51,8 @@ contextual `?` help on hover, and
 toggle pins one. SQLite-backed accounts (argon2 + session
 cookies, first-run setup card) each carry their own ClubLog matrix,
 re-downloaded on a per-account schedule (daily by default) so a QSO worked
-today stops showing as new tomorrow; the shared LoTW users list refreshes
+today stops showing as new tomorrow, with ClubLog's own DX Dashboard embedded
+under My ClubLog; the shared LoTW users list refreshes
 server-wide, weekly by default. Every spot classifies per user with
 Telegram alerts and per-callsign cooldown; a send that fails in transit
 (handshake or response timeout) is retried once, and every send — including
@@ -63,8 +64,8 @@ artifacts). Sources, cluster nodes, and broadcast destinations are
 edited under Settings › Server and hot-apply — listeners rebind, nodes redial,
 destinations re-point, and `config/dxca.toml` is rewritten so restarts
 agree. Ships as a launchd agent (macOS) or systemd service (Pi);
-**in production on the shack's Raspberry Pi since 2026-08-27**, and on a
-second, unrelated station's Pi since 2026-08-27.
+**in production on the shack's Raspberry Pi since 2026-08-27**, on a Windows
+machine on the same LAN, and on two further, unrelated stations' Pis.
 
 New since 2.2: every spot names **both** the feed that carried it and the
 station that actually spotted it ([Who spotted it](#who-spotted-it)),
