@@ -262,6 +262,11 @@
         {/if}
       </div>
       {#if station.stats}
+        <!-- The totals and the tickbox that changes what they count are ONE
+             thing, so they are one column. Floated hard right with
+             margin-left:auto the tickbox read as a stray control belonging
+             to the card rather than to the numbers. -->
+        <div class="totals">
         <dl class="awards">
           <div>
             <dt>DXCC</dt>
@@ -295,9 +300,10 @@
             title="Totals count current DXCC entities by default, matching the ARRL standings. Tick to add the 62 deleted entities — Abu Ail, Blenheim Reef, British North Borneo and the rest. Those QSOs are in your log either way; they just score nothing."
           >
             <input type="checkbox" bind:checked={awards.includeDeleted} />include
-            deleted
+            deleted entities
           </label>
         {/if}
+        </div>
       {:else}
         <span class="hint">
           No log loaded — set your ClubLog credentials in <b>My ClubLog</b> and
@@ -619,17 +625,24 @@
     color: var(--muted);
   }
 
+  /* The totals and their scope switch, stacked as one unit. */
+  .totals {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
   /* Sits with the totals it changes, not in the filter row — it is part of
-     reading the card, not part of narrowing the feed. */
-  /* After the numbers and hard right, not wedged between the callsign and
-     the first total: the stat blocks are a rhythm of label/number/caption,
-     and a checkbox dropped into the middle of it reads as a stray control.
-     Subordinate on purpose — it changes the numbers, it is not one. */
+     reading the card, not part of narrowing the feed. Directly BENEATH them
+     and aligned to their left edge, so it reads as a footnote on the
+     numbers. It was previously floated hard right with margin-left:auto,
+     which put it at the far edge of the card touching nothing it affects —
+     an orphan. Subordinate on purpose: it changes the numbers, it is not
+     one of them. */
   .include-deleted {
     display: flex;
     align-items: center;
     gap: 0.3rem;
-    margin-left: auto;
     color: var(--muted);
     font-size: 0.72rem;
     white-space: nowrap;
