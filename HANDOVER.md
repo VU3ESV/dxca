@@ -879,19 +879,30 @@ The published v2.12.2 release notes originally carried the wrong
 toolchain-drift explanation; corrected 2026-08-30, with a note that the fixes
 land after the tag and touch no shipped code.
 
-### DONE: My ClubLog band × mode grid, RUMlog-style (2026-08-30, `4c464f1`)
+### DONE: My ClubLog band × mode grid — v2.13.0 on all four hosts (2026-08-30)
 
-**Built.** One table replaces the two: a row per mode class (worked and
-confirmed), a column per band, a `Total` column and a `Mixed` row — RUMlog's
-shape. `by_band_and_mode` gained a third field, `grid`, and 206 tests pass.
+**Built, released and deployed.** One table replaces the two: a row per mode
+class (worked and confirmed), a column per band, a `Total` column and a
+`Mixed` row — RUMlog's shape. `by_band_and_mode` gained a third field,
+`grid`, and 206 tests pass. v2.13.0 is published with the Windows zip, and
+noderedpi4 (9 nodes), the Windows box (2), adersh (4) and vu2wj (2) all
+report it; both third-party config md5s unchanged.
 
-**Not yet seen in a browser, and not yet deployed.** The counting is covered
-by a test and the UI builds, but rendering the page needs a login, so the
-layout itself is unverified. Look at it before the next release goes out —
-`just run` on the Mac, or deploy to noderedpi4 and open the Stats tab. If
-running it locally, note that `config/dxca.toml`'s cluster nodes will dial
+**Still not seen in a browser — this is the one open thread.** The counting
+is covered by tests and the UI compiles, but rendering the page needs a
+login, so the layout itself has never been looked at. **Open the Stats tab on
+noderedpi4 and check it**, because nothing in the gate can. If you would
+rather look locally, note that `config/dxca.toml`'s cluster nodes will dial
 with **this station's `login_call`** and fight the Pi's session; use a config
 with no `cluster_nodes` for a look-only run.
+
+**Pinning the toolchain cost the cross targets, once.** `rust-toolchain.toml`
+naming `1.96.1` makes rustup treat it as a different install from `stable`,
+with its own target set — so `win-bundle.sh` stopped with *missing rust
+target* even though the same compiler had built Windows binaries the day
+before. Fixed with `rustup target add x86_64-pc-windows-gnu
+aarch64-unknown-linux-gnu`. **Expect this again on the next pin bump**, and
+add the targets straight after raising it.
 
 Two things kept out of scope on purpose, still open: **a `Sat` column** (not
 a band, needs a decision about the slot key, touches alerting) and **the band
