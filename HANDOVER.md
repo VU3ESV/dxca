@@ -738,7 +738,7 @@ so it cannot empty the table — the lesson from the alert-level filter.
 **Verified against the real pipeline, not by reading.** A local instance in
 the session scratchpad with **no cluster_nodes** — logging in as VU2CPL
 would fight the shack Pis for the same node session — fed synthetic WSJT-X
-UDP packets by a 90-line Python script written off `dxca-core/src/wsjtx.rs`
+UDP packets by **`scripts/feed-spots.py`**, written off `dxca-core/src/wsjtx.rs`
 (magic, schema, type, then u32-length UTF-8 strings; a Status sets the dial
 frequency the Decodes are relative to). At 11:26 IST from MK82 the 160M and
 40M rows dimmed, 15M and 10M did not, the badge read `5 dimmed`, hover
