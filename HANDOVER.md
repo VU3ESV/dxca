@@ -518,6 +518,24 @@ last *published* release, because tags can outrun releases.
 
 ## Open items → next session
 
+**Built, NOT deployed (2026-08-29): BYE now disconnects.** noderedpi4 is on
+v2.7.1; this is unreleased.
+
+Reported from the field: *"bye ] and quit didnt quit"*. Two things. `Ctrl-]`
+is a control character and a literal `]` is easily typed instead, which just
+sends text to the server — but the operator should never have needed the
+telnet escape. `BYE` used to **log out while keeping the socket open**, on
+the reasoning that the spot feed is what most clients want. For a human that
+is wrong and surprising: every real cluster disconnects on `BYE`, and the
+old behaviour left an operator watching a streaming feed with no obvious
+exit. It now says `73 <call>.` and hangs up.
+
+**The logger protection is unchanged and still tested**: an anonymous
+session's `BYE` is ignored entirely, so a logger that happens to transmit it
+is never hung up on. That distinction is the whole reason `BYE` was gated on
+authentication in the first place.
+
+
 **SHIPPED as v2.7.1 (2026-08-29): the telnet feed is held during a command
 reply.** Live on noderedpi4 and
 [released](https://github.com/vu2cpl/dxca/releases/tag/v2.7.1) with the

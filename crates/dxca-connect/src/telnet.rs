@@ -301,10 +301,17 @@ async fn serve_client(
                         continue;
                     }
                     let was_authed = matches!(state, SessionState::Authed(_));
+                    let mut disconnect = false;
                     if let Some(reply) =
-                        handle_line(&line, &mut state, &mut failures, cfg).await
+                        handle_line(&line, &mut state, &mut failures, cfg, &mut disconnect).await
                     {
                         stream.write_all(reply.as_bytes()).await?;
+                    }
+                    if disconnect {
+                        if let Some(sink) = sink.as_ref() {
+                            sink.close(session);
+                        }
+                        break 'session Ok(());
                     }
                     // The password exchange ends the moment the password
                     // line arrives, so its hold is released here rather than
@@ -372,6 +379,9 @@ async fn handle_line(
     state: &mut SessionState,
     failures: &mut u32,
     cfg: &InteractiveConfig,
+    // Set when the operator asked to leave; the caller closes the socket
+    // after the reply is written.
+    disconnect: &mut bool,
 ) -> Option<String> {
     match state {
         SessionState::AwaitingPassword { callsign } => {
@@ -428,16 +438,20 @@ async fn handle_line(
                     None => Some("Usage: LOGIN <callsign>\r\n".into()),
                 },
                 // Only honoured once authenticated: a logger that happens
-                // to transmit "BYE" must not be hung up on. Note it logs
-                // *out* rather than closing the socket — the spot feed is
-                // what most clients are here for.
+                // to transmit "BYE" must not be hung up on, which is why an
+                // anonymous session's BYE is still ignored entirely.
+                //
+                // For a human it **disconnects**, as it does on every real
+                // cluster. It used to log out and leave the socket open with
+                // the feed still streaming, which left the operator with no
+                // obvious way out — the telnet escape is `Ctrl-]`, a control
+                // character, and typing a literal `]` (easily done) just
+                // sends more text to a server that is now ignoring it.
                 "BYE" | "QUIT" => match state {
                     SessionState::Authed(id) => {
-                        let msg = format!(
-                            "73 {}; logged out, the spot feed continues.\r\n",
-                            id.callsign
-                        );
+                        let msg = format!("73 {}.\r\n", id.callsign);
                         *state = SessionState::Anonymous;
+                        *disconnect = true;
                         Some(msg)
                     }
                     _ => None,
@@ -612,11 +626,34 @@ mod login_tests {
         server.broadcast_line("DX de TEST:      14074.0   K1JT   FT8  1428Z");
         assert!(read_until(&mut c, "K1JT").await.contains("K1JT"));
 
-        // BYE logs out without dropping the connection or the feed.
+        // BYE says 73 and hangs up, as it does on every real cluster.
+        // It used to log out and leave the socket open with the feed still
+        // streaming, which left the operator with no obvious way out.
         c.write_all(b"bye\r\n").await.unwrap();
         assert!(read_until(&mut c, "73").await.contains("VU2CPL"));
+        let mut buf = [0u8; 256];
+        let n = tokio::time::timeout(std::time::Duration::from_secs(5), c.read(&mut buf))
+            .await
+            .expect("the server should close after BYE")
+            .expect("read");
+        assert_eq!(n, 0, "BYE must close the connection");
+    }
+
+    /// The logger protection is unchanged: an anonymous session that
+    /// happens to transmit BYE is ignored, not hung up on.
+    #[tokio::test]
+    async fn an_anonymous_bye_does_not_disconnect() {
+        let server = ClusterServer::start_with(0, interactive()).await.unwrap();
+        let port = server.local_port();
+        let mut c = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+        read_until(&mut c, "LOGIN <callsign>").await;
+        c.write_all(b"BYE\r\n").await.unwrap();
+        expect_quiet(&mut c).await;
         server.broadcast_line("DX de TEST:      21074.0   W1AW   FT8  1429Z");
-        assert!(read_until(&mut c, "W1AW").await.contains("W1AW"));
+        assert!(
+            read_until(&mut c, "W1AW").await.contains("W1AW"),
+            "the feed must keep running for a logger"
+        );
     }
 
     #[tokio::test]

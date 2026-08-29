@@ -25,7 +25,7 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
-**v2.4.0** (2026-08-28): dxca is the
+**v2.7.1** (2026-08-29): dxca is the
 live shack aggregator with a real web GUI, and **runs on
 Windows**, with a prebuilt `.exe` and installer as a release asset (read
 [Windows](#windows) first; it is the least proven of the four platforms). Decoder UDP sources and
@@ -61,9 +61,12 @@ second, unrelated station's Pi since 2026-08-27.
 
 New since 2.2: every spot names **both** the feed that carried it and the
 station that actually spotted it ([Who spotted it](#who-spotted-it)),
-carried through to Telegram and the alert history; a **search box** over
-callsign and spotter; and an optional **interactive telnet** mode where an
-operator logs in and passes read-only cluster commands through to one node
+carried through to Telegram and the alert history; **skimmer spots are
+marked and filterable**, on screen and for Telegram separately; a **search
+box** over callsign and spotter; award totals that count **current DXCC
+entities by default** ([Deleted entities](#deleted-entities)); and an
+optional **interactive telnet** mode where an operator logs in and passes
+read-only cluster commands through to one node
 ([Telnet login](#telnet-login-optional-off-by-default)) — off by default,
 and invisible to loggers either way. Telegram sends now retry once when
 they fail in transit. From 2.4.0 the database migrates itself on open, so
@@ -558,7 +561,7 @@ SH/NODES              list the nodes; * marks yours
 SET/NODE DB0SUE       aim your commands at one
 SH/DX 10              forwarded; the reply comes back to you alone
 SH/WWV                solar data, likewise
-BYE                   log out (the spot feed keeps running)
+BYE                   disconnect
 ```
 
 Commands are **canonicalized, then allowlisted** — `sh/dx` is expanded to

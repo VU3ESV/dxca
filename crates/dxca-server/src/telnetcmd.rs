@@ -206,7 +206,10 @@ impl TelnetCommands {
                 }
             }
             "BYE" | "QUIT" => {
-                self.send(session, "Type BYE in full to log out.".into());
+                // The telnet layer intercepts a literal BYE and hangs up;
+                // an abbreviation reaches here instead, so say so rather
+                // than leaving the operator wondering why nothing happened.
+                self.send(session, "Type BYE in full to disconnect.".into());
             }
             other => self.send(session, format!("{other}: not implemented here.")),
         }
@@ -316,7 +319,7 @@ DXCA telnet — cluster commands are passed to ONE node at a time.
   SET/NODE <name>     send your commands to that node
   SH/DXCA             this server's status
   SH/DX, SH/WWV, ...  queries, forwarded to your node
-  BYE                 log out (the spot feed keeps running)
+  BYE                 log out and disconnect
 Read-only queries only. Spotting and anything that changes a node account
 is refused — DXCA shares one node session with every user.";
 
