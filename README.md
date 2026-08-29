@@ -593,10 +593,30 @@ moment are **dimmed, never hidden**, and hovering a dimmed row restores it in
 full. A `N dimmed` badge sits beside the spot count, because a filter that
 silently changes the screen is indistinguishable from a feed going quiet.
 
-It works from **sun elevation at your station**, not clock hours: sunset
-moves by an hour across the year in Bengaluru and by six in northern Europe,
-and above the Arctic circle clock rules stop meaning anything. **New DXCC is
-never dimmed** whatever the sun is doing.
+Pick **dim** or **hide** beside the tickbox. Dim is the default and cannot
+cost you a contact; hide is cleaner on a busy feed and is the deliberate
+choice. Either way the count stays, and **New DXCC is never masked** whatever
+the sun is doing.
+
+It works from **where the sun actually is at your station**, not clock hours:
+sunset moves by an hour across the year in Bengaluru and by six in northern
+Europe, and above the Arctic circle clock rules stop meaning anything. Your
+day is divided into four phases — **Dawn, Day, Dusk, Night** — and the badge
+beside the tickbox says which one you are in, with sunrise and sunset in its
+tooltip.
+
+**Dawn and Dusk are the grey line**, the window either side of the terminator
+when the low bands come alive and the high bands are still open. How long
+that window lasts is **yours to set**, in minutes, beside the locator —
+45 by default, because how long it stays useful varies with the band, the
+season and the path. It is the one number in this feature you are expected to
+nudge.
+
+**Telegram narrows separately.** On *My Alerts*, "only ping for bands that are
+plausibly open right now" applies the same mask to your alerts while the
+screen keeps showing everything. It fails open harder than the screen does: a
+New DXCC always pings, and so does a band the model says nothing about,
+because a held alert is a spot you never learn about at all.
 
 Stated plainly, because a mask pretending to be a propagation predictor
 would be worse than none: it models **only your end** of the path, uses no

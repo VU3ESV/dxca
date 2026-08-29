@@ -50,6 +50,7 @@ pub fn build_router(state: AppState) -> Router {
             get(get_notify).put(put_notify),
         )
         .route("/api/config/me/station", get(get_station).put(put_station))
+        .route("/api/me/sun", get(sun))
         .route("/api/clublog/refresh", post(refresh))
         .route("/api/config/global", get(get_global).put(put_global))
         .route("/api/telegram/test", post(telegram_test))
@@ -138,7 +139,7 @@ fn annotate_spot(
     app: &AppState,
     user: Option<&User>,
     s: &dxca_core::Spot,
-    sun_elev: Option<f64>,
+    sun: Option<dxca_core::solar::SunPhase>,
 ) -> serde_json::Value {
     let mut v = serde_json::to_value(s).expect("spot serializes");
     let dx_call = s.dx_callsign();
@@ -162,8 +163,8 @@ fn annotate_spot(
     // instruction — the server never withholds a spot on this basis.
     // Whether anything is dimmed or hidden is the client's decision, so the
     // mask stays opt-in and off by default.
-    if let (Some(elev), Some(b)) = (sun_elev, band) {
-        v["band_open"] = serde_json::Value::Bool(dxca_core::bands::plausible_at(b, elev));
+    if let (Some(phase), Some(b)) = (sun, band) {
+        v["band_open"] = serde_json::Value::Bool(dxca_core::bands::plausible_in(b, phase));
     }
 
     if let Some(u) = user
@@ -183,7 +184,7 @@ async fn spots(
 ) -> Json<serde_json::Value> {
     let user = auth::user_from_headers(&app.users.db, &headers);
     // Once per request, not once per spot.
-    let sun = user.as_ref().and_then(|u| app.users.sun_elevation(u.id));
+    let sun = user.as_ref().and_then(|u| app.users.sun_phase(u.id));
     let spots = app.pipeline.recent_spots(q.limit.min(2000));
     let annotated: Vec<serde_json::Value> = spots
         .iter()
@@ -290,7 +291,7 @@ async fn stream_socket(
                             &app,
                             user.as_ref(),
                             &spot,
-                            user.as_ref().and_then(|u| app.users.sun_elevation(u.id)),
+                            user.as_ref().and_then(|u| app.users.sun_phase(u.id)),
                         ),
                     });
                     if socket.send(WsMessage::Text(frame.to_string().into())).await.is_err() {
@@ -915,6 +916,23 @@ async fn get_station(State(app): State<AppState>, headers: HeaderMap) -> Respons
     with_user_config(&app, &headers, |db, uid| db.station_config(uid))
 }
 
+/// Where the sun is for this account right now: the phase, and the sunrise
+/// and sunset it was derived from.
+///
+/// 204 rather than an error when there is no locator — "nothing to say" is
+/// the normal state for most accounts, not a failure. The UI reads that as
+/// "no band mask available" and shows no control at all.
+async fn sun(State(app): State<AppState>, headers: HeaderMap) -> Response {
+    let user = match require_user(&app, &headers) {
+        Ok(u) => u,
+        Err(resp) => return resp,
+    };
+    match app.users.sun_state(user.id) {
+        Some(v) => Json(v).into_response(),
+        None => StatusCode::NO_CONTENT.into_response(),
+    }
+}
+
 async fn put_station(
     State(app): State<AppState>,
     headers: HeaderMap,
@@ -932,6 +950,17 @@ async fn put_station(
         return err(
             StatusCode::BAD_REQUEST,
             "not a Maidenhead locator — expected 4 or 6 characters like MK82 or JN58TD",
+        );
+    }
+    // Bounded rather than free. Below 5 minutes the grey line is too narrow
+    // to be a phase at all; above 180 it stops being a grey line and starts
+    // being "most of the day", at which point the mask is saying nothing.
+    // Refused rather than clamped: silently changing a number the operator
+    // typed is how they end up not trusting the screen.
+    if !(5..=180).contains(&cfg.greyline_window_min) {
+        return err(
+            StatusCode::BAD_REQUEST,
+            "greyline window must be between 5 and 180 minutes",
         );
     }
     match app.users.db.set_station_config(user.id, &cfg) {

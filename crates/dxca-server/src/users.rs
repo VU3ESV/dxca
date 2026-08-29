@@ -258,10 +258,32 @@ impl UserService {
     /// per request** and handed to `annotate_spot`, never per spot: the sun
     /// does not move across a spot list, and a database read per row would
     /// be absurd.
-    pub fn sun_elevation(&self, user_id: i64) -> Option<f64> {
+    pub fn sun_phase(&self, user_id: i64) -> Option<dxca_core::solar::SunPhase> {
         let cfg = self.db.station_config(user_id).ok()?;
         let pos = dxca_core::grid::parse(&cfg.locator)?;
-        Some(dxca_core::solar::elevation(pos, now_unix()))
+        Some(dxca_core::solar::phase(
+            pos,
+            now_unix(),
+            cfg.greyline_window_min,
+        ))
+    }
+
+    /// The phase plus the sunrise/sunset it was derived from, for the
+    /// screen. The UI shows the two times beside the phase badge so the
+    /// operator can see what the mask is reasoning from rather than having
+    /// to trust it — the same disclosure the `N dimmed` count provides.
+    pub fn sun_state(&self, user_id: i64) -> Option<serde_json::Value> {
+        let cfg = self.db.station_config(user_id).ok()?;
+        let pos = dxca_core::grid::parse(&cfg.locator)?;
+        let now = now_unix();
+        let t = dxca_core::solar::sun_times(pos, now);
+        Some(serde_json::json!({
+            "phase": dxca_core::solar::phase(pos, now, cfg.greyline_window_min).key(),
+            "sunrise_unix": t.sunrise_unix,
+            "sunset_unix": t.sunset_unix,
+            "greyline_window_min": cfg.greyline_window_min,
+            "locator": cfg.locator,
+        }))
     }
 
     /// Classify one spot for one user (their matrix + alert toggles).
@@ -312,6 +334,27 @@ impl UserService {
             // band/mode narrowing above it.
             if !notify.passes_skimmer(spot.is_skimmer) {
                 continue;
+            }
+            // The band mask, if this account asked for it on Telegram
+            // (milestone 4). Computed per SPOT here rather than per request
+            // as the API does, because the fan-out runs continuously and a
+            // session can outlive a sunset — a phase cached at startup would
+            // narrow the wrong bands for the rest of the evening.
+            //
+            // New DXCC is exempt, exactly as it is on screen — and the
+            // reason is stronger here. A dimmed row is still on the page and
+            // one hover from being read; a held Telegram is a spot the
+            // operator never learns about at all. If the model is ever
+            // wrong, being wrong about the rarest catch of the year is the
+            // one failure that would end this feature's welcome.
+            if notify.notify_respect_band_mask && c.level != AlertLevel::NewDxcc {
+                let open = self
+                    .sun_phase(user_id)
+                    .zip(c.band)
+                    .map(|(p, b)| dxca_core::bands::plausible_in(b, p));
+                if !notify.passes_band_mask(open) {
+                    continue;
+                }
             }
             let Some(call) = spot.dx_callsign() else {
                 continue;

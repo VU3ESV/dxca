@@ -600,6 +600,80 @@ outside the lightness band. Light `#0891b2 / #6639ba / #bf3989`, dark
 `#22a7b3 / #a371f7 / #db61a2`; both sets pass all six checks.
 
 
+**The band mask now runs on sun PHASES around a tunable grey-line window,
+and milestone 4 is built (2026-08-29).** Manoj: *"m4 next and add a twilight
+setting with default 45 minutes. this is user variable to get greyline timing
+which can vary. see meridian implementation."*
+
+**The elevation model was wrong about the thing that matters most.** It got
+day and night right and could not express the **grey line** at all — the
+narrow window either side of the terminator where the D layer has collapsed
+but the F layer is still lit, which is when the DX is actually worked on 160m
+and 80m. A fixed number of degrees is a wildly different amount of *time*
+depending on latitude: measured at the June solstice, 45 minutes before
+sunset is about 9° up in Bengaluru and about 5° in Munich. One threshold is
+wrong at one end or the other, always.
+
+So the model now resolves **Dawn / Day / Dusk / Night against the real
+sunrise and sunset** for that place and day, with the window in **minutes**
+and set by the operator. `bands::plausible_at(band, elevation)` became
+`bands::plausible_in(band, phase)`; the elevation table became a phase table.
+`solar::elevation` stays — it is still the honest answer to "how high is the
+sun" and its tests still pin the refraction bias — but nothing in the mask
+calls it any more.
+
+**Ported from Meridian's `meridian-core::geo`**, defaults included, so the two
+programs cannot disagree about what phase it is. The pieces: `SunPhase`,
+`sun_times`, `phase`, the "Almanac for Computers" horizon solve, and Howard
+Hinnant's civil-calendar helpers. Note the two algorithms now living side by
+side in `solar.rs` and **why that is deliberate** — `elevation` is NOAA and
+geometric; `event_ut_hours` solves directly for the horizon crossing at a
+90.833° zenith that includes refraction. Solving one from the other would
+need iteration and would behave badly on exactly the polar days where the
+elevation curve never crosses zero.
+
+**The tuning knob moved out of the source and into the operator's hands**,
+which is what made it safe to skip the "watch it for a week" step this plan
+had insisted on before milestone 4. A model that disagrees with the bands is
+now something Manoj adjusts on My ClubLog, not something he waits for a
+release to fix.
+
+**Milestone 4, both halves:**
+
+- **Hide mode**, a `<select>` beside the tickbox, shown only once the mask is
+  on, with **dim as the default** — a corrupted or half-written localStorage
+  preference lands on dim, never on hide. The `N hidden` count is derived
+  from the rows *before* hiding, so the number survives the thing it counts.
+  A mask that removed rows and lost count of them would be precisely the
+  silent-filter failure this feature exists to avoid.
+- **Telegram** (`notify_respect_band_mask`), off by default, narrowed
+  separately from the screen. **New DXCC is exempt** — the screen never dims
+  it and Telegram never holds it, and the reason is stronger here: a dimmed
+  row is one hover from being read, a held alert is a spot never learned
+  about. And **no opinion never suppresses**: no locator, or an unmodelled
+  band, sends as before. Four cases pinned in
+  `telegram_band_mask_fails_open`.
+
+**Bounds are refused, not clamped.** 5–180 minutes; outside that the PUT
+returns 400 with the range in the message. Silently changing a number the
+operator typed is how they stop trusting the screen.
+
+**Watch the `StationConfig` default.** `#[serde(default)]` on the struct
+would have made a missing `greyline_window_min` **zero**, which abolishes the
+grey line rather than defaulting it — every existing account has a row
+without that key. Hence the hand-written `Default` and the explicit
+`#[serde(default = "default_greyline_window_min")]`, and a test asserting a
+round trip still reads 45.
+
+**Verified in a browser against the real pipeline**, same isolated local
+instance as milestone 3: the phase badge read Day, the mode selector took
+10 rows to 5 with the badge changing "5 dimmed" → "5 hidden", the stepper
+moved 45 → 55, the save round-tripped, and 2 and 600 minutes were both
+refused with the range in the message.
+
+**Not exercised on real data:** the Telegram narrowing has never held an
+actual alert, and the New DXCC exemption still needs a loaded log to reach.
+
 **Phase-rotation band mask: milestone 3 built and verified in a browser
 (2026-08-29).** `docs/PHASE-ROTATION-MASK.md` has the full record. A **Band
 mask** tickbox on Spots, off by default, shown only once a locator is set;

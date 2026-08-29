@@ -161,13 +161,39 @@ impl Default for MqttDestination {
 /// is station data, not a credential, and it will gain company as the mask
 /// grows. Empty means **no mask at all** — the feature is opt-in and an
 /// account that never sets a locator behaves exactly as it always has.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct StationConfig {
     /// Maidenhead locator, 4 or 6 characters. Validated on write; an
     /// unparseable value simply disables the mask rather than guessing a
     /// position.
     pub locator: String,
+    /// Minutes either side of sunrise and sunset counted as grey line.
+    ///
+    /// The operator's to set, because how long the grey line stays useful
+    /// genuinely varies — with the band, the season, the path and the
+    /// station. 45 is the default, matching Meridian's greyline scheduler so
+    /// the two programs agree about what phase it is.
+    ///
+    /// `#[serde(default)]` on this struct would make a missing value 0,
+    /// which would abolish the grey line rather than default it — hence the
+    /// explicit default below.
+    #[serde(default = "default_greyline_window_min")]
+    pub greyline_window_min: u32,
+}
+
+/// 45 minutes, as in Meridian.
+pub fn default_greyline_window_min() -> u32 {
+    45
+}
+
+impl Default for StationConfig {
+    fn default() -> Self {
+        Self {
+            locator: String::new(),
+            greyline_window_min: default_greyline_window_min(),
+        }
+    }
 }
 
 /// Per-user notification settings — the 1.x `NotificationConfig` minus the
@@ -207,6 +233,8 @@ pub struct NotifyUserConfig {
     /// able to watch everything on screen while only being pinged for the
     /// spots a person bothered to send.
     pub notify_manual_only: bool,
+    /// Apply the phase-rotation band mask to Telegram alerts too.
+    pub notify_respect_band_mask: bool,
 }
 
 impl Default for NotifyUserConfig {
@@ -227,6 +255,7 @@ impl Default for NotifyUserConfig {
             notify_bands: Vec::new(),
             notify_modes: Vec::new(),
             notify_manual_only: false,
+            notify_respect_band_mask: false,
         }
     }
 }
@@ -240,6 +269,20 @@ impl NotifyUserConfig {
     /// asked for human spots and this one is a machine's.
     pub fn passes_skimmer(&self, is_skimmer: bool) -> bool {
         !(self.notify_manual_only && is_skimmer)
+    }
+
+    /// The band mask, applied to Telegram (`docs/PHASE-ROTATION-MASK.md`
+    /// milestone 4). Off by default and narrowed separately from the Spots
+    /// screen, exactly as the band/mode and manual-only narrowings are:
+    /// watch everything on screen, be woken only for what is workable.
+    ///
+    /// `band_open` is `None` when there is no locator or the band is one the
+    /// model says nothing about. That is "no opinion", and no opinion never
+    /// suppresses an alert — the same fail-open rule the rest of the mask
+    /// follows, and it matters more here, because a suppressed Telegram is a
+    /// spot the operator never learns about at all.
+    pub fn passes_band_mask(&self, band_open: Option<bool>) -> bool {
+        !(self.notify_respect_band_mask && band_open == Some(false))
     }
 
     pub fn passes_band_mode(&self, band: Option<&str>, mode_class: &str) -> bool {

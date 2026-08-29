@@ -15,15 +15,29 @@
 
 const STORE_KEY = 'dxca.bandmask';
 
-function restore(): boolean {
+function restore(): { on: boolean; mode: 'dim' | 'hide' } {
   try {
-    return JSON.parse(localStorage.getItem(STORE_KEY) ?? '{}').on === true;
+    const raw = JSON.parse(localStorage.getItem(STORE_KEY) ?? '{}');
+    // Anything but the literal 'hide' means dim. A corrupted or
+    // half-written preference must land on the safe mode, never on the one
+    // that removes rows.
+    return { on: raw.on === true, mode: raw.mode === 'hide' ? 'hide' : 'dim' };
   } catch {
-    return false;
+    return { on: false, mode: 'dim' };
   }
 }
 
-const state = $state<{ on: boolean }>({ on: restore() });
+/// Dim or hide. **Dim is the default and the recommended mode**, because it
+/// cannot cost a contact: the row stays on the page, keeps its sort
+/// position, and comes back on hover. Hide is cleaner on a busy feed and is
+/// the mode to choose deliberately — which is why nothing selects it for
+/// the operator.
+export type MaskMode = 'dim' | 'hide';
+
+const state = $state<{ on: boolean; mode: MaskMode }>({
+  on: restore().on,
+  mode: restore().mode,
+});
 
 export const bandMask = {
   get on() {
@@ -31,13 +45,27 @@ export const bandMask = {
   },
   set on(v: boolean) {
     state.on = v;
-    try {
-      localStorage.setItem(STORE_KEY, JSON.stringify({ on: v }));
-    } catch {
-      // Private mode / storage disabled — it still works this session.
-    }
+    persist();
+  },
+  get mode() {
+    return state.mode;
+  },
+  set mode(v: MaskMode) {
+    state.mode = v;
+    persist();
   },
 };
+
+function persist() {
+  try {
+    localStorage.setItem(
+      STORE_KEY,
+      JSON.stringify({ on: state.on, mode: state.mode }),
+    );
+  } catch {
+    // Private mode / storage disabled — it still works this session.
+  }
+}
 
 /// Alert levels the mask never touches, rarest first.
 ///
@@ -63,4 +91,14 @@ export function masked(spot: any): boolean {
   if (!state.on) return false;
   if (spot?.band_open !== false) return false;
   return !NEVER_MASK.includes(spot?.alert);
+}
+
+/// Should this spot be removed from the list entirely?
+///
+/// Only in hide mode, and only for what `masked` already agrees to recede —
+/// so every exemption above (New DXCC, no locator, no opinion from the
+/// server) protects the hide path automatically rather than being restated
+/// here where the two could drift apart.
+export function hidden(spot: any): boolean {
+  return state.mode === 'hide' && masked(spot);
 }

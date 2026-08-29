@@ -34,6 +34,7 @@
     notify_unconf_band: false, notify_unconf_mode: false,
     notify_bands: [], notify_modes: [],
     notify_manual_only: false,
+    notify_respect_band_mask: false,
   });
   let message = $state('');
   let error = $state('');
@@ -133,6 +134,19 @@
     >
       <input type="checkbox" bind:checked={cfg.notify_manual_only} />Only ping
       for spots a human made (skip skimmers)
+    </label>
+    <!-- Milestone 4 of docs/PHASE-ROTATION-MASK.md. Narrowed separately from
+         the Spots screen's own mask, like every other narrowing here: watch
+         everything on screen, be woken only for what is workable. It fails
+         open — no locator, or a band the model says nothing about, still
+         pings — because a suppressed Telegram is a spot you never learn
+         about at all. -->
+    <label
+      class="manual-only"
+      title="Hold alerts for bands the sun says are not workable from your QTH right now. Needs a locator on My ClubLog. New DXCC always pings whatever the sun is doing, and a band the model says nothing about always pings too."
+    >
+      <input type="checkbox" bind:checked={cfg.notify_respect_band_mask} />Only
+      ping for bands that are plausibly open right now (band mask)
     </label>
 
     <div class="actions">

@@ -6,7 +6,7 @@
   import { onMount } from 'svelte';
   import ChipGroup from '../lib/ChipGroup.svelte';
   import { awards, pick, canFilter } from '../lib/awards.svelte';
-  import { bandMask, masked } from '../lib/bandmask.svelte';
+  import { bandMask, masked, hidden } from '../lib/bandmask.svelte';
   import { loadReference, bands, modes, levels, levelLabel } from '../lib/reference.svelte';
 
   let spots = $state<any[]>([]);
@@ -17,6 +17,10 @@
   /// `band_open`, because an empty feed or a batch of unclassified spots
   /// would make a configured locator look absent and hide the control.
   let locator = $state('');
+  /// Where the sun is for this account: phase, sunrise, sunset. Null until
+  /// loaded, and stays null for an account with no locator — the server
+  /// answers 204 for that, which is the normal case, not a failure.
+  let sun = $state<any>(null);
   let sortKey = $state('time_unix');
   let sortDesc = $state(true);
   /// Free-text narrowing, matched against the spotted call and the spotter.
@@ -77,15 +81,40 @@
       if (st.status === 200) station = st.json;
       const q = await api('GET', '/api/config/me/station');
       if (q.status === 200) locator = q.json?.locator ?? '';
+      await loadSun();
     })();
-    return openStream((frame) => {
+    // The phase changes about four times a day, so a poll is enough — but
+    // it must exist: a session left open across sunset would otherwise mask
+    // the wrong bands for the whole evening.
+    const sunTimer = setInterval(loadSun, 60_000);
+    const stop = openStream((frame) => {
       if (frame.type === 'spot') {
         spots = [frame.spot, ...spots].slice(0, MAX_ROWS);
       } else if (frame.type === 'status') {
         status = frame.status;
       }
     });
+    return () => {
+      clearInterval(sunTimer);
+      stop();
+    };
   });
+
+  async function loadSun() {
+    const r = await api('GET', '/api/me/sun');
+    // 204 = no locator, which is the ordinary state for most accounts.
+    sun = r.status === 200 ? r.json : null;
+  }
+
+  const PHASE_LABEL: Record<string, string> = {
+    dawn: 'Dawn',
+    day: 'Day',
+    dusk: 'Dusk',
+    night: 'Night',
+  };
+
+  const hhmmUtc = (u: number | null | undefined) =>
+    u == null ? '—' : `${hhmm(u)}Z`;
 
   const freqKHz = (s: any) =>
     (s.dial_frequency_hz + s.delta_frequency_hz) / 1000;
@@ -156,6 +185,11 @@
         });
     }
     const dir = sortDesc ? -1 : 1;
+    // Hide mode removes rows HERE, after every other narrowing, so the
+    // count below still sees them. A mask that both removed rows and lost
+    // count of them would be the silent-filter failure this feature exists
+    // to avoid.
+    if (bandMask.mode === 'hide') rows = rows.filter((s) => !hidden(s));
     return rows.slice().sort((a, b) => {
       let va = a[sortKey], vb = b[sortKey];
       if (sortKey === 'freq') { va = freqKHz(a); vb = freqKHz(b); }
@@ -183,7 +217,11 @@
   // The mask is NOT a narrowing — it never removes a row, so it plays no
   // part in `visible` and cannot empty the table. It only counts what it
   // has receded, which is what the badge beside the spot count reports.
-  let maskedCount = $derived(visible.filter(masked).length);
+  let maskedCount = $derived(
+    bandMask.mode === 'hide'
+      ? spots.filter(hidden).length
+      : visible.filter(masked).length,
+  );
 
   // Every narrowing the operator can be holding, including the older
   // source/CQ ones — the empty state has to account for all of them or it
@@ -361,9 +399,36 @@
     {#if locator}
       <label
         class="flabel"
-        title="Recede spots on bands the sun says are not plausibly workable from {locator} right now. Nothing is hidden and New DXCC is never dimmed — see docs/PHASE-ROTATION-MASK.md."
+        title="Recede spots on bands the sun says are not plausibly workable from {locator} right now. New DXCC is never masked — see docs/PHASE-ROTATION-MASK.md."
         ><input type="checkbox" bind:checked={bandMask.on} />Band mask</label
       >
+      <!-- Only offered once the mask is on: a mode selector for a switched
+           off feature is a control that does nothing. Dim is the default and
+           stays first — hide is the deliberate choice, not the obvious one. -->
+      {#if bandMask.on}
+        <select
+          class="maskmode"
+          bind:value={bandMask.mode}
+          aria-label="What the band mask does to masked spots"
+          title="Dim keeps every spot on the page, receded, and restores it on hover — it cannot cost you a contact. Hide removes them from the list, which is cleaner on a busy feed."
+        >
+          <option value="dim">dim them</option>
+          <option value="hide">hide them</option>
+        </select>
+        <!-- What the mask is reasoning from, shown rather than trusted. The
+             phase is the whole input to the model, and the two times are how
+             an operator judges whether the greyline window is set right. -->
+        {#if sun}
+          <span
+            class="phase"
+            data-phase={sun.phase}
+            title="Sunrise {hhmmUtc(sun.sunrise_unix)}, sunset {hhmmUtc(
+              sun.sunset_unix,
+            )} at {sun.locator}. Grey line is {sun.greyline_window_min} min either side — change it on My ClubLog."
+            >{PHASE_LABEL[sun.phase] ?? sun.phase}</span
+          >
+        {/if}
+      {/if}
     {/if}
     <span class="count muted">{visible.length} spots</span>
     <!-- Never silent: a mask that changes the screen without saying so is
@@ -372,8 +437,10 @@
     {#if bandMask.on && maskedCount > 0}
       <span
         class="count masked-count"
-        title="Dimmed, not hidden — every one of them is still in the table and still sortable. New DXCC is never dimmed."
-        >{maskedCount} dimmed</span
+        title={bandMask.mode === 'hide'
+          ? 'Removed from the list by the band mask. New DXCC is never hidden — switch to "dim them" to see these again.'
+          : 'Dimmed, not hidden — every one of them is still in the table and still sortable. New DXCC is never dimmed.'}
+        >{maskedCount} {bandMask.mode === 'hide' ? 'hidden' : 'dimmed'}</span
       >
     {/if}
   </div>
@@ -820,6 +887,34 @@
   /* Sits beside the spot count, not in place of it — the operator needs
      both numbers to read the screen. Muted ink, because this is
      information about the view, not a condition to act on. */
+  /* Compact, and sized to sit in the filter row rather than dominate it —
+     it is a modifier on a tickbox, not a control in its own right. */
+  .maskmode {
+    font-size: 0.8rem;
+    padding: 0.1rem 0.2rem;
+  }
+
+  /* The phase badge states the model's one input. Deliberately NOT colour
+     coded by phase: the alert levels already own colour in this row, and a
+     yellow "Dusk" beside an orange New Slot would read as a fifth alert
+     level. Muted ink and a border, like a status pill. */
+  .phase {
+    font-size: 0.75rem;
+    padding: 0.05rem 0.4rem;
+    border: 1px solid color-mix(in srgb, CanvasText 25%, Canvas);
+    border-radius: 999px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  /* Dawn and dusk are the grey line — the phase worth noticing, because it
+     is when the low bands come alive. One weight of emphasis, no hue. */
+  .phase[data-phase='dawn'],
+  .phase[data-phase='dusk'] {
+    color: var(--fg);
+    border-color: color-mix(in srgb, CanvasText 45%, Canvas);
+  }
+
   .masked-count {
     margin-left: 0.6rem;
     color: var(--muted);

@@ -1,10 +1,10 @@
 # Phase-rotation spot mask
 
-**Status:** **milestones 1–3 built and verified in a browser** — the maths,
-the band model, the per-user locator, the API annotation and **dim mode with
-its count**. Milestone 4 (hide mode, Telegram narrowing) designed, not built,
-and deliberately parked until the §2 windows have been watched against a real
-feed. **Nothing is ever hidden** ·
+**Status:** **all four milestones built and verified in a browser.** The
+maths, the band model, the per-user locator, the API annotation, dim mode
+with its count, hide mode, and the Telegram narrowing. The model now runs on
+**sun phases around a configurable grey-line window** rather than fixed
+elevation thresholds ·
 **Drafted:** 2026-08-29 · **Phase:** 2
 
 Bands rotate through the day. At local midday 160m is dead for anything but
@@ -41,36 +41,61 @@ Nothing needed for this exists yet. Four pieces, in dependency order:
 The first three are pure functions with no I/O, which is the point: they are
 testable against published reference values rather than by observation.
 
-## 2. Why sun elevation, not local clock time
+## 2. Why sun phases, not clock time and not raw elevation
 
 The obvious implementation is a table of local-time windows — "160m from
 sunset to sunrise" as clock hours. It is wrong at the latitudes and seasons
-that matter most.
+that matter most. Sunset moves about an hour across the year in Bengaluru
+and **six** in northern Europe; above the Arctic circle the concept breaks
+entirely.
 
-Sunset in Bengaluru moves by about an hour across the year. Sunset in
-northern Europe moves by **six**, and above the Arctic circle the concept
-breaks entirely. A fixed clock rule would mask 80m at 1600 in December for a
-European operator for whom it has been dark for an hour, and unmask it at
-1600 in June when there are five hours of daylight left.
+The first implementation therefore used **sun elevation**, which encodes
+latitude, longitude, date and time in one number. That was right about day
+and night and wrong about the thing that matters most on the low bands: the
+**grey line**, the narrow window either side of the terminator where the D
+layer has collapsed but the F layer is still lit. An elevation threshold
+cannot express it, because a fixed number of degrees is a wildly different
+amount of *time* depending on where you are — the sun sets almost vertically
+at the equator and crawls at 48°N. Measured, at the June solstice, 45 minutes
+before sunset is about 9° up in Bengaluru and about 5° in Munich.
 
-**Sun elevation at the operator's QTH** handles all of that with one
-calculation and no tables: it already encodes latitude, longitude, date and
-time. The standard NOAA solar-position algorithm is about forty lines,
-accurate to well under a degree, and needs nothing but the timestamp and the
-coordinates.
+So the model resolves **phases against the real sunrise and sunset** for that
+place and day:
 
-Rough windows, to be tuned against real observation rather than treated as
-settled:
-
-| Band | Plausible when |
+| Phase | When |
 |---|---|
-| 160m, 80m | Sun below about −6° (civil twilight or darker) |
-| 60m, 40m | Sun below about +5°; best in darkness, usable around dawn/dusk |
-| 30m | Always — its distinction is that it works day and night |
-| 20m | Sun above about −12°; open well past sunset on long paths |
-| 17m, 15m | Sun above about 0° |
-| 12m, 10m | Sun above about +10°; needs real daylight and MUF |
-| 6m and up | Never masked — sporadic-E and tropo obey none of this |
+| **Dawn** | within the window either side of sunrise |
+| **Day** | between the two windows, sun up |
+| **Dusk** | within the window either side of sunset |
+| **Night** | between the two windows, sun down |
+
+and the **window is the operator's to set**, defaulting to **45 minutes**.
+How long the grey line stays useful genuinely varies — with the band, the
+season, the path and the station — so this is a number to nudge and watch,
+not a constant to get right once. This is Meridian's model, defaults
+included, so the two programs cannot disagree about what phase it is.
+
+Which bands are plausible in which phase:
+
+| Band | Dawn | Day | Dusk | Night |
+|---|:-:|:-:|:-:|:-:|
+| 160m, 80m, 60m, 40m | ● | | ● | ● |
+| 30m | ● | ● | ● | ● |
+| 20m | ● | ● | ● | ● |
+| 17m, 15m | ● | ● | ● | |
+| 12m, 10m | | ● | | |
+| 6m and up | ● | ● | ● | ● |
+
+The grey-line columns are where the low bands and the high bands are open at
+the same time, which is exactly the overlap a single elevation threshold
+could not produce. 30m and 6m-and-up have no entry at all and are therefore
+never masked.
+
+Polar day and polar night have no sunrise or sunset to be either side of;
+they return Day and Night for the whole 24 hours. When a short day or night
+makes the two windows overlap, they meet at solar midday/midnight and the
+vanishing Day/Night is never returned — which is the correct answer at high
+latitude in June, where the whole night *is* grey line.
 
 ## 3. What the mask does NOT model
 
@@ -84,8 +109,11 @@ predictor would be worse than none:
 - **No solar flux, no K index, no MUF.** DXCA has WWV data available through
   the cluster nodes and deliberately does not use it here. That is a much
   larger feature and it would make the mask's behaviour unpredictable.
-- **No grey line.** The most interesting LF propagation happens in the
-  narrow window this model treats as a simple threshold crossing.
+- **The grey line is a window, not a physical model.** Dawn and Dusk are
+  "within N minutes of the terminator", which is a decent proxy and not
+  ionospheric physics. It does not know that the useful window is longer on
+  160m than on 40m, or that it stretches along the terminator rather than
+  around the clock.
 - **Nothing about antennas.** An operator with no 160m antenna wants that
   band gone at every hour, which is what the existing band chips already do.
 
@@ -144,6 +172,13 @@ migration** — an account without one simply has the mask unavailable.
 grid squares. Reading the most common value from their own log and offering
 it saves a lookup, and an operator who has never typed their locator into
 DXCA has certainly typed it into their logger.
+
+**The grey-line window lives beside the locator**, as a stepper defaulting
+to 45 minutes, bounded to 5–180 and **refused rather than clamped** outside
+that: silently changing a number the operator typed is how they stop trusting
+the screen. Below 5 minutes the grey line is too narrow to be a phase; above
+180 it stops being a grey line and starts being most of the day, at which
+point the mask is saying nothing.
 
 **6-character precision is pointless here** and 4 is plenty: a grid square
 is 70 by 100 miles, and sunset differs across it by a few minutes. Accept
@@ -244,13 +279,42 @@ both, use what is given, do not ask for more.
    loaded ClubLog log to produce a flagged spot, so the local check could
    not reach it — the logic is a one-line list membership, but it is
    untested against live data.
-4. **Hide mode and the Telegram narrowing.** Only once the model has been
-   watched against real conditions and the windows in §2 have been tuned.
-   The alert-level floor becomes a setting here; until then it is the
-   hard-coded default of New DXCC that §4 describes.
+4. ~~**Hide mode and the Telegram narrowing.**~~ **DONE 2026-08-29**, at
+   Manoj's instruction and earlier than this plan intended — the plan said
+   to watch the thresholds for a week first. What made that safe to skip is
+   that the thresholds themselves stopped being the fragile part: the §2
+   rewrite moved the tuning knob out of the source and into the operator's
+   hands as the grey-line window, so a model that disagrees with the bands
+   is now something the operator adjusts rather than something they wait for
+   a release to fix.
 
-Stopping after 3 is a perfectly good outcome, and the tuning that milestone
-produces is worth more than the code in milestone 4.
+   **Hide mode** removes masked rows from the list. It is a `<select>` beside
+   the tickbox, it appears only once the mask is on, and **dim stays the
+   default** — a corrupted or half-written preference lands on dim, never on
+   hide. Crucially the `N hidden` count is derived from the rows *before*
+   hiding, so the number survives the thing it counts; a mask that removed
+   rows and lost count of them would be exactly the silent-filter failure
+   this feature exists to avoid.
+
+   **The Telegram narrowing** is `notify_respect_band_mask`, off by default
+   and narrowed separately from the screen, like every other Telegram
+   narrowing. Two rules matter more here than on screen, because a held
+   alert is a spot the operator never learns about at all rather than one
+   they can hover:
+
+   - **New DXCC is exempt.** The screen never dims it; Telegram never holds
+     it. If the model is ever wrong, being wrong about the rarest catch of
+     the year is the one failure that would end this feature's welcome.
+   - **No opinion never suppresses.** No locator, or a band the model says
+     nothing about, sends as it always did. `telegram_band_mask_fails_open`
+     pins all four cases.
+
+   The phase is computed per spot in the fan-out rather than cached, because
+   the fan-out runs continuously and a phase read at startup would narrow the
+   wrong bands for the rest of the evening.
+
+All four are built. The tuning milestone 3 was meant to produce is now the
+operator's dial rather than a source edit, which is the better outcome.
 
 ## 8. Open questions
 
@@ -258,9 +322,11 @@ produces is worth more than the code in milestone 4.
   path is entirely sunlit would be a real improvement and needs the spotted
   station's location — which DXCA already resolves to a DXCC entity, though
   an entity centroid is a crude proxy for a station's actual position.
-- **What tunes the windows in §2?** The honest answer is a week of watching
-  the mask against a real feed and moving thresholds where it disagrees with
-  the operator. Worth building a "would have masked" debug view first, so
-  the tuning can happen without anything being hidden.
+- ~~**What tunes the windows in §2?**~~ **Answered by the phase rewrite:**
+  the operator does, with the grey-line window, without waiting for a
+  release. What remains untunable is the band-to-phase table itself —
+  Meridian solves that with per-band phase checkboxes, and DXCA could grow
+  the same thing if the fixed table turns out to be wrong for a real
+  station.
 - **Does 60m belong with 40m?** Its propagation sits between 80 and 40, and
   it scores nothing for the Challenge anyway.

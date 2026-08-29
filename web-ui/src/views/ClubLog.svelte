@@ -52,7 +52,7 @@
   let station = $state<any>(null);
   // Station data rather than a ClubLog credential, but it belongs on the
   // page an operator thinks of as "about me and my log".
-  let stationCfg = $state<any>({ locator: '' });
+  let stationCfg = $state<any>({ locator: '', greyline_window_min: 45 });
   // Both cards read the same shared preference, so the totals here and the
   // station card on Spots can never disagree about which entities count.
   let shownStats = $derived(
@@ -87,6 +87,7 @@
     // "Saved." would reasonably assume it took.
     const rs = await api('PUT', '/api/config/me/station', {
       locator: stationCfg.locator ?? '',
+      greyline_window_min: Number(stationCfg.greyline_window_min) || 45,
     });
     busy = false;
     if (r.status !== 200) error = r.json?.error ?? `HTTP ${r.status}`;
@@ -163,6 +164,41 @@
       the <b>band mask</b> on the Spots screen. Leave it blank and nothing
       changes anywhere.
     </p>
+    <!-- Only offered once there is a locator: without one there is no
+         sunrise to be either side of. -->
+    {#if stationCfg.locator}
+      <div class="settings-form">
+        <span class="label">Grey line</span>
+        <span class="stepper">
+          <button
+            type="button"
+            onclick={() => (stationCfg.greyline_window_min = Math.max(5, Number(stationCfg.greyline_window_min || 45) - 5))}
+            aria-label="Narrow the grey-line window by 5 minutes">−</button
+          >
+          <input
+            class="mins"
+            type="number"
+            min="5"
+            max="180"
+            step="5"
+            bind:value={stationCfg.greyline_window_min}
+          />
+          <button
+            type="button"
+            onclick={() => (stationCfg.greyline_window_min = Math.min(180, Number(stationCfg.greyline_window_min || 45) + 5))}
+            aria-label="Widen the grey-line window by 5 minutes">+</button
+          >
+          <span class="unit">min</span>
+        </span>
+      </div>
+      <p class="hint note">
+        How long either side of sunrise and sunset counts as <b>grey line</b> —
+        the window when the low bands come alive and the high bands are still
+        open. Yours to set, because how long it stays useful varies with the
+        band, the season and the path. 45 minutes is the default, and matches
+        Meridian.
+      </p>
+    {/if}
 
     <h2>Alert levels</h2>
     <p class="hint sub">
@@ -411,6 +447,31 @@
   /* Six characters wide, because that is all a locator can be. A grid
      square stretched across the card invites the operator to type an
      address into it. */
+  /* A stepper rather than a bare number field: this is a value the operator
+     is meant to nudge and watch, not type once. */
+  .stepper {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+
+  .stepper button {
+    width: 1.7rem;
+    padding: 0.1rem 0;
+    line-height: 1.2;
+  }
+
+  .stepper .mins {
+    width: 4.5rem;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stepper .unit {
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+
   .locator {
     max-width: 8rem;
     text-transform: uppercase;

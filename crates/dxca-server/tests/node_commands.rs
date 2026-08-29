@@ -299,7 +299,7 @@ async fn no_locator_means_no_band_annotation() {
     );
 
     assert_eq!(
-        users.sun_elevation(uid),
+        users.sun_phase(uid),
         None,
         "no locator set: the mask must be unavailable"
     );
@@ -310,23 +310,29 @@ async fn no_locator_means_no_band_annotation() {
         uid,
         &StationConfig {
             locator: "NONSENSE".into(),
+            ..Default::default()
         },
     )
     .unwrap();
-    assert_eq!(users.sun_elevation(uid), None, "unparseable locator");
+    assert_eq!(users.sun_phase(uid), None, "unparseable locator");
 
     // A real one switches it on.
     db.set_station_config(
         uid,
         &StationConfig {
-            locator: "MK82".into(),
+            locator: "MK83TE".into(),
+            ..Default::default()
         },
     )
     .unwrap();
-    let elev = users.sun_elevation(uid).expect("locator set");
-    assert!(
-        (-90.0..=90.0).contains(&elev),
-        "elevation out of range: {elev}"
+    users.sun_phase(uid).expect("locator set");
+    // The window must survive a round trip with its default intact. A
+    // missing value deserialising as 0 would abolish the grey line rather
+    // than default it, which is why StationConfig hand-writes Default.
+    assert_eq!(
+        db.station_config(uid).unwrap().greyline_window_min,
+        45,
+        "the default greyline window is 45 minutes"
     );
 
     let _ = std::fs::remove_dir_all(&dir);
@@ -339,21 +345,73 @@ async fn no_locator_means_no_band_annotation() {
 async fn the_mask_follows_the_sun_at_a_real_qth() {
     use dxca_core::{bands, grid, solar};
 
-    let pos = grid::parse("MK82").expect("MK82");
-    // 2026-06-21; MK82 is near 77E, so local noon is about 0700 UTC and
+    let pos = grid::parse("MK83TE").expect("MK83TE");
+    // 2026-06-21; MK83 is near 77.6E, so local noon is about 0700 UTC and
     // local midnight about 1900 UTC.
     let midnight_utc = 1_782_000_000;
     let local_noon = midnight_utc + 7 * 3_600;
     let local_midnight = midnight_utc + 19 * 3_600;
 
-    let day = solar::elevation(pos, local_noon);
-    let night = solar::elevation(pos, local_midnight);
-    assert!(day > 0.0 && night < 0.0, "day {day}, night {night}");
+    let day = solar::phase(pos, local_noon, 45);
+    let night = solar::phase(pos, local_midnight, 45);
+    assert_eq!(day, solar::SunPhase::Day, "local noon");
+    assert_eq!(night, solar::SunPhase::Night, "local midnight");
 
-    assert!(!bands::plausible_at("160M", day), "160m at local midday");
-    assert!(bands::plausible_at("15M", day), "15m at local midday");
-    assert!(bands::plausible_at("160M", night), "160m at local midnight");
-    assert!(!bands::plausible_at("15M", night), "15m at local midnight");
+    assert!(!bands::plausible_in("160M", day), "160m at local midday");
+    assert!(bands::plausible_in("15M", day), "15m at local midday");
+    assert!(bands::plausible_in("160M", night), "160m at local midnight");
+    assert!(!bands::plausible_in("15M", night), "15m at local midnight");
     // 30M is the band that does not care.
-    assert!(bands::plausible_at("30M", day) && bands::plausible_at("30M", night));
+    assert!(bands::plausible_in("30M", day) && bands::plausible_in("30M", night));
+}
+
+/// The grey line, which is what the phase model bought over elevation
+/// windows: a window either side of sunset where 160m AND 15m are both
+/// plausible at once. No single elevation threshold can produce that.
+#[tokio::test]
+async fn the_greyline_opens_the_low_and_high_bands_together() {
+    use dxca_core::{bands, grid, solar};
+
+    let pos = grid::parse("MK83TE").expect("MK83TE");
+    let sunset = solar::sun_times(pos, 1_782_000_000)
+        .sunset_unix
+        .expect("Bengaluru is not polar");
+
+    // Half an hour before sunset, inside the default 45-minute window.
+    let dusk = solar::phase(pos, sunset - 30 * 60, 45);
+    assert_eq!(dusk, solar::SunPhase::Dusk);
+    assert!(bands::plausible_in("160M", dusk), "160m on the grey line");
+    assert!(bands::plausible_in("15M", dusk), "15m on the grey line");
+
+    // Narrow the window and the same instant is ordinary daylight again:
+    // 160m closes, 15m stays. The setting is what moves the boundary.
+    let narrow = solar::phase(pos, sunset - 30 * 60, 10);
+    assert_eq!(narrow, solar::SunPhase::Day);
+    assert!(!bands::plausible_in("160M", narrow));
+    assert!(bands::plausible_in("15M", narrow));
+}
+
+/// Fail open, on the path that matters most. A Telegram alert suppressed in
+/// error is a spot the operator never learns about, so "no opinion" must
+/// never suppress: no locator, or a band the model does not model, sends.
+#[test]
+fn telegram_band_mask_fails_open() {
+    use dxca_server::db::NotifyUserConfig;
+
+    let mut cfg = NotifyUserConfig::default();
+    assert!(
+        !cfg.notify_respect_band_mask,
+        "the Telegram band mask must default off"
+    );
+
+    cfg.notify_respect_band_mask = true;
+    assert!(cfg.passes_band_mask(None), "no opinion must never suppress");
+    assert!(cfg.passes_band_mask(Some(true)), "an open band sends");
+    assert!(!cfg.passes_band_mask(Some(false)), "a closed band is held");
+
+    cfg.notify_respect_band_mask = false;
+    assert!(
+        cfg.passes_band_mask(Some(false)),
+        "switched off, a closed band still sends"
+    );
 }
