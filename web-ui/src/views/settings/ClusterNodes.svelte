@@ -10,6 +10,7 @@
   import { status, refreshStatus } from '../../lib/status.svelte';
   import HelpTip from '../../lib/HelpTip.svelte';
   import ApplySave from '../../lib/ApplySave.svelte';
+  import ConfigGate from '../../lib/ConfigGate.svelte';
   import {
     server, loadServerConfig, drop, SOURCE_NAME_MAX,
   } from '../../lib/serverconfig.svelte';
@@ -65,7 +66,7 @@
   {/if}
 </div>
 
-{#if server.cfg}
+<ConfigGate>
   <div class="card">
     <h2>
       Cluster nodes — config
@@ -111,4 +112,4 @@
     <div class="actions"><button onclick={add}>+ Add node</button></div>
     <ApplySave />
   </div>
-{/if}
+</ConfigGate>

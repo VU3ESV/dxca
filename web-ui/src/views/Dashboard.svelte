@@ -84,9 +84,18 @@
       await loadReference();
       const r = await api('GET', '/api/spots?limit=500');
       if (r.json?.spots) spots = r.json.spots;
+      // Guarded, unlike the `r.json?.spots` above which is safe by its own
+      // optional chaining. `api` no longer throws when the server is
+      // unreachable — it returns status 0 — so an unguarded assignment here
+      // would push an error object into the SHARED status store and the header
+      // pill would report "0/0 nodes" on every screen. That states a fact
+      // ("nothing is configured") in place of an admission ("I could not
+      // ask"), which is the worse of the two by far.
       const s = await api('GET', '/api/status');
-      status = s.json;
-      setStatus(s.json);
+      if (s.status === 200) {
+        status = s.json;
+        setStatus(s.json);
+      }
       const st = await api('GET', '/api/me/station');
       if (st.status === 200) station = st.json;
       const q = await api('GET', '/api/config/me/station');

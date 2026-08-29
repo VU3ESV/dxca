@@ -16,6 +16,7 @@
   import { status, refreshStatus } from '../../lib/status.svelte';
   import HelpTip from '../../lib/HelpTip.svelte';
   import ApplySave from '../../lib/ApplySave.svelte';
+  import ConfigGate from '../../lib/ConfigGate.svelte';
   import Blacklist from '../Blacklist.svelte';
   import { server, loadServerConfig } from '../../lib/serverconfig.svelte';
 
@@ -71,7 +72,7 @@
   </div>
 {/if}
 
-{#if server.cfg}
+<ConfigGate>
   <div class="card">
     <h2>Reference data — shared by all users</h2>
 
@@ -145,7 +146,7 @@
       <code>{server.cfg.read_only.data_dir}</code> (edit config/dxca.toml + restart).
     </p>
   </div>
-{/if}
+</ConfigGate>
 
 <Blacklist />
 
