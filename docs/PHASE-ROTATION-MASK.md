@@ -1,9 +1,10 @@
 # Phase-rotation spot mask
 
-**Status:** **milestones 1–2 built** — the maths, the band model, the
-per-user locator and the API annotation. Milestones 3–4 (any UI at all)
-designed, not built. **Nothing is filtered and nothing is dimmed**; the
-server offers advice and no client acts on it yet ·
+**Status:** **milestones 1–3 built and verified in a browser** — the maths,
+the band model, the per-user locator, the API annotation and **dim mode with
+its count**. Milestone 4 (hide mode, Telegram narrowing) designed, not built,
+and deliberately parked until the §2 windows have been watched against a real
+feed. **Nothing is ever hidden** ·
 **Drafted:** 2026-08-29 · **Phase:** 2
 
 Bands rotate through the day. At local midday 160m is dead for anything but
@@ -200,10 +201,53 @@ both, use what is given, do not ask for more.
    WebSocket recomputes per frame instead, because a session can stay open
    across a sunset and a stale elevation would mask the wrong bands for the
    rest of the evening.
-3. **Dim mode, with the masked count.** The Spots screen only. This is the
-   milestone worth stopping at to live with for a week before going further.
+3. ~~**Dim mode, with the masked count.**~~ **DONE 2026-08-29.** The Spots
+   screen only, and the milestone worth living with for a week before going
+   further.
+
+   A **Band mask** tickbox sits with the other display narrowings, off by
+   default, remembered per browser in `localStorage`. It appears **only once
+   a locator is set** — without one the server sends no advice, and a
+   permanently dead checkbox is worse than no checkbox. The route to it is
+   the note beside the Locator field on My ClubLog, which names the feature.
+
+   Masked rows are **dimmed to 45% and restored in full on hover**. That
+   hover rule is the safety valve made physical: a receded row is always one
+   pointer away from being read, so the mask cannot turn a workable spot
+   into a puzzle. Opacity rather than a muted colour, deliberately, because
+   it fades the alert tint too — a New Band flag on a dead band should look
+   like a quiet flag rather than a loud one.
+
+   The mask takes **no part in the `visible` filter**. It cannot empty the
+   table, cannot interact with the other narrowings, and cannot produce the
+   "screen went blank" failure the alert-level filter taught us about. The
+   `N dimmed` badge beside the spot count is what keeps it honest.
+
+   **One real bug surfaced while verifying it, and it was not in the mask.**
+   `band_open` was annotated inside the classification branch, and
+   `users::classify` returns `None` for an account with no ClubLog matrix —
+   so the mask's precondition had silently become *"has a ClubLog log"*
+   rather than *"has a locator"*, and the Band column was empty for those
+   accounts too. A band is a property of the spot's frequency, not of
+   anyone's log. `annotate_spot` now derives it from the frequency
+   unconditionally, and classification only adds the alert level, DXCC name
+   and beacon flag on top.
+
+   Verified against the real pipeline rather than by reading: a local
+   instance with **no cluster nodes** (logging in as VU2CPL would fight the
+   shack Pis for the same node session) fed synthetic WSJT-X UDP packets on
+   four bands. At 11:26 IST from MK82 the 160M and 40M rows dimmed and the
+   15M and 10M rows did not, the badge read `5 dimmed`, hover restored a
+   row, both themes were legible, and the preference survived a reload.
+
+   **Not yet exercised on a real feed:** the New DXCC exemption. It needs a
+   loaded ClubLog log to produce a flagged spot, so the local check could
+   not reach it — the logic is a one-line list membership, but it is
+   untested against live data.
 4. **Hide mode and the Telegram narrowing.** Only once the model has been
    watched against real conditions and the windows in §2 have been tuned.
+   The alert-level floor becomes a setting here; until then it is the
+   hard-coded default of New DXCC that §4 describes.
 
 Stopping after 3 is a perfectly good outcome, and the tuning that milestone
 produces is worth more than the code in milestone 4.

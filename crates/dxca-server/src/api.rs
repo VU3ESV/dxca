@@ -144,24 +144,34 @@ fn annotate_spot(
     let dx_call = s.dx_callsign();
     v["dx_call"] = serde_json::to_value(&dx_call).unwrap();
     v["is_lotw"] = serde_json::Value::Bool(dx_call.is_some_and(|c| app.users.is_lotw_user(&c)));
+
+    // The band is a property of the SPOT — a frequency and a band plan —
+    // not of anyone's log. It used to be published only as part of a
+    // classification, which meant an account with no ClubLog log loaded saw
+    // an empty Band column and, worse, no band mask: `classify` returns
+    // None without a log matrix, so the mask's own precondition silently
+    // became "has a ClubLog log" instead of "has a locator". Derived here
+    // from the frequency, exactly as the classifier derives it.
+    let band = dxca_core::bands::band_from_mhz(s.frequency_mhz());
+    v["band"] = serde_json::to_value(band).unwrap();
+
+    // Phase-rotation mask (docs/PHASE-ROTATION-MASK.md): is this band
+    // plausibly workable from the operator's QTH at this moment?
+    //
+    // Present only when they have set a locator, and it is advice, not an
+    // instruction — the server never withholds a spot on this basis.
+    // Whether anything is dimmed or hidden is the client's decision, so the
+    // mask stays opt-in and off by default.
+    if let (Some(elev), Some(b)) = (sun_elev, band) {
+        v["band_open"] = serde_json::Value::Bool(dxca_core::bands::plausible_at(b, elev));
+    }
+
     if let Some(u) = user
         && let Some(c) = app.users.classify(u.id, s)
     {
         v["alert"] = serde_json::to_value(c.level).unwrap();
         v["dxcc_name"] = serde_json::to_value(&c.dxcc_name).unwrap();
-        v["band"] = serde_json::to_value(c.band).unwrap();
         v["is_beacon"] = serde_json::Value::Bool(c.is_beacon);
-        // Phase-rotation mask (docs/PHASE-ROTATION-MASK.md): is this band
-        // plausibly workable from the operator's QTH at this moment?
-        //
-        // Present only when they have set a locator, and it is advice, not
-        // an instruction — the server never withholds a spot on this basis.
-        // Whether anything is dimmed or hidden is the client's decision, so
-        // the mask stays opt-in and off by default.
-        if let (Some(elev), Some(band)) = (sun_elev, c.band) {
-            v["band_open"] =
-                serde_json::Value::Bool(dxca_core::bands::plausible_at(band, elev));
-        }
     }
     v
 }

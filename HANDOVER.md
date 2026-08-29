@@ -587,6 +587,96 @@ outside the lightness band. Light `#0891b2 / #6639ba / #bf3989`, dark
 `#22a7b3 / #a371f7 / #db61a2`; both sets pass all six checks.
 
 
+**Phase-rotation band mask: milestone 3 built and verified in a browser
+(2026-08-29).** `docs/PHASE-ROTATION-MASK.md` has the full record. A **Band
+mask** tickbox on Spots, off by default, shown only once a locator is set;
+masked rows dim to 45% and come back to full on hover; an `N dimmed` badge
+sits beside the spot count. The mask takes no part in the `visible` filter,
+so it cannot empty the table — the lesson from the alert-level filter.
+
+**Verified against the real pipeline, not by reading.** A local instance in
+the session scratchpad with **no cluster_nodes** — logging in as VU2CPL
+would fight the shack Pis for the same node session — fed synthetic WSJT-X
+UDP packets by a 90-line Python script written off `dxca-core/src/wsjtx.rs`
+(magic, schema, type, then u32-length UTF-8 strings; a Status sets the dial
+frequency the Decodes are relative to). At 11:26 IST from MK82 the 160M and
+40M rows dimmed, 15M and 10M did not, the badge read `5 dimmed`, hover
+restored a row, both themes were legible and the preference survived a
+reload. **First attempt started the server from the repo root and it picked
+up `config/dxca.toml` — the burn-in config — connecting to all five real
+nodes as VU2CPL for about twenty seconds before it was killed.** The config
+path is hard-coded relative to the working directory (`config::DEFAULT_PATH`),
+so an isolated run needs its own directory, not a flag. Worth knowing before
+the next local test.
+
+**That verification found a coupling bug worth more than the milestone.**
+`band_open` was annotated inside the classification branch, and
+`users::classify` returns `None` for an account with no ClubLog matrix — so
+the mask's precondition had silently become *"has a ClubLog log"* rather
+than *"has a locator"*, and the Band column was empty for those accounts
+too. A band is a property of the spot's frequency, not of anyone's log.
+`annotate_spot` now derives it unconditionally and classification adds only
+the alert level, DXCC name and beacon flag on top. **Still unexercised:** the
+New DXCC exemption needs a loaded log to produce a flagged spot, so the
+local check could not reach it.
+
+**Stats: the three charts now share one fixed label column (2026-08-29).**
+Manoj sent a screenshot of the live page and said the labels need to be
+fixed width. He was right and the original comment in `Stats.svelte` argued
+the opposite: `max-content` sized each chart to its **own** longest name, so
+`160M`, `FT8` and `DB0SUE` each started their bars at a different x. That
+reads fine one chart at a time and ragged down the page — and the charts are
+stacked, so they get compared whether or not they were meant to be. Now
+`7.5rem` for all three, with labels **wrapping** rather than truncating:
+verified that a 25-character name goes to two lines, is not clipped, and
+does not move the bars. Truncating a node's name in a chart about which node
+carried what would be exactly the wrong thing to lose.
+
+The same screenshot showed **"in memory— about 32 min"** with no space.
+Svelte trims the leading whitespace of an `{#if}` block's content wherever
+it is written — moving it onto the tag's own line does not help — so it
+needs an explicit `{' '}`. The space cannot live outside the block either:
+that leaves "memory ." on an instance with no span yet. `span()` also
+returned "0 min" on a fresh instance, so it now returns the whole phrase and
+says "under a minute".
+
+**Windows install location fixed, and the first real Windows test found a
+second bug (2026-08-29).** Manoj ran the new installer on his own machine.
+The fixed location worked; the **one-time import did not** — it offered no
+previous install and he copied `config\` and `data\` into `C:\DXCA` by hand.
+
+The cause was a batch parsing bug in the scheduled-task lookup that had
+**never once worked**, in either version of this script:
+
+```
+for /f "tokens=2*" %%a in (... findstr /c:"Task To Run:") do set "OLDEXE=%%b"
+```
+
+The line reads `Task To Run:   C:\somewhere\run-dxca.cmd`. Token 2 is `To`,
+so the `*` remainder begins at `Run:` — `OLDEXE` came out as
+`Run:            C:\somewhere\run-dxca.cmd`, which `%%~dpp` cannot make a
+folder out of. Splitting on `:` is not the fix either; the path has one.
+The working idiom is `!VAR:*Task To Run:=!`, which deletes everything up to
+and including the needle and leaves the path whatever it contains, followed
+by a `for /f "tokens=* delims= "` pass to strip schtasks' padding.
+
+**Why nothing reported it:** detection failing is *designed* to fall through
+to a prompt rather than complain, so a permanently broken lookup and a
+machine with no previous install look identical from the outside. The
+sibling-folder scan — the fallback that was meant to cover this — only fires
+when the new zip is unpacked beside the old install, and it was not.
+
+Two lessons worth keeping. A "convenience" path that silently degrades needs
+a way to tell *broken* from *nothing to find*; and `tokens=N*` is worth
+spelling out on paper before trusting it, because it splits where the
+delimiters are, not where the label ends.
+
+Manoj's own machine is already migrated by hand, so `C:\DXCA` holds his
+config and database and every future run is detected as an upgrade. Worth
+confirming once that the task points at the new location:
+`schtasks /query /tn dxca /v /fo list | findstr "Task To Run"` should read
+`C:\DXCA\run-dxca.cmd`. The fix matters for the next machine, not his.
+
 **NEEDS TESTING ON WINDOWS (2026-08-29): DXCA now installs to a fixed
 location, `C:\DXCA`.** Written but **not run** — there is no Windows machine
 in this workflow, so the batch is unverified beyond a paren-balance check.

@@ -561,6 +561,30 @@ Deliberately **bars, not pie charts**: the job is comparing magnitudes
 across up to fifteen categories with names like `UberSDR CWskim`, and a
 fifteen-slice pie can neither be compared by eye nor hold its own labels.
 
+### Band mask (optional, off by default)
+
+Bands rotate through the day. At local midday 160m is dead for anything but
+ground wave, and a New-Band flag on a 160m spot is an interruption you can
+do nothing about; at 0200 local it is the most valuable line on the screen.
+
+Set your **Locator** on *My ClubLog* — a 4- or 6-character Maidenhead square
+— and a **Band mask** tickbox appears with the other narrowings on Spots.
+With it on, spots whose band is not plausibly workable from your QTH at this
+moment are **dimmed, never hidden**, and hovering a dimmed row restores it in
+full. A `N dimmed` badge sits beside the spot count, because a filter that
+silently changes the screen is indistinguishable from a feed going quiet.
+
+It works from **sun elevation at your station**, not clock hours: sunset
+moves by an hour across the year in Bengaluru and by six in northern Europe,
+and above the Arctic circle clock rules stop meaning anything. **New DXCC is
+never dimmed** whatever the sun is doing.
+
+Stated plainly, because a mask pretending to be a propagation predictor
+would be worse than none: it models **only your end** of the path, uses no
+solar flux, K index or MUF, and knows nothing about your antennas. It is a
+coarse plausibility filter. Leave the locator blank and none of it exists.
+Full reasoning in [`docs/PHASE-ROTATION-MASK.md`](docs/PHASE-ROTATION-MASK.md).
+
 ### Deleted entities
 
 DXCC has a **deleted** list — Abu Ail, Blenheim Reef, British North Borneo

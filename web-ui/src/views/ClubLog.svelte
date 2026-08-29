@@ -50,6 +50,9 @@
   // The statistics come from the same endpoint the Spots station card uses,
   // so the two can never disagree about what the log holds.
   let station = $state<any>(null);
+  // Station data rather than a ClubLog credential, but it belongs on the
+  // page an operator thinks of as "about me and my log".
+  let stationCfg = $state<any>({ locator: '' });
   // Both cards read the same shared preference, so the totals here and the
   // station card on Spots can never disagree about which entities count.
   let shownStats = $derived(
@@ -67,6 +70,8 @@
     await loadReference();
     const r = await api('GET', '/api/config/me/clublog');
     if (r.status === 200 && r.json) cfg = { ...cfg, ...r.json };
+    const rs = await api('GET', '/api/config/me/station');
+    if (rs.status === 200 && rs.json) stationCfg = { ...stationCfg, ...rs.json };
     await loadStation();
   });
 
@@ -76,9 +81,17 @@
       ...cfg,
       refresh_hours: Number(cfg.refresh_hours) || 0,
     });
+    // The locator saves alongside, so one Save button means one save. The
+    // server validates it, and a rejected locator must surface as an error
+    // rather than a silent no-op — an operator who typed a grid and saw
+    // "Saved." would reasonably assume it took.
+    const rs = await api('PUT', '/api/config/me/station', {
+      locator: stationCfg.locator ?? '',
+    });
     busy = false;
-    if (r.status === 200) message = 'Saved.';
-    else error = r.json?.error ?? `HTTP ${r.status}`;
+    if (r.status !== 200) error = r.json?.error ?? `HTTP ${r.status}`;
+    else if (rs.status !== 200) error = rs.json?.error ?? `HTTP ${rs.status}`;
+    else message = 'Saved.';
   }
 
   async function refresh() {
@@ -128,6 +141,27 @@
         Your log will only change when you press <b>Refresh log now</b> —
         anything you work keeps alerting as new until you do.
       {/if}
+    </p>
+
+    <!-- Not a ClubLog credential, but it belongs on the page an operator
+         thinks of as "about me and my station", and it shares this card's
+         one Save button rather than growing a second one. -->
+    <h2>My station</h2>
+    <div class="settings-form">
+      <span class="label">Locator</span>
+      <input
+        class="locator"
+        bind:value={stationCfg.locator}
+        placeholder="MK82"
+        autocapitalize="characters"
+        maxlength="6"
+      />
+    </div>
+    <p class="hint note">
+      Your Maidenhead square, 4 or 6 characters. Optional, and used for one
+      thing only: working out where the sun is at your station, which powers
+      the <b>band mask</b> on the Spots screen. Leave it blank and nothing
+      changes anywhere.
     </p>
 
     <h2>Alert levels</h2>
@@ -372,5 +406,14 @@
 
   p {
     margin: 0.75rem 0 0;
+  }
+
+  /* Six characters wide, because that is all a locator can be. A grid
+     square stretched across the card invites the operator to type an
+     address into it. */
+  .locator {
+    max-width: 8rem;
+    text-transform: uppercase;
+    font-family: var(--mono);
   }
 </style>

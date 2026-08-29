@@ -44,11 +44,16 @@
   const pct = (n: number, total: number) =>
     total > 0 ? ((n / total) * 100).toFixed(1) : '0.0';
 
+  /// Returns the whole phrase, "about" included, because the short case
+  /// cannot take that hedge: a freshly started instance reading "about 0 min
+  /// of feed" states a measurement where there isn't one yet, and "about
+  /// under a minute" is not English.
   function span(secs: number): string {
     if (!secs) return '';
     const m = Math.round(secs / 60);
-    if (m < 90) return `${m} min`;
-    return `${(m / 60).toFixed(1)} hours`;
+    if (m < 1) return 'under a minute';
+    if (m < 90) return `about ${m} min`;
+    return `about ${(m / 60).toFixed(1)} hours`;
   }
 </script>
 
@@ -66,8 +71,14 @@
         <span class="cap">spots held</span>
       </div>
       <p class="hint">
-        Everything DXCA currently has in memory{#if stats.span_secs}
-          — about {span(stats.span_secs)} of feed{/if}. The ring keeps the most
+        <!-- {' '} rather than a literal space: Svelte trims the leading
+             whitespace of a block's content wherever it is written, so both
+             "memory{#if}\n — about" and "memory{#if} — about" render as
+             "memory— about". An explicit expression is the only form that
+             survives, and the space cannot move outside the block — it
+             would leave "memory ." on an instance with no span yet. -->
+        Everything DXCA currently has in memory{#if stats.span_secs}{' '}—
+          {span(stats.span_secs)} of feed{/if}. The ring keeps the most
         recent spots and discards the oldest, so this is a window, not a
         running total since startup.
       </p>
@@ -132,14 +143,24 @@
     font-size: 0.85rem;
   }
 
-  /* One grid for the whole chart rather than one per row: the label column
-     then sizes to the longest name in THIS chart and every row aligns down
-     it. A fixed width cannot serve both "160M" and "UberSDR CWskim", and
-     truncating a node's name in a chart about which node carried what is
-     exactly the wrong thing to lose. */
+  /* One grid for the whole chart rather than one per row, and a FIXED label
+     column so all three charts share it.
+
+     `max-content` sized each chart to its own longest name, which read fine
+     one chart at a time and ragged down the page: "160M" and "FT8" and
+     "DB0SUE" each started their bars at a different x, so the three charts
+     never lined up. Looking at the whole page is what showed it — the
+     charts are stacked, so they are compared whether or not they were
+     meant to be.
+
+     The width is the answer to "what is the longest name here", and the
+     labels WRAP rather than truncate when something exceeds it. Truncating
+     a node's name in a chart about which node carried what would be exactly
+     the wrong thing to lose; a two-line label costs one row of height and
+     keeps every character. */
   .bars {
     display: grid;
-    grid-template-columns: max-content 1fr max-content max-content;
+    grid-template-columns: 7.5rem 1fr max-content max-content;
     align-items: center;
     /* 2px between fills, so adjacent bars read as separate marks rather
        than one block. */
@@ -152,9 +173,10 @@
     display: contents;
   }
 
+  /* Wraps rather than overflows or truncates — see .bars above. */
   .key {
     color: var(--fg);
-    white-space: nowrap;
+    overflow-wrap: anywhere;
   }
 
   /* The track is the recessive frame the bar sits in — it shows the scale

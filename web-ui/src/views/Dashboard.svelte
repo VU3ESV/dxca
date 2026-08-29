@@ -6,11 +6,17 @@
   import { onMount } from 'svelte';
   import ChipGroup from '../lib/ChipGroup.svelte';
   import { awards, pick, canFilter } from '../lib/awards.svelte';
+  import { bandMask, masked } from '../lib/bandmask.svelte';
   import { loadReference, bands, modes, levels, levelLabel } from '../lib/reference.svelte';
 
   let spots = $state<any[]>([]);
   let status = $state<any>(null);
   let station = $state<any>(null);
+  /// The operator's Maidenhead square, or '' — the band mask's precondition.
+  /// Asked for directly rather than inferred from whether spots carry
+  /// `band_open`, because an empty feed or a batch of unclassified spots
+  /// would make a configured locator look absent and hide the control.
+  let locator = $state('');
   let sortKey = $state('time_unix');
   let sortDesc = $state(true);
   /// Free-text narrowing, matched against the spotted call and the spotter.
@@ -69,6 +75,8 @@
       status = s.json;
       const st = await api('GET', '/api/me/station');
       if (st.status === 200) station = st.json;
+      const q = await api('GET', '/api/config/me/station');
+      if (q.status === 200) locator = q.json?.locator ?? '';
     })();
     return openStream((frame) => {
       if (frame.type === 'spot') {
@@ -171,6 +179,11 @@
   // the server's own AlertLevel::label() via /api/reference, the colour from
   // app.css's [data-level] table. Adding a ninth level needs no edit here.
   const flagged = (s: any) => s.alert && s.alert !== 'worked' && s.alert !== 'none';
+
+  // The mask is NOT a narrowing — it never removes a row, so it plays no
+  // part in `visible` and cannot empty the table. It only counts what it
+  // has receded, which is what the badge beside the spot count reports.
+  let maskedCount = $derived(visible.filter(masked).length);
 
   // Every narrowing the operator can be holding, including the older
   // source/CQ ones — the empty state has to account for all of them or it
@@ -341,7 +354,28 @@
     >
     <label class="flabel"><input type="checkbox" bind:checked={cqOnly} />CQ only</label>
     <label class="flabel"><input type="checkbox" bind:checked={hideDupes} />Hide duplicates</label>
+    <!-- Only offered once a locator exists, because without one the server
+         sends no band advice and a permanently dead checkbox is worse than
+         no checkbox. The route to it is the note beside the Locator field
+         on My ClubLog. -->
+    {#if locator}
+      <label
+        class="flabel"
+        title="Recede spots on bands the sun says are not plausibly workable from {locator} right now. Nothing is hidden and New DXCC is never dimmed — see docs/PHASE-ROTATION-MASK.md."
+        ><input type="checkbox" bind:checked={bandMask.on} />Band mask</label
+      >
+    {/if}
     <span class="count muted">{visible.length} spots</span>
+    <!-- Never silent: a mask that changes the screen without saying so is
+         indistinguishable from a feed going quiet. Nothing is removed in
+         dim mode, so the count says "dimmed", not "hidden". -->
+    {#if bandMask.on && maskedCount > 0}
+      <span
+        class="count masked-count"
+        title="Dimmed, not hidden — every one of them is still in the table and still sortable. New DXCC is never dimmed."
+        >{maskedCount} dimmed</span
+      >
+    {/if}
   </div>
 
   <!-- The three narrowings, one row each so a long band list wraps on its own
@@ -375,7 +409,11 @@
             <tr
               class:flagged={flagged(s)}
               class:beacon={!flagged(s) && s.is_beacon}
+              class:masked={masked(s)}
               data-level={flagged(s) ? s.alert : undefined}
+              title={masked(s)
+                ? `${s.band} is not plausibly open from ${locator} at this hour — dimmed, not hidden`
+                : undefined}
             >
               <td class="mono">{hhmm(s.time_unix)}Z</td>
               <td>{s.source_name}</td>
@@ -763,4 +801,28 @@
   tr.flagged td { background: var(--lvl-bg); }
   tr.flagged .alert { color: var(--lvl); }
   tr.beacon td { color: var(--muted); }
+
+  /* The band mask: DIM, NEVER HIDE (docs/PHASE-ROTATION-MASK.md).
+
+     A receded row keeps its place, its sort position and its alert tint —
+     it simply stops competing for attention. Opacity rather than a muted
+     colour precisely because it fades the level tint too: a New Band flag
+     on a dead band should look like a quiet flag, not a loud one.
+
+     Hover brings it back to full. That is the safety valve made physical —
+     a dimmed row is always one pointer away from being read, so the mask
+     can never turn a workable spot into a puzzle. It is also why this
+     stays declared last: source order hands it the final word over the
+     .flagged and .beacon rules above. */
+  tr.masked td { opacity: 0.45; }
+  tr.masked:hover td { opacity: 1; }
+
+  /* Sits beside the spot count, not in place of it — the operator needs
+     both numbers to read the screen. Muted ink, because this is
+     information about the view, not a condition to act on. */
+  .masked-count {
+    margin-left: 0.6rem;
+    color: var(--muted);
+    font-style: italic;
+  }
 </style>

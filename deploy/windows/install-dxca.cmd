@@ -155,9 +155,30 @@ rem task listing is English-only and its encoding varies by Windows build.
 rem Detection failing must never block the import.
 if not defined UPGRADE (
   set "OLDDIR="
-  for /f "tokens=2*" %%a in (
+  rem The line reads:  Task To Run:   C:\somewhere\run-dxca.cmd
+  rem
+  rem `tokens=2*` was WRONG here and silently so: token 2 is "To", and the
+  rem `*` remainder therefore begins at "Run:", giving
+  rem "Run:            C:\somewhere\run-dxca.cmd" — a string %%~dpp cannot
+  rem make a folder out of. Detection never once succeeded, and because a
+  rem failure here is designed to fall through to a prompt rather than
+  rem complain, nothing said so. Found on Manoj's first real Windows test
+  rem (2026-08-29): the installer offered no previous install and he copied
+  rem config\ and data\ into C:\DXCA by hand.
+  rem
+  rem Splitting on ":" is not the fix either — the path has one in it.
+  rem `!VAR:*needle=!` deletes everything up to and including the needle,
+  rem which leaves the path whatever it contains.
+  set "OLDLINE="
+  for /f "tokens=*" %%a in (
     'schtasks /query /tn "%TASKNAME%" /v /fo list 2^>nul ^| findstr /i /c:"Task To Run:"'
-  ) do set "OLDEXE=%%b"
+  ) do set "OLDLINE=%%a"
+  set "OLDEXE="
+  if defined OLDLINE (
+    set "OLDEXE=!OLDLINE:*Task To Run:=!"
+    rem schtasks pads the value out with spaces; strip them.
+    for /f "tokens=* delims= " %%x in ("!OLDEXE!") do set "OLDEXE=%%x"
+  )
   if defined OLDEXE (
     for %%p in ("!OLDEXE!") do set "OLDDIR=%%~dpp"
     if "!OLDDIR:~-1!"=="\" set "OLDDIR=!OLDDIR:~0,-1!"
