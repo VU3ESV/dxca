@@ -722,19 +722,25 @@ left:
    the host was still on its old binary and serving — but **check before
    retrying** rather than assuming: `systemctl is-active dxca`, the binary's
    size and date, and the version the API reports. A plain retry then worked.
-2. **An unfinished fix is STASHED, not committed** —
-   `git stash list` → `configgate-wip-2026-08-29` (`1f1da1d`). It addresses a
-   real defect found on 2026-08-29 when a VPN came up and took the
-   192.168.1.0/24 route: every Settings › Server page renders nothing until its
-   config arrives, so all five went blank at once and the honest reading was
-   *"all settings have vanished"*. Nothing was wrong with the data.
-   The stash contains `lib/api.ts` made to fail soft (a route disappearing
-   makes `fetch` **throw**, and only non-200 replies were handled — that is the
-   root cause) plus a `ConfigGate` component giving those pages a real error
-   state. **It is not verified**: the browser check that appeared to pass was
-   measuring the wrong things, and the dynamically-imported module was probably
-   a different instance from the app's. Verify by actually pulling the network,
-   not by stubbing `fetch` from the console.
+2. **DONE — the network-failure fix is merged** (`afc9fd0`). `lib/api.ts` no
+   longer lets `fetch` throw; an unreachable server arrives as `status: 0`,
+   which every one of the forty call sites already treats as failure, and the
+   `ConfigGate` component gives the Server pages a real error state instead of
+   rendering nothing. Not deployed yet — it is on `main`, past v2.12.0.
+
+   **Two things worth carrying forward from it.**
+
+   *A Vite dev proxy hides this bug class.* With the proxy in front, an
+   upstream that is down returns **HTTP 500** and `fetch` resolves — so the
+   dev setup exercises the non-200 path and never the throw. Against a
+   genuinely unconnectable origin (`http://127.0.0.1:1/`), raw `fetch` gives
+   `TypeError: Failed to fetch`. Any future test of "server unreachable"
+   has to bypass the proxy or it is testing the wrong thing.
+
+   *Changing a shared primitive's failure contract needs a caller sweep.*
+   Making `api()` return instead of throw silently changed what an UNGUARDED
+   `x = r.json` does. Two of forty sites were unguarded; one fed the shared
+   status store and would have made the header pill claim "0/0 nodes".
 
 **Two things a reviewer should look at first**, because they are the parts that
 touch existing data:
