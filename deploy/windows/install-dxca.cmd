@@ -85,7 +85,96 @@ if defined UPGRADE (
   echo [ok] Existing install detected — updating in place.
   echo      config\dxca.toml and data\ will NOT be touched.
 ) else (
-  echo [ok] Fresh install.
+  echo [ok] No config or database in this folder.
+)
+
+rem --- carry a previous install's settings across -------------------------
+rem Every release unzips into its OWN version-named folder, so an operator
+rem installing 2.8.0 runs this from a folder that has never held a config.
+rem Without this block that reads as a fresh install: a new empty database
+rem is created and the account, ClubLog credentials, log matrix and alert
+rem history are all left orphaned in the previous version's folder. That is
+rem the "every install needs reconfiguring" complaint, and it is data loss
+rem rather than mere inconvenience.
+rem
+rem The reliable mechanism is the operator naming the old folder; detecting
+rem it from the existing scheduled task is only a convenience, because the
+rem task listing is English-only and its encoding varies by Windows build.
+rem Detection failing must never block the import.
+if not defined UPGRADE (
+  set "OLDDIR="
+  for /f "tokens=2*" %%a in (
+    'schtasks /query /tn "%TASKNAME%" /v /fo list 2^>nul ^| findstr /i /c:"Task To Run:"'
+  ) do set "OLDEXE=%%b"
+  if defined OLDEXE (
+    for %%p in ("!OLDEXE!") do set "OLDDIR=%%~dpp"
+    if "!OLDDIR:~-1!"=="\" set "OLDDIR=!OLDDIR:~0,-1!"
+  )
+
+  rem A detected folder only counts if it really holds an install and is not
+  rem this one.
+  set "SUGGEST="
+  if defined OLDDIR (
+    if /i not "!OLDDIR!"=="%INSTALLDIR%" (
+      if exist "!OLDDIR!\config\dxca.toml" if exist "!OLDDIR!\data\dxca.db" set "SUGGEST=!OLDDIR!"
+    )
+  )
+
+  echo.
+  echo  Settings and accounts live in a DXCA folder's config\ and data\.
+  echo  A new version unzips to a NEW folder, so they must be carried over
+  echo  or this install starts empty and everything needs setting up again.
+  if defined SUGGEST echo  Found a previous install: !SUGGEST!
+  echo.
+  if defined SUGGEST (
+    set /p "IMPORT=Import settings from that folder? [Y/n, or type another path] "
+    if "!IMPORT!"=="" set "IMPORT=Y"
+    if /i "!IMPORT!"=="Y" set "IMPORT=!SUGGEST!"
+  ) else (
+    set /p "IMPORT=Path of your previous DXCA folder, or blank for a fresh install: "
+  )
+
+  if /i "!IMPORT!"=="n" set "IMPORT="
+  if defined IMPORT (
+    rem Trim quotes an operator pasted or Explorer added. The unquoted
+    rem SET form is deliberate: `set "X=!X:"=!"` trips the parser inside a
+    rem parenthesised block.
+    set IMPORT=!IMPORT:"=!
+    if "!IMPORT:~-1!"=="\" set "IMPORT=!IMPORT:~0,-1!"
+    if not exist "!IMPORT!\data\dxca.db" (
+      echo.
+      echo *** No data\dxca.db in "!IMPORT!" — nothing imported.
+      echo     Continuing as a fresh install.
+      echo.
+      set "IMPORT="
+    )
+  )
+
+  if defined IMPORT (
+    if not exist "%INSTALLDIR%\config" mkdir "%INSTALLDIR%\config"
+    if not exist "%INSTALLDIR%\data"   mkdir "%INSTALLDIR%\data"
+    rem The database first: it carries the accounts, so a half-done import
+    rem that got the config but not the database would be the worst outcome.
+    copy /y "!IMPORT!\data\dxca.db" "%INSTALLDIR%\data\dxca.db" >nul
+    if errorlevel 1 (
+      echo *** Could not copy the database. Is DXCA still running from
+      echo     "!IMPORT!"? Close it and run this installer again.
+      pause
+      exit /b 1
+    )
+    rem cty.xml and the LoTW list are large downloads; carrying them saves
+    rem the first run fetching ~16 MB again. Absent ones are not an error.
+    if exist "!IMPORT!\data\cty.xml" copy /y "!IMPORT!\data\cty.xml" "%INSTALLDIR%\data\" >nul
+    if exist "!IMPORT!\data\lotw-users.txt" copy /y "!IMPORT!\data\lotw-users.txt" "%INSTALLDIR%\data\" >nul
+    if exist "!IMPORT!\config\dxca.toml" copy /y "!IMPORT!\config\dxca.toml" "%INSTALLDIR%\config\dxca.toml" >nul
+    echo [ok] Imported settings and database from "!IMPORT!".
+    echo      Your account, ClubLog credentials and log matrix came with them.
+    rem From here this behaves exactly like an in-place update: the config is
+    rem now the operator's, and must not be rewritten below.
+    set "UPGRADE=1"
+  ) else (
+    echo [ok] Fresh install.
+  )
 )
 
 rem --- stop whatever is running before touching the binary ---------------

@@ -527,6 +527,35 @@ last *published* release, because tags can outrun releases.
 
 ## Open items → next session
 
+**NEEDS TESTING ON WINDOWS (2026-08-29): the installer now imports a
+previous install's config and database.** Written but **not run** — there is
+no Windows machine in this workflow, so the batch is unverified beyond a
+paren-balance check. **Test before trusting it.**
+
+**The bug it fixes is data loss, not inconvenience.** `INSTALLDIR=%~dp0` —
+the folder the installer is run from — and every release unzips into its own
+version-named folder (`dxca-2.8.0-windows-x64\`). So installing a new
+version was always a *fresh* install: new empty database, and the account,
+ClubLog credentials, log matrix and alert history left orphaned in the
+previous version's folder. That is the "every install needs reconfiguring"
+report.
+
+The installer already *noticed* the situation — it warns that a task exists
+but this folder has no config — and then replaced the task anyway. That is
+now the point where it offers to import.
+
+**Design note:** the reliable mechanism is the operator naming the old
+folder; auto-detection from the scheduled task is a convenience only,
+because `schtasks /v /fo list` is English-only and its encoding varies by
+Windows build. Detection failing falls back to a prompt rather than
+blocking. The database is copied first — a half-done import that took the
+config but not the accounts would be the worst outcome — and the import
+sets `UPGRADE=1` so the config is then treated as the operator's and never
+rewritten.
+
+The old folder is left untouched and doubles as a backup.
+
+
 **Milestones 1–2 BUILT (2026-08-29), 3–4 designed only: the phase-rotation
 spot mask** —
 [`docs/PHASE-ROTATION-MASK.md`](docs/PHASE-ROTATION-MASK.md). Manoj's

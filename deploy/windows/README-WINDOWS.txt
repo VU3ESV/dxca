@@ -117,6 +117,37 @@ The uninstaller removes the scheduled task and the firewall rules. It
 deliberately leaves config\ and data\ alone — delete the folder yourself
 when you actually mean to discard your accounts and settings.
 
+----------------------------------------------------------------
+ 4a. UPGRADING TO A NEW VERSION
+----------------------------------------------------------------
+
+Your account, ClubLog credentials, log matrix and alert history live in
+the install folder, in config\ and data\. Each release unzips into its
+own version-named folder, so a new version starts out knowing nothing.
+
+The installer handles this: when it finds no config in the folder it is
+run from, it looks for your previous install and offers to import it.
+
+  Import settings from that folder? [Y/n, or type another path]
+
+Press Enter and your settings, database, cty.xml and LoTW list are
+copied across, and the upgrade proceeds as an in-place update. If it
+cannot find the old folder — it looks at the existing scheduled task,
+which only works on English-language Windows — it asks you to type the
+path instead. Paste it from Explorer's address bar; quotes are fine.
+
+Answer "n" only when you genuinely want a clean install with no
+accounts.
+
+Two things worth knowing:
+
+  * Close DXCA before importing. The installer stops the scheduled
+    task, but if the old copy is still running the database file is
+    locked and the import stops rather than half-completing.
+
+  * The old folder is left untouched, so it doubles as your backup.
+    Delete it once the new version has come up and you have logged in.
+
 
 ----------------------------------------------------------------
  5. PORTS
