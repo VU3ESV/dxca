@@ -2,7 +2,11 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-08-29 · **Status:**
-**v2.10.0 on ALL FOUR HOSTS** (2026-08-29) — noderedpi4, `adersh@192.168.1.151`,
+**v2.11.0 on ALL FOUR HOSTS** (2026-08-29) — the band mask moved to sun
+phases (Dawn/Day/Dusk/Night) around a **tunable grey-line window**, default
+45 minutes, plus milestone 4: hide mode and the Telegram narrowing. Ported
+from Meridian's greyline model so the two programs agree about the phase.
+Previously **v2.10.0 on all four** (2026-08-29) — noderedpi4, `adersh@192.168.1.151`,
 `vu2wj@192.168.1.201` and now **Windows at `192.168.1.170`**, which joined the
 fleet this day. Contents: the phase-rotation band mask (milestone 3, dim mode
 with a masked count), the Windows installer's move to a fixed `C:\DXCA`, the
