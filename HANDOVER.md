@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.7.2 on ALL THREE Pis** — noderedpi4, `adersh@192.168.1.151` and `vu2wj@192.168.1.201`. Every tag from v2.4.0 onward has a published GitHub release with a Windows zip (v2.3.0 and v2.3.1 remain bare tags, superseded by v2.4.0's release notes). **v2.3.0–v2.7.0 all shipped on 2026-08-28**, in order: the interactive telnet gate and read-only command passthrough (`telnet_interactive = true` on noderedpi4, still **false** on adersh); spotter attribution — Source is the feed that carried a spot, Spotter is the station that heard it — carried into Telegram and the My Alerts history, with the **first schema migration** this database has had; a spots search over call/spotter; award totals that count **current DXCC entities by default**, with an *include deleted* tickbox; skimmer identification with a **Manual only** display filter; and Telegram's own *human spots only* narrowing. Both migrations were verified against real data (91 and 102 alert rows preserved), and skimmer/spotter attribution was confirmed live on both stations.
+**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.8.0 on ALL THREE Pis** — noderedpi4, `adersh@192.168.1.151` and `vu2wj@192.168.1.201`. Every tag from v2.4.0 onward has a published GitHub release with a Windows zip (v2.3.0 and v2.3.1 remain bare tags, superseded by v2.4.0's release notes). **v2.3.0–v2.7.0 all shipped on 2026-08-28**, in order: the interactive telnet gate and read-only command passthrough (`telnet_interactive = true` on noderedpi4, still **false** on adersh); spotter attribution — Source is the feed that carried a spot, Spotter is the station that heard it — carried into Telegram and the My Alerts history, with the **first schema migration** this database has had; a spots search over call/spotter; award totals that count **current DXCC entities by default**, with an *include deleted* tickbox; skimmer identification with a **Manual only** display filter; and Telegram's own *human spots only* narrowing. Both migrations were verified against real data (91 and 102 alert rows preserved), and skimmer/spotter attribution was confirmed live on both stations.
 **Repo:** https://github.com/vu2cpl/dxca (**public** — verified via
 `gh repo view` 2026-08-27; the doc said "private" until then, and the
 "Open items" release checklist still lists the public flip as pending)
@@ -479,6 +479,15 @@ alert history grew from 102 rows at v2.4.0 to 109 by the v2.5.0 deploy, and
 empty. The migration's back-fill boundary is exactly where it should be, and
 the recording path works in production, not only in tests.*
 
+## Deploy sequence (2026-08-29, standing)
+
+**Local first, then one VPN host at a time.** noderedpi4 is reachable while
+the VPN is *down*, so it goes first and needs no coordination. Then prompt
+Manoj for the VPN, deploy `adersh@192.168.1.151`, **report back and wait** —
+he brings `vu2wj@192.168.1.201` online himself before that one can be done.
+Never treat "the VPN is up" as covering both third-party boxes; ping each
+before assuming. His instruction, 2026-08-29.
+
 ## The three installs (2026-08-28)
 
 | Host | Account | Notes |
@@ -518,8 +527,11 @@ last *published* release, because tags can outrun releases.
 
 ## Open items → next session
 
-**Built, NOT deployed (2026-08-29): WSJT-X mode names, and telnet ECHO
-negotiation.** All three Pis are on v2.7.2; this is unreleased.
+**SHIPPED as v2.8.0 (2026-08-29): WSJT-X mode names, and telnet ECHO
+negotiation.** On all three Pis,
+[released](https://github.com/vu2cpl/dxca/releases/tag/v2.8.0) with the
+Windows zip. Verified on the live shack server that a client which never
+logs in receives **zero `0xFF` bytes** — no negotiation reaches a logger.
 
 **The Windows/WSJT-X "no mode" bug is fixed, and it was real.** WSJT-X
 reports a decode's mode as the single character it prints — `~` for FT8 —
