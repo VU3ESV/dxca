@@ -879,7 +879,27 @@ The published v2.12.2 release notes originally carried the wrong
 toolchain-drift explanation; corrected 2026-08-30, with a note that the fixes
 land after the tag and touch no shipped code.
 
-### NEXT: My ClubLog stats need a band × mode grid, RUMlog-style (Manoj, 2026-08-30)
+### DONE: My ClubLog band × mode grid, RUMlog-style (2026-08-30, `4c464f1`)
+
+**Built.** One table replaces the two: a row per mode class (worked and
+confirmed), a column per band, a `Total` column and a `Mixed` row — RUMlog's
+shape. `by_band_and_mode` gained a third field, `grid`, and 206 tests pass.
+
+**Not yet seen in a browser, and not yet deployed.** The counting is covered
+by a test and the UI builds, but rendering the page needs a login, so the
+layout itself is unverified. Look at it before the next release goes out —
+`just run` on the Mac, or deploy to noderedpi4 and open the Stats tab. If
+running it locally, note that `config/dxca.toml`'s cluster nodes will dial
+with **this station's `login_call`** and fight the Pi's session; use a config
+with no `cluster_nodes` for a look-only run.
+
+Two things kept out of scope on purpose, still open: **a `Sat` column** (not
+a band, needs a decision about the slot key, touches alerting) and **the band
+-count award row** — `5 Band`, `6 Band`, `9 Band`, `10 Band`, `WARC`,
+`Slot 26`, worked and confirmed, which is a different computation from any
+grid cell.
+
+The original note follows, for the reasoning.
 
 **Today the Stats › My ClubLog screen shows two separate one-dimensional
 tables** — *Entities per band* (mode-agnostic) and *Entities per mode*
