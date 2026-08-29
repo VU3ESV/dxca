@@ -2,12 +2,19 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-08-29 · **Status:**
-**v2.12.1 (2026-08-29 evening)** — three changes on top of the shell rework:
-the **network-failure fix** (a dropped route no longer makes the Settings
-pages look like lost configuration), the **ClubLog DX Dashboard** embedded
-under *Stats › My ClubLog*, and **Stats filling the window** instead of
-stopping at 56rem. On both LAN hosts. The two VPN hosts stay on v2.12.0 until
-prompted.
+**v2.12.1 on ALL FOUR HOSTS (2026-08-29 evening)** — noderedpi4, Windows
+`192.168.1.170`, `adersh@192.168.1.151`, `vu2wj@192.168.1.201`. Three changes
+on top of the shell rework: the **network-failure fix** (a dropped route no
+longer makes the Settings pages look like lost configuration), the **ClubLog
+DX Dashboard** embedded under *Stats › My ClubLog*, and **Stats filling the
+window** instead of stopping at 56rem. Every host was deployed from the
+**v2.12.1 tag itself**, checked out detached, so all four run byte-identical
+released code — `main` carries one commit past it (a dead-code removal in the
+embed's callsign fallback) that is deliberately unshipped.
+
+Both VPN hosts kept their own `config/dxca.toml` byte-for-byte — md5 taken
+before and after on each, which is the check that actually proves `--no-seed`
+did its job.
 
 **The ClubLog embed is confirmed working in a real browser** (Manoj, Safari).
 It rendered BLANK in the sandboxed preview pane with no console error and
@@ -718,11 +725,17 @@ left:
 0. **Redeploy the two LAN hosts** whenever convenient, so the version they
    report matches what they run. No functional change.
 
-1. **The two VPN hosts want v2.12.1** — `adersh@192.168.1.151` and
-   `vu2wj@192.168.1.201`, one at a time on Manoj's prompt, both `--no-seed`.
-   They are on v2.12.0 and perfectly usable; v2.12.1 is three UI fixes with
-   **no schema change**, so the pre-migration DB copy is a formality this time
-   rather than the real precaution it was for v2.12.0.
+1. **Nothing outstanding on the fleet.** All four hosts are on v2.12.1.
+   `main` is one commit ahead of the tag — the embed no longer falls back to
+   the login callsign when no ClubLog callsign is set. That path is
+   unreachable today, so it was not worth a release; it rides the next one.
+
+   **The VPN tunnel flaps, and both VPN hosts have now shown it.** adersh's
+   v2.12.0 deploy died mid-rsync with `Connection closed`; vu2wj took three
+   attempts to answer ssh at all (`Operation timed out`, then `Network is
+   unreachable`, then fine). Neither is a fault in the host or the script —
+   the swap happens only after the transfer completes, so a drop leaves the
+   host on its old binary and still serving. **Verify, then simply retry.**
 
    **The deploy recipe that worked, for next time.** Both VPN hosts:
    `deploy/pi-deploy.sh --no-seed <user>@<ip>`, with `data/dxca.db` copied to
