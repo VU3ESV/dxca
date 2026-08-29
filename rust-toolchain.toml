@@ -1,3 +1,14 @@
 [toolchain]
-channel = "stable"
+# Pinned, not "stable", as of 2026-08-30. A floating channel means the
+# compiler under the fleet changes whenever someone runs `rustup update`,
+# and rustfmt/clippy change their minds with it — the gate can go red
+# without a line of this project's code moving. 1.96.1 is what every
+# release from v2.0.0 to v2.12.2 was actually built and shipped with.
+#
+# Bumping this is a deliberate act: raise it, run `just gate`, and fix
+# whatever the new rustfmt and clippy have opinions about in the same
+# commit. Keep the floor in `[workspace.package] rust-version` (1.88) and
+# `MIN_RUSTC` in install.sh in step — they are a *minimum* for people
+# building from source, not this pin.
+channel = "1.96.1"
 components = ["rustfmt", "clippy"]
