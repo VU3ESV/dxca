@@ -117,7 +117,7 @@
   );
 </script>
 
-<div class="page narrow">
+<div class="page statspage">
   <div class="segrow">
     <!-- Labelled, because unlabelled it read as decoration rather than as the
          switch between two different datasets. -->
@@ -361,6 +361,24 @@
 </div>
 
 <style>
+  /* Fills the window, like Spots and Alerts do. It was `.narrow` (56rem),
+     which is the right cap for a column of settings fields but wrong for
+     this screen: the bar charts want every pixel of track they can get —
+     that length IS the comparison — and the embedded ClubLog dashboard is a
+     whole page in its own right that was being squeezed into two-thirds of
+     the window while the rest sat empty. */
+  .statspage {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Prose still stops at a readable measure. Widening the SCREEN is not a
+     reason to run a sentence across 1400px. */
+  .statspage :global(.hint),
+  .statspage :global(.help-pop-body) {
+    max-width: 44rem;
+  }
+
   .segrow {
     display: flex;
     align-items: center;
