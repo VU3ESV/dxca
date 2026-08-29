@@ -105,16 +105,18 @@
     station ? pick(station.by_band_mode, station.by_band_mode_current) : null,
   );
 
-  /// The callsign ClubLog knows this account by — the LOG's callsign, which
-  /// can differ from the login (a /P or a club log). Lowercased because that
-  /// is the form clublog.org's own URLs use.
+  /// The callsign to embed: **the one set in Settings › My station › ClubLog
+  /// account**, which the server returns as `log_callsign`. It can differ
+  /// from the login — a /P, or a club log — and the log is what this card is
+  /// about. Lowercased, the form clublog.org's own URLs use.
   ///
-  /// Empty until a log has been downloaded, and the embed is skipped entirely
-  /// then: framing `clublog.org/dx-dash/` with no callsign would show a
-  /// stranger's error page inside our own card.
-  let logCall = $derived(
-    (station?.log_callsign ?? station?.callsign ?? '').trim().toLowerCase(),
-  );
+  /// Deliberately NO fallback to the login callsign. It would be unreachable
+  /// today (the embed sits inside a branch that needs `station.stats`, and
+  /// that is null until a log has been downloaded, which requires this
+  /// callsign) — but the failure it would cause is bad enough to be worth
+  /// closing anyway: falling back would frame SOMEONE ELSE's public dashboard
+  /// under a heading that says "My ClubLog". Better to show nothing.
+  let logCall = $derived((station?.log_callsign ?? '').trim().toLowerCase());
 </script>
 
 <div class="page statspage">
