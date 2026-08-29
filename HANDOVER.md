@@ -698,9 +698,23 @@ plain text** — keep them somewhere deliberate, not the Desktop, and out of
 any shared backup. And `wg-quick` rejects a config whose basename carries a
 space or runs past 15 characters, so `Shaji _vu2wj.conf` had to be renamed.
 
-**One honest gap:** what `AllowedIPs` said *before* it was first edited was
-never captured, so the 2026-08-28 blackout is only *inferred* to have been a
-wide (`/24` or `0.0.0.0/0`) route. The `DNS` line is confirmed, not inferred.
+**Gap closed 2026-08-30 — it was a full tunnel.** This entry first said the
+original `AllowedIPs` had not been captured, so the cause was inferred. The
+untouched exports then turned up in `~/Desktop/vpn profiles/`:
+`vu2cpl_wew.conf` and `vu2wj.conf`, matched to the live tunnels by endpoint
+hash, both carrying **`AllowedIPs = 0.0.0.0/0, ::0/0`**.
+
+So it was never a subnet route and never a `/24` clash — the tunnels took the
+**default route**. Every packet went in, the shack included, which is why
+hosts that share no prefix with anything on the tunnel became unreachable.
+The original entry in Known gotchas blamed overlapping `192.168.1.0/24`
+networks; that was wrong twice over, since this Mac is not on that subnet and
+the route in play was `0.0.0.0/0`.
+
+Worth keeping as a diagnostic habit: **read the tunnel config before
+theorising about the routing table.** Two days of "the VPN and the shack
+cannot coexist" rested on a guess that one line of the config would have
+settled.
 
 ## Deploy sequence (2026-08-29, standing; network half retired 2026-08-30)
 
