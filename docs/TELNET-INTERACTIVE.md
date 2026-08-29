@@ -418,12 +418,30 @@ in production by someone getting an alert for a QSO from last Tuesday.
      dropped. `the_spot_feed_is_held_during_a_reply_then_flushed` covers it,
      and was verified by breaking it.
 
-   **What could NOT be fixed, and why.** The operator's *typing* is also
-   shredded by the feed (`sh/wwDX de VU2CPL: …v`). That is the client
-   echoing locally in line mode: it sends nothing until Enter, so the server
-   cannot know a line is in progress and cannot hold anything back. It needs
-   `IAC WILL ECHO` so the server owns the echo — the same negotiation the
-   visible-password problem needs. One piece of work would fix both.
+   **The typing half needed `IAC WILL ECHO`, and now has it (2026-08-29).**
+   The operator's own input was shredded by the feed
+   (`sh/wwDX de VU2CPL: …v`) because the client echoes locally in line mode:
+   it sends nothing until Enter, so the server could not know a line was in
+   progress. The server now offers `WILL ECHO` + `WILL SUPPRESS-GO-AHEAD`,
+   and a client that accepts switches to character mode — at which point the
+   server sees every keystroke, echoes it itself, hides the password by
+   simply not echoing it, and holds the feed while a line is part-typed.
+
+   **The offer is made only after `LOGIN` is typed**, never on connect. A
+   logger has never received a negotiation byte from this server and still
+   does not; `no_negotiation_is_sent_to_a_client_that_never_logs_in` asserts
+   it on the banner *and* on the feed. Server echo turns on only when the
+   client answers `DO ECHO` — a refusal or silence leaves everything exactly
+   as it was.
+
+   **A bug this uncovered, invisible until character mode existed.** RFC 854
+   transmits a bare CR as `CR NUL`, and the NUL is padding to discard. It was
+   surviving the line split and prefixing the *next* command, so `sh/nodes`
+   arrived as `\0sh/nodes` and was refused as an unknown verb. In line mode
+   the whole line arrived at once and the stray byte never mattered; the
+   moment the client started sending characters, every second command broke.
+   Found by driving a real `telnet` through a pty — no unit test would have
+   produced `CR NUL`.
 
    **Enabled on noderedpi4 2026-08-28** and checked against the running
    service: an anonymous session that threw a bare callsign, `set/name`,

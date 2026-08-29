@@ -518,6 +518,35 @@ last *published* release, because tags can outrun releases.
 
 ## Open items → next session
 
+**Built, NOT deployed (2026-08-29): WSJT-X mode names, and telnet ECHO
+negotiation.** All three Pis are on v2.7.2; this is unreleased.
+
+**The Windows/WSJT-X "no mode" bug is fixed, and it was real.** WSJT-X
+reports a decode's mode as the single character it prints — `~` for FT8 —
+not as a name, and DXCA passed that straight through. Confirmed in the
+committed capture: `crates/dxca-core/tests/vectors/wsjtx/type02-1.bin` ends
+`\x00\x00\x00\x01~`. MSHV sends `"FT8"` as a name, which is why the Pi
+looked fine and only the Windows/WSJT-X install showed the problem.
+`modes::from_decoder_char` maps the markers; anything unmapped falls back to
+the **Status** message's mode, which is a proper name from the decoder
+itself, and only then to band-plan inference.
+`a_real_wsjtx_decode_reports_ft8_not_a_tilde` drives the genuine capture
+through the pipeline and was verified by breaking it.
+
+**Telnet ECHO negotiation** closes the last item on the interactive-telnet
+feature: the password is no longer echoed, and the feed no longer shreds the
+operator's typing. **Offered only after `LOGIN` is typed**, never on connect,
+so a logger still never sees a negotiation byte — asserted on both the
+banner and the feed. Server echo engages only on an explicit `DO ECHO`.
+
+**A bug that only character mode could expose:** RFC 854 sends a bare CR as
+`CR NUL`, and the NUL was surviving the line split to prefix the next
+command — `sh/nodes` arrived as `\0sh/nodes` and was refused. In line mode
+the stray byte never mattered. Found by driving a real `telnet` through a
+pty; no unit test would have generated `CR NUL`. **The lesson repeats:
+every bug in this feature has been found by using it, not by testing it.**
+
+
 **SHIPPED as v2.7.2 (2026-08-29): BYE now disconnects.** **Live on all three Pis**,
 [released](https://github.com/vu2cpl/dxca/releases/tag/v2.7.2) with the
 Windows zip. VU2WJ's box was briefly unreachable during the first pass —

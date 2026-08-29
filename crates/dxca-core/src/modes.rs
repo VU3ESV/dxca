@@ -17,6 +17,33 @@ pub const CLASSES: &[&str] = &["CW", "PHONE", "DATA"];
 /// credited phone spots to digital award slots. An empty return means the
 /// frequency was in no segment worth guessing about, and callers must treat
 /// that as *unknown*, not as DATA.
+/// WSJT-X reports a decode's mode as the **single character** it prints in
+/// its own decode window, not as a mode name: `~` is FT8, `+` is FT4, and so
+/// on. Passing that through unmapped puts a `~` in the mode column and makes
+/// a locally decoded spot look like it has no mode at all — which is exactly
+/// how it was reported from a Windows install running WSJT-X.
+///
+/// Only the characters worth being sure about are mapped. Anything else
+/// returns `None`, so the caller can fall back to the Status message's own
+/// mode string, which is a proper name and authoritative.
+pub fn from_decoder_char(reported: &str) -> Option<&'static str> {
+    let t = reported.trim();
+    let mut chars = t.chars();
+    let (c, rest) = (chars.next()?, chars.next());
+    if rest.is_some() {
+        return None; // a real name like "FT8", not a marker
+    }
+    match c {
+        '~' => Some("FT8"),
+        '+' => Some("FT4"),
+        '#' => Some("JT65"),
+        '@' => Some("JT9"),
+        '&' => Some("MSK144"),
+        ':' => Some("Q65"),
+        _ => None,
+    }
+}
+
 pub fn resolve(reported: &str, freq_mhz: f64) -> (String, bool) {
     let reported = reported.trim();
     if !reported.is_empty() {
@@ -58,7 +85,28 @@ pub fn canonical_opt(raw: &str) -> Option<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::canonical;
+    use super::{canonical, from_decoder_char};
+
+    /// The Windows/WSJT-X report: local spots showed no usable mode because
+    /// the decoder sends a marker character, not a name.
+    #[test]
+    fn wsjtx_mode_characters_become_mode_names() {
+        assert_eq!(from_decoder_char("~"), Some("FT8"));
+        assert_eq!(from_decoder_char("+"), Some("FT4"));
+        assert_eq!(from_decoder_char("#"), Some("JT65"));
+        assert_eq!(from_decoder_char("@"), Some("JT9"));
+        assert_eq!(from_decoder_char("&"), Some("MSK144"));
+    }
+
+    /// A decoder that sends a real name (MSHV sends "FT8") must pass
+    /// straight through, and an unknown marker must not be guessed at.
+    #[test]
+    fn names_and_unknown_markers_are_left_alone() {
+        assert_eq!(from_decoder_char("FT8"), None, "already a name");
+        assert_eq!(from_decoder_char("SSB"), None);
+        assert_eq!(from_decoder_char(""), None);
+        assert_eq!(from_decoder_char("?"), None, "unmapped marker");
+    }
 
     #[test]
     fn buckets() {

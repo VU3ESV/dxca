@@ -218,6 +218,8 @@ async fn run_pipeline(
     // Per-source dial frequency from the latest Status (1.x keeps it on
     // each listener); dedupe cache mirrors `rebroadcastCache`.
     let mut dial_by_source: HashMap<String, u64> = HashMap::new();
+    // Per-source mode from the Status message — see the Decode arm.
+    let mut mode_by_source: HashMap<String, String> = HashMap::new();
     let mut dedupe: HashMap<String, i64> = HashMap::new();
 
     while let Some(input) = rx.recv().await {
@@ -242,6 +244,12 @@ async fn run_pipeline(
         match parsed.message {
             Message::Status(status) => {
                 dial_by_source.insert(datagram.source_name.clone(), status.dial_frequency_hz);
+                // Status carries a real mode NAME ("FT8"), unlike Decode,
+                // which carries the marker character WSJT-X prints. Kept as
+                // the authoritative fallback for any marker not in the map.
+                if !status.mode.trim().is_empty() {
+                    mode_by_source.insert(datagram.source_name.clone(), status.mode.clone());
+                }
             }
             Message::Decode(decode) => {
                 let now = now_unix();
@@ -249,12 +257,23 @@ async fn run_pipeline(
                     .get(&datagram.source_name)
                     .copied()
                     .unwrap_or(0);
-                // A decoder always names its mode, so this is effectively
-                // pass-through; resolve() only matters if one ever sends a
-                // blank, in which case the dial frequency is a better guess
-                // than DATA-by-default.
+                // Three sources, best first. WSJT-X sends the *marker*
+                // character it prints (`~` for FT8), not a name — passing
+                // that through is what made local spots look like they had
+                // no mode. MSHV sends a real name and falls through the map
+                // untouched. Anything unrecognised defers to the Status
+                // message's own mode, which is a proper name from the
+                // decoder itself; only then does the band plan guess.
+                let reported = match dxca_core::modes::from_decoder_char(&decode.mode) {
+                    Some(name) => name.to_string(),
+                    None if !decode.mode.trim().is_empty() => decode.mode.clone(),
+                    None => mode_by_source
+                        .get(&datagram.source_name)
+                        .cloned()
+                        .unwrap_or_default(),
+                };
                 let (mode, mode_inferred) = dxca_core::modes::resolve(
-                    &decode.mode,
+                    &reported,
                     (dial + u64::from(decode.delta_frequency_hz)) as f64 / 1_000_000.0,
                 );
                 let spot = Spot {

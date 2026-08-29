@@ -117,3 +117,53 @@ async fn read_some(stream: &mut TcpStream, needle: &str) -> String {
     }
     got
 }
+
+/// Reported from a Windows install running WSJT-X: local spots showed no
+/// usable mode. The captured vectors say why — a real WSJT-X decode carries
+/// its mode as the single character it prints (`~` for FT8), not as a name,
+/// and DXCA passed that straight through to the Spots table.
+///
+/// Uses the genuine capture rather than a synthesised datagram, because the
+/// whole point is what WSJT-X actually sends.
+#[tokio::test]
+async fn a_real_wsjtx_decode_reports_ft8_not_a_tilde() {
+    let source_port = 48_335;
+    let cfg = Config {
+        telnet_port: 0,
+        udp_sources: vec![UdpSource {
+            name: "WSJTX".into(),
+            port: source_port,
+            enabled: true,
+        }],
+        broadcast_destinations: Vec::new(),
+        ..Config::default()
+    };
+    let (state, _tx) = pipeline::start(&cfg, None).await.expect("pipeline start");
+
+    let send = UdpSocket::bind(("127.0.0.1", 0)).await.unwrap();
+    // Status first: it carries the dial frequency, and a proper mode name
+    // that backs up the marker map.
+    send.send_to(&vector("wsjtx", "type01-1.bin"), ("127.0.0.1", source_port))
+        .await
+        .unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    send.send_to(&vector("wsjtx", "type02-1.bin"), ("127.0.0.1", source_port))
+        .await
+        .unwrap();
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let spot = loop {
+        assert!(std::time::Instant::now() < deadline, "no spot arrived");
+        if let Some(s) = state.recent_spots(1).first().cloned() {
+            break s;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    };
+
+    assert_eq!(spot.source_name, "WSJTX");
+    assert_eq!(spot.mode, "FT8", "the `~` marker must resolve to a mode name");
+    assert!(
+        !spot.mode_inferred,
+        "WSJT-X told us the mode; nothing was guessed from the frequency"
+    );
+}

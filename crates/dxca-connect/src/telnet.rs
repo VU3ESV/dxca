@@ -63,6 +63,80 @@ const HOLD_MAX_MS: u64 = 20_000;
 /// distracted operator grow the server's memory.
 const HOLD_BUFFER_MAX: usize = 500;
 
+// --- telnet option negotiation ---------------------------------------
+//
+// Only ever offered **after the operator types `LOGIN`**, never on connect.
+// A logger that has never sent a command must not receive a negotiation
+// byte it was not expecting — RUMlog, Logger32 and N1MM+ have worked
+// against a server that never negotiated, and that stays true for them.
+//
+// What it buys, once a client agrees:
+//  * the password stops being echoed, because the server owns the echo and
+//    simply does not echo it back;
+//  * the server sees each keystroke, so it can hold the spot feed while a
+//    line is being typed — which is the only way to stop the feed shredding
+//    the operator's own input.
+//
+// Fail-safe: server echo turns on **only** when the client explicitly
+// answers `DO ECHO`. A client that refuses, or says nothing, keeps its own
+// local echo and everything behaves exactly as it did before.
+
+const IAC: u8 = 255;
+const WILL: u8 = 251;
+const DO: u8 = 253;
+const DONT: u8 = 254;
+const OPT_ECHO: u8 = 1;
+const OPT_SGA: u8 = 3;
+
+/// Server offers to do the echoing, and to suppress go-ahead so the client
+/// switches out of line mode and sends each character as it is typed.
+const OFFER_ECHO: [u8; 6] = [IAC, WILL, OPT_ECHO, IAC, WILL, OPT_SGA];
+
+/// Split inbound bytes into the data and the option replies.
+///
+/// `wire::strip_telnet_iac` discards negotiation wholesale, which is right
+/// for a cluster *client* that never negotiates. Here the answer matters,
+/// so it is parsed rather than dropped.
+fn take_iac(data: &[u8]) -> (Vec<u8>, Vec<(u8, u8)>) {
+    let mut out = Vec::with_capacity(data.len());
+    let mut cmds = Vec::new();
+    let mut i = 0;
+    while i < data.len() {
+        if data[i] != IAC {
+            out.push(data[i]);
+            i += 1;
+            continue;
+        }
+        let Some(&next) = data.get(i + 1) else { break };
+        match next {
+            IAC => {
+                out.push(IAC); // escaped 0xFF is literal data
+                i += 2;
+            }
+            0xFB..=0xFE => {
+                if let Some(&opt) = data.get(i + 2) {
+                    cmds.push((next, opt));
+                }
+                i += 3;
+            }
+            0xFA => {
+                // Subnegotiation: skip to IAC SE.
+                let mut j = i + 2;
+                while j + 1 < data.len() {
+                    if data[j] == IAC && data[j + 1] == 0xF0 {
+                        j += 2;
+                        break;
+                    }
+                    j += 1;
+                }
+                i = j.max(i + 2);
+            }
+            _ => i += 2,
+        }
+    }
+    (out, cmds)
+}
+
 /// Who a telnet session turned out to be.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TelnetIdentity {
@@ -224,6 +298,9 @@ async fn serve_client(
     // Extended by each reply line; capped by `hold_deadline`.
     let mut hold_until: Option<tokio::time::Instant> = None;
     let mut hold_deadline: Option<tokio::time::Instant> = None;
+    // True only once the client has explicitly answered `DO ECHO`. Until
+    // then nothing changes: the client echoes locally, exactly as before.
+    let mut server_echo = false;
 
     // Closing over `sink` in the loop below would move it; keep a handle
     // for the disconnect path.
@@ -232,8 +309,12 @@ async fn serve_client(
         tokio::select! {
             line = rx.recv() => match line {
                 Ok(line) => {
+                    // A part-typed line counts as holding once the server
+                    // owns the echo: that is the only way to stop the feed
+                    // interleaving with the operator's own keystrokes.
                     let holding = hold_until.is_some()
-                        || matches!(state, SessionState::AwaitingPassword { .. });
+                        || matches!(state, SessionState::AwaitingPassword { .. })
+                        || (server_echo && !pending.is_empty());
                     if holding {
                         if held.len() >= HOLD_BUFFER_MAX {
                             held.pop_front();
@@ -290,8 +371,74 @@ async fn serve_client(
                 let Some(cfg) = interactive.as_ref() else { continue };
 
                 // Telnet clients open with IAC negotiation; it is not UTF-8
-                // and would otherwise land in the first "command".
-                pending.extend_from_slice(&crate::dxcluster::wire::strip_telnet_iac(&buf[..n]));
+                // and would otherwise land in the first "command". The
+                // option replies are parsed rather than discarded, because
+                // whether the client accepted our echo offer decides how the
+                // rest of this session behaves.
+                let (data, cmds) = take_iac(&buf[..n]);
+                for (verb, opt) in cmds {
+                    if opt == OPT_ECHO {
+                        // Only an explicit DO turns it on. DONT turns it
+                        // back off, and silence leaves it off — a client
+                        // that says nothing keeps echoing for itself, and
+                        // everything behaves as it did before.
+                        match verb {
+                            DO => server_echo = true,
+                            DONT => server_echo = false,
+                            _ => {}
+                        }
+                    }
+                }
+
+                // With the server owning the echo, each keystroke arrives
+                // separately and has to be shown — except a password, which
+                // is exactly the point of taking the echo over.
+                if server_echo {
+                    let awaiting_password =
+                        matches!(state, SessionState::AwaitingPassword { .. });
+                    let mut visible: Vec<u8> = Vec::with_capacity(data.len());
+                    for &b in &data {
+                        match b {
+                            b'\r' | b'\n' => visible.extend_from_slice(b"\r\n"),
+                            // Backspace / delete: rub the character out.
+                            0x08 | 0x7f => {
+                                if !pending.is_empty() {
+                                    visible.extend_from_slice(b"\x08 \x08");
+                                }
+                            }
+                            b if b.is_ascii_graphic() || b == b' ' => visible.push(b),
+                            _ => {}
+                        }
+                    }
+                    if !awaiting_password && !visible.is_empty() {
+                        stream.write_all(&visible).await?;
+                    } else if awaiting_password {
+                        // Show the line ending only, so Enter still moves
+                        // the cursor and the password itself stays hidden.
+                        if data.iter().any(|b| *b == b'\r' || *b == b'\n') {
+                            stream.write_all(b"\r\n").await?;
+                        }
+                    }
+                }
+
+                // Erase from the buffer too, or the rubbed-out character
+                // would still reach the command.
+                for &b in &data {
+                    if b == 0x08 || b == 0x7f {
+                        pending.pop();
+                    }
+                }
+                // RFC 854 transmits a bare CR as `CR NUL`, and the NUL is
+                // padding to be discarded. Left in, it survives the line
+                // split and prefixes the NEXT command — which is exactly
+                // how `sh/nodes` arrived as `\0sh/nodes` and was refused as
+                // an unknown verb. Only visible once the client switched to
+                // character mode, so no earlier test could have caught it.
+                let data: Vec<u8> = data
+                    .into_iter()
+                    .filter(|b| *b != 0x08 && *b != 0x7f && *b != 0x00)
+                    .collect();
+                pending.extend_from_slice(&data);
                 while let Some(pos) = pending.iter().position(|b| *b == b'\n' || *b == b'\r') {
                     let raw: Vec<u8> = pending.drain(..=pos).collect();
                     let line = String::from_utf8_lossy(&raw[..raw.len() - 1])
@@ -301,6 +448,17 @@ async fn serve_client(
                         continue;
                     }
                     let was_authed = matches!(state, SessionState::Authed(_));
+                    // Offer to take over the echo the moment the operator
+                    // identifies themselves as a person, and before they
+                    // type a password. A client that never sends LOGIN
+                    // never sees this.
+                    if !server_echo
+                        && line.split_whitespace().next().is_some_and(|v| {
+                            v.eq_ignore_ascii_case("LOGIN")
+                        })
+                    {
+                        stream.write_all(&OFFER_ECHO).await?;
+                    }
                     let mut disconnect = false;
                     if let Some(reply) =
                         handle_line(&line, &mut state, &mut failures, cfg, &mut disconnect).await
@@ -429,9 +587,16 @@ async fn handle_line(
                         // an explicit warning because this server does not
                         // negotiate telnet ECHO — the password will appear
                         // on screen as it is typed.
+                        // Deliberately conditional wording: the server has
+                        // just offered to take the echo over, but whether
+                        // the client accepts is its decision, and promising
+                        // either outcome would be wrong.
+                        // The caveat goes BEFORE the label so the prompt
+                        // still ends at the cursor, where a prompt belongs.
                         Some(
-                            "\r\nThe spot feed pauses while you type. \
-                             Your password WILL be visible.\r\nPassword: "
+                            "\r\nThe spot feed pauses while you type; your \
+                             client has been asked to hide the password.\r\n\
+                             Password: "
                                 .into(),
                         )
                     }
@@ -842,6 +1007,100 @@ mod login_tests {
         read_until(&mut c, "LOGIN <callsign>").await;
         server.broadcast_line("DX de TEST:      14074.0   NOW   FT8  1428Z");
         assert!(read_until(&mut c, "NOW").await.contains("NOW"));
+    }
+
+    /// The safety property that matters most: a client that never types
+    /// LOGIN never receives a negotiation byte. Loggers have always worked
+    /// against a server that did not negotiate, and that must stay true.
+    #[tokio::test]
+    async fn no_negotiation_is_sent_to_a_client_that_never_logs_in() {
+        let server = ClusterServer::start_with(0, interactive()).await.unwrap();
+        let port = server.local_port();
+        let mut c = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+        let banner = read_until(&mut c, "LOGIN <callsign>").await;
+        assert!(!banner.contains('\u{ff}'), "no IAC in the banner");
+
+        c.write_all(b"sh/dx\r\n").await.unwrap();
+        expect_quiet(&mut c).await;
+        server.broadcast_line("DX de TEST:      14074.0   K1JT   FT8  1428Z");
+        let feed = read_until(&mut c, "K1JT").await;
+        assert!(!feed.contains('\u{ff}'), "no IAC in the feed either");
+    }
+
+    /// Typing LOGIN identifies a person, so the server offers to own the
+    /// echo — before the password is asked for, which is the point.
+    #[tokio::test]
+    async fn login_triggers_the_echo_offer() {
+        let server = ClusterServer::start_with(0, interactive()).await.unwrap();
+        let port = server.local_port();
+        let mut c = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+        read_until(&mut c, "LOGIN <callsign>").await;
+        c.write_all(b"LOGIN VU2CPL\r\n").await.unwrap();
+
+        let mut got = Vec::new();
+        let mut buf = [0u8; 512];
+        while !got.windows(3).any(|w| w == [IAC, WILL, OPT_ECHO]) {
+            let n = tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                c.read(&mut buf),
+            )
+            .await
+            .expect("timed out waiting for the echo offer")
+            .expect("read");
+            assert!(n > 0, "server closed");
+            got.extend_from_slice(&buf[..n]);
+        }
+        assert!(
+            got.windows(3).any(|w| w == [IAC, WILL, OPT_SGA]),
+            "suppress-go-ahead is offered too, so the client leaves line mode"
+        );
+    }
+
+    /// Having taken the echo over, the server must not echo the password —
+    /// that is the whole reason for taking it over.
+    #[tokio::test]
+    async fn an_accepted_echo_offer_hides_the_password() {
+        let server = ClusterServer::start_with(0, interactive()).await.unwrap();
+        let port = server.local_port();
+        let mut c = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+        read_until(&mut c, "LOGIN <callsign>").await;
+        c.write_all(b"LOGIN VU2CPL\r\n").await.unwrap();
+        read_until(&mut c, "Password").await;
+
+        // Accept the offer, then type the password one character at a time
+        // the way a character-mode client would.
+        c.write_all(&[IAC, DO, OPT_ECHO]).await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        for ch in b"secret" {
+            c.write_all(&[*ch]).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        c.write_all(b"\r\n").await.unwrap();
+
+        let welcome = read_until(&mut c, "Welcome").await;
+        assert!(
+            !welcome.contains("secret"),
+            "the password must never be echoed back: {welcome:?}"
+        );
+    }
+
+    /// A client that refuses the offer keeps its own echo, and the server
+    /// must not start echoing on top of it.
+    #[tokio::test]
+    async fn a_refused_echo_offer_changes_nothing() {
+        let server = ClusterServer::start_with(0, interactive()).await.unwrap();
+        let port = server.local_port();
+        let mut c = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+        read_until(&mut c, "LOGIN <callsign>").await;
+        c.write_all(b"LOGIN VU2CPL\r\n").await.unwrap();
+        read_until(&mut c, "Password").await;
+        c.write_all(&[IAC, DONT, OPT_ECHO]).await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        c.write_all(b"secret\r\n").await.unwrap();
+        let welcome = read_until(&mut c, "Welcome").await;
+        // No server echo means the reply carries none of what was typed.
+        assert!(!welcome.contains("secret"), "got {welcome:?}");
     }
 
     /// A real telnet client opens with IAC negotiation. Those bytes are not
