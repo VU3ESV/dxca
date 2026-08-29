@@ -46,6 +46,23 @@ const MAX_LINE: usize = 512;
 /// fast enough to brute-force a weak password if we let it run forever.
 const MAX_LOGIN_FAILURES: u32 = 3;
 
+/// Quiet period after a command's last reply line before the spot feed
+/// resumes. Deliberately longer than the router's own 2 s response window,
+/// so the feed does not restart in the middle of a reply that is still
+/// trickling in.
+const HOLD_GRACE_MS: u64 = 2_500;
+
+/// Hard cap on holding the feed, however badly a command misbehaves.
+/// Longer than the router's 15 s command timeout, so a stuck command frees
+/// the feed shortly after the router gives up on it rather than muting the
+/// session indefinitely.
+const HOLD_MAX_MS: u64 = 20_000;
+
+/// Spot lines kept while the feed is held. A held feed is a few seconds, so
+/// this is generous; past it the oldest are dropped rather than letting one
+/// distracted operator grow the server's memory.
+const HOLD_BUFFER_MAX: usize = 500;
+
 /// Who a telnet session turned out to be.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TelnetIdentity {
@@ -194,6 +211,20 @@ async fn serve_client(
     let mut replies: Option<tokio::sync::mpsc::UnboundedReceiver<String>> = None;
     let sink = interactive.as_ref().and_then(|c| c.commands.clone());
 
+    // The spot feed is HELD, not dropped, while the operator is mid-exchange
+    // — typing a password, or waiting on a command's reply. Field-tested
+    // reason: a `SH/DX` table with live spots landing between its rows is
+    // unreadable, and the reply is what the operator asked for. Spots are
+    // buffered and flushed when the hold lifts, so nothing is lost.
+    //
+    // This cannot fix input being shredded as it is TYPED: in line mode the
+    // client echoes locally and sends nothing until Enter, so the server
+    // does not know a line is in progress. That needs `IAC WILL ECHO`.
+    let mut held: std::collections::VecDeque<String> = std::collections::VecDeque::new();
+    // Extended by each reply line; capped by `hold_deadline`.
+    let mut hold_until: Option<tokio::time::Instant> = None;
+    let mut hold_deadline: Option<tokio::time::Instant> = None;
+
     // Closing over `sink` in the loop below would move it; keep a handle
     // for the disconnect path.
     let closer = sink.clone();
@@ -201,14 +232,14 @@ async fn serve_client(
         tokio::select! {
             line = rx.recv() => match line {
                 Ok(line) => {
-                    // The spot feed is held back while a password is being
-                    // typed. Otherwise the `Password: ` prompt — which has
-                    // no newline, because the cursor must stay put for the
-                    // answer — gets a spot line glued to it and scrolls
-                    // away, which reads exactly like never being asked.
-                    // A few seconds of spots are missed; being able to log
-                    // in is worth more.
-                    if !matches!(state, SessionState::AwaitingPassword { .. }) {
+                    let holding = hold_until.is_some()
+                        || matches!(state, SessionState::AwaitingPassword { .. });
+                    if holding {
+                        if held.len() >= HOLD_BUFFER_MAX {
+                            held.pop_front();
+                        }
+                        held.push_back(line);
+                    } else {
                         stream.write_all(line.as_bytes()).await?;
                     }
                 }
@@ -226,6 +257,27 @@ async fn serve_client(
             } => {
                 stream.write_all(reply.as_bytes()).await?;
                 stream.write_all(b"\r\n").await?;
+                // More of the reply may still be coming; keep the feed back
+                // until it goes quiet, but never past the hard deadline.
+                if let Some(deadline) = hold_deadline {
+                    let next = tokio::time::Instant::now()
+                        + std::time::Duration::from_millis(HOLD_GRACE_MS);
+                    hold_until = Some(next.min(deadline));
+                }
+            },
+            // The hold expiring is an event in its own right: flush what
+            // the feed produced while the operator was reading.
+            _ = async {
+                match hold_until {
+                    Some(t) => tokio::time::sleep_until(t).await,
+                    None => std::future::pending().await,
+                }
+            } => {
+                hold_until = None;
+                hold_deadline = None;
+                for line in held.drain(..) {
+                    stream.write_all(line.as_bytes()).await?;
+                }
             },
             read = stream.read(&mut buf) => {
                 let n = match read {
@@ -254,6 +306,16 @@ async fn serve_client(
                     {
                         stream.write_all(reply.as_bytes()).await?;
                     }
+                    // The password exchange ends the moment the password
+                    // line arrives, so its hold is released here rather than
+                    // by the timer.
+                    if !matches!(state, SessionState::AwaitingPassword { .. })
+                        && hold_until.is_none()
+                    {
+                        for line in held.drain(..) {
+                            stream.write_all(line.as_bytes()).await?;
+                        }
+                    }
                     match (&state, was_authed) {
                         // Just logged in — open the command channel.
                         (SessionState::Authed(id), false) => {
@@ -272,6 +334,12 @@ async fn serve_client(
                         (SessionState::Authed(_), true) => {
                             if let Some(sink) = sink.as_ref() {
                                 sink.submit(session, &line);
+                                let now = tokio::time::Instant::now();
+                                hold_deadline =
+                                    Some(now + std::time::Duration::from_millis(HOLD_MAX_MS));
+                                hold_until = Some(
+                                    now + std::time::Duration::from_millis(HOLD_GRACE_MS),
+                                );
                             }
                         }
                         _ => {}
@@ -657,6 +725,86 @@ mod login_tests {
             .unwrap();
         read_until(&mut p, "DX Cluster Server").await;
         expect_quiet(&mut p).await;
+    }
+
+    /// A stub sink that answers one command with several lines, slowly
+    /// enough that the feed would interleave if it were not held.
+    struct SlowSink {
+        tx: std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedSender<String>>>,
+    }
+    impl CommandSink for SlowSink {
+        fn open(
+            &self,
+            _session: SessionId,
+            _identity: &TelnetIdentity,
+        ) -> tokio::sync::mpsc::UnboundedReceiver<String> {
+            let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+            *self.tx.lock().unwrap() = Some(tx);
+            rx
+        }
+        fn submit(&self, _session: SessionId, _line: &str) {
+            let tx = self.tx.lock().unwrap().clone().expect("opened");
+            tokio::spawn(async move {
+                for i in 0..3 {
+                    let _ = tx.send(format!("reply row {i}"));
+                    tokio::time::sleep(std::time::Duration::from_millis(60)).await;
+                }
+            });
+        }
+        fn close(&self, _session: SessionId) {}
+    }
+
+    /// The field bug: a `SH/DX` table with live spots landing between its
+    /// rows is unreadable. The feed is held while a reply is arriving —
+    /// and **flushed afterwards**, so the spots are delayed, never dropped.
+    #[tokio::test]
+    async fn the_spot_feed_is_held_during_a_reply_then_flushed() {
+        let server = ClusterServer::start_with(
+            0,
+            Some(InteractiveConfig {
+                auth: Arc::new(StubAuth),
+                commands: Some(Arc::new(SlowSink {
+                    tx: std::sync::Mutex::new(None),
+                })),
+            }),
+        )
+        .await
+        .unwrap();
+        let port = server.local_port();
+        let mut c = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+        read_until(&mut c, "LOGIN <callsign>").await;
+        c.write_all(b"LOGIN VU2CPL\r\n").await.unwrap();
+        read_until(&mut c, "Password").await;
+        c.write_all(b"secret\r\n").await.unwrap();
+        read_until(&mut c, "Welcome").await;
+
+        c.write_all(b"sh/dx\r\n").await.unwrap();
+        // A spot arrives while the reply is still coming.
+        tokio::time::sleep(std::time::Duration::from_millis(80)).await;
+        server.broadcast_line("DX de TEST:      14074.0   MIDREPLY   FT8  1428Z");
+
+        // Every reply row lands before the spot does.
+        let got = read_until(&mut c, "reply row 2").await;
+        assert!(
+            !got.contains("MIDREPLY"),
+            "a spot interrupted the reply: {got}"
+        );
+
+        // ...and the spot is not lost — it arrives once the hold lifts.
+        let after = read_until(&mut c, "MIDREPLY").await;
+        assert!(after.contains("MIDREPLY"), "the held spot must be flushed");
+    }
+
+    /// An anonymous session has no commands, so nothing is ever held: the
+    /// regression guard for every logger on the port.
+    #[tokio::test]
+    async fn an_anonymous_session_is_never_held() {
+        let server = ClusterServer::start_with(0, interactive()).await.unwrap();
+        let port = server.local_port();
+        let mut c = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+        read_until(&mut c, "LOGIN <callsign>").await;
+        server.broadcast_line("DX de TEST:      14074.0   NOW   FT8  1428Z");
+        assert!(read_until(&mut c, "NOW").await.contains("NOW"));
     }
 
     /// A real telnet client opens with IAC negotiation. Those bytes are not

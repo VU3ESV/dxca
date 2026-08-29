@@ -518,6 +518,24 @@ last *published* release, because tags can outrun releases.
 
 ## Open items → next session
 
+**Built, NOT deployed (2026-08-28): the telnet feed is held during a command
+reply.** All three Pis are on v2.7.0; this is unreleased.
+
+The first real `SH/DX` against DB0SUE **worked end to end** and leaked no
+history (see `docs/TELNET-INTERACTIVE.md` for the evidence — the naive check
+looks like a leak and isn't). What it exposed was readability: live spots
+landed between the rows of the `SH/DX` table. The feed is now held and
+**buffered** from submit until the reply goes quiet (2.5 s grace, 20 s hard
+cap, 500-line buffer), then flushed — delayed, never dropped. Anonymous
+sessions are never held, which has its own test.
+
+**Still open, and it needs `IAC WILL ECHO`:** the operator's *typing* is
+shredded by the feed too. In line mode the client echoes locally and sends
+nothing until Enter, so the server cannot know a line is in progress. The
+same negotiation would also stop the password being echoed. **One piece of
+work fixes both** — that is the next thing worth doing on this feature.
+
+
 **SHIPPED as v2.7.0 (2026-08-28): Telegram manual-only, and the DXCC
 toggle inverted.** Live on noderedpi4 (9 nodes),
 [released](https://github.com/vu2cpl/dxca/releases/tag/v2.7.0) with the

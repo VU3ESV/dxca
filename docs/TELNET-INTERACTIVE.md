@@ -388,6 +388,41 @@ in production by someone getting an alert for a QSO from last Tuesday.
    against a fake node that counts every byte it receives, and asserts the
    count stays zero.
 
+   **First real `SH/DX` against a live node, 2026-08-28.** Manoj ran the
+   full sequence on DB0SUE. Everything worked — login, `SH/NODES`,
+   `SET/NODE` (lower case accepted), `SH/WWV` returning the real solar
+   table, `SH/DX` returning ten historical spots, `S/PASSWORD test` refused
+   with *"read as SET/PASSWORD"*, and a clean `BYE`.
+
+   **No history leaked**, and the proof is worth recording because the
+   naive check looks alarming: the callsigns from the `SH/DX` reply *are*
+   in the spot ring. They arrived legitimately — via **five different
+   nodes**, with ages spread 3–10 minutes matching their own `SH/DX`
+   timestamps. A leak could only have come via DB0SUE and would have been
+   uniformly ~2 minutes old, injected at once.
+
+   Two things the field test taught that the fakes had not:
+
+   - **DXSpider's `SH/DX` replies in a tabular format**
+     (`21074.0 VK3AWA 29-Aug-2026 0256Z … <K4ANC>`), not `DX de` lines, so
+     those rows never parse as spots anyway. The interception still earns
+     its place: a genuinely live `DX de PD2WL:` arrived mid-window and was
+     correctly routed to the session — the Spots screen got that DX via
+     W3LPL instead, so node redundancy covered the gap.
+   - **The reply was interleaved with live spots**, which made the table
+     hard to read. Fixed the same evening: the feed is now **held and
+     buffered** from the moment a command is submitted until its reply goes
+     quiet (2.5 s, capped at 20 s), then flushed — so spots are delayed, not
+     dropped. `the_spot_feed_is_held_during_a_reply_then_flushed` covers it,
+     and was verified by breaking it.
+
+   **What could NOT be fixed, and why.** The operator's *typing* is also
+   shredded by the feed (`sh/wwDX de VU2CPL: …v`). That is the client
+   echoing locally in line mode: it sends nothing until Enter, so the server
+   cannot know a line is in progress and cannot hold anything back. It needs
+   `IAC WILL ECHO` so the server owns the echo — the same negotiation the
+   visible-password problem needs. One piece of work would fix both.
+
    **Enabled on noderedpi4 2026-08-28** and checked against the running
    service: an anonymous session that threw a bare callsign, `set/name`,
    `sh/dx` and `BYE` at port 7575 received **zero** non-spot bytes while
