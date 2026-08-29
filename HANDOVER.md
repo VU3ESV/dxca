@@ -683,15 +683,33 @@ and `192.168.1.201/32` — and no `DNS` line, every other address in
 
 **The macOS WireGuard app (1.0.16) runs only one tunnel at a time.** Tested:
 activating the second deactivates the first, and no preference changes it.
-For both at once, export the tunnels from the app and run them with
-`wg-quick`, which gives each its own `utun`:
+For more than one, run them with `wg-quick`, which gives each its own `utun`.
 
-    sudo wg-quick up ~/<dir>/Adersh_vu2cpl.conf
-    sudo wg-quick up ~/<dir>/Shaji_vu2wj.conf
+The configs live in **`/opt/homebrew/etc/wireguard/`** (dir `700`, files
+`600`) — one of the three directories `wg-quick` searches by default, so they
+go up by bare name, no path:
+
+    sudo wg-quick up Adersh_vu2cpl
+    sudo wg-quick up Shaji_vu2wj
+    sudo wg-quick up vu2cpl_Ranjith
 
 Deactivate the app's own tunnels first so no peer runs twice. `wg-quick down`
-with the same paths reverses it. **Verified 2026-08-30: `.151`, `.201` and
-`.169` all ping simultaneously.**
+with the same names reverses it. Note `wg-quick` rejects a basename with a
+space or over 15 characters — `Shaji _vu2wj.conf` had to be renamed, and
+`vu2cpl_Ranjith` fits with one character to spare.
+
+**Verified 2026-08-30, all at once:** adersh `192.168.1.151`, vu2wj
+`192.168.1.201`, VU2OY `192.168.220.51` (a third site, PiVPN-hosted, added
+the same day), the shack's own `192.168.1.169` and `192.168.1.170`, and the
+open internet still leaving directly via `en0` rather than any tunnel. Three
+tunnels, two local subnets, one default route, no conflict.
+
+**VU2OY's profile arrived already in the right shape** — `AllowedIPs` a
+single `/32` and no `DNS` line — so nothing had to be narrowed. Its LAN is
+`192.168.220.0/24`, which collides with nothing here. Its sibling profile
+`vu2oy.conf`, a peer of the same server, is a **full tunnel** with its own
+DNS: importing that one instead would reproduce the original blackout
+exactly.
 
 Two traps met on the way. The exported `.conf` files hold **private keys in
 plain text** — keep them somewhere deliberate, not the Desktop, and out of
