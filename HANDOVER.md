@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.7.2 on noderedpi4 and `adersh@192.168.1.151`; `vu2wj@192.168.1.201` is on v2.7.0** (its Pi was unreachable at deploy time). The differences are interactive-telnet polish only, and that feature is off on both third-party boxes. Every tag from v2.4.0 onward has a published GitHub release with a Windows zip (v2.3.0 and v2.3.1 remain bare tags, superseded by v2.4.0's release notes). **v2.3.0–v2.7.0 all shipped on 2026-08-28**, in order: the interactive telnet gate and read-only command passthrough (`telnet_interactive = true` on noderedpi4, still **false** on adersh); spotter attribution — Source is the feed that carried a spot, Spotter is the station that heard it — carried into Telegram and the My Alerts history, with the **first schema migration** this database has had; a spots search over call/spotter; award totals that count **current DXCC entities by default**, with an *include deleted* tickbox; skimmer identification with a **Manual only** display filter; and Telegram's own *human spots only* narrowing. Both migrations were verified against real data (91 and 102 alert rows preserved), and skimmer/spotter attribution was confirmed live on both stations.
+**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.7.2 on ALL THREE Pis** — noderedpi4, `adersh@192.168.1.151` and `vu2wj@192.168.1.201`. Every tag from v2.4.0 onward has a published GitHub release with a Windows zip (v2.3.0 and v2.3.1 remain bare tags, superseded by v2.4.0's release notes). **v2.3.0–v2.7.0 all shipped on 2026-08-28**, in order: the interactive telnet gate and read-only command passthrough (`telnet_interactive = true` on noderedpi4, still **false** on adersh); spotter attribution — Source is the feed that carried a spot, Spotter is the station that heard it — carried into Telegram and the My Alerts history, with the **first schema migration** this database has had; a spots search over call/spotter; award totals that count **current DXCC entities by default**, with an *include deleted* tickbox; skimmer identification with a **Manual only** display filter; and Telegram's own *human spots only* narrowing. Both migrations were verified against real data (91 and 102 alert rows preserved), and skimmer/spotter attribution was confirmed live on both stations.
 **Repo:** https://github.com/vu2cpl/dxca (**public** — verified via
 `gh repo view` 2026-08-27; the doc said "private" until then, and the
 "Open items" release checklist still lists the public flip as pending)
@@ -518,14 +518,12 @@ last *published* release, because tags can outrun releases.
 
 ## Open items → next session
 
-**SHIPPED as v2.7.2 (2026-08-29): BYE now disconnects.** Live on
-noderedpi4 and `adersh@192.168.1.151`,
+**SHIPPED as v2.7.2 (2026-08-29): BYE now disconnects.** **Live on all three Pis**,
 [released](https://github.com/vu2cpl/dxca/releases/tag/v2.7.2) with the
-Windows zip. **`vu2wj@192.168.1.201` is still on v2.7.0 — its Pi was
-unreachable** (no ping, no ssh) while the VPN was up and adersh answered
-normally, so the box itself is off or off-network rather than the tunnel
-being down. Nothing lost: everything since v2.7.0 is interactive-telnet
-polish and that feature is disabled on his box.
+Windows zip. VU2WJ's box was briefly unreachable during the first pass —
+no ping, no ssh, while the VPN was up and adersh answered normally, so the
+box was off rather than the tunnel being down — and took the deploy a few
+minutes later when it came back.
 
 Reported from the field: *"bye ] and quit didnt quit"*. Two things. `Ctrl-]`
 is a control character and a literal `]` is easily typed instead, which just
