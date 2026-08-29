@@ -755,22 +755,23 @@ third-party box is; ping each before deploying to it.
 | `192.168.1.201` (hostname `rpi`) | `vu2wj` | Third party. `--no-seed` always. |
 | `192.168.220.51` (hostname `raspberrypi`) | `vu2oy` | **VU2OY (Ranjith).** Third party, over the PiVPN tunnel added 2026-08-30. **Debian 12 bookworm**, self-built. Key auth + NOPASSWD sudo since 2026-08-30. `--no-seed` always. |
 
-**VU2OY builds his own, and tracks `main`.** His box was never deployed from
-this Mac — no `~/dxca-deploy` staging directory, no `known_hosts` entry
-before 2026-08-30. There is a source tree at `~/dxca` on the public remote,
-on branch `main`, and it was at `v2.13.0-1-g2928de8` within the hour of that
-release. He pulls and runs `install.sh`.
+**The `~/dxca` source tree on that Pi is Manoj's, not Ranjith's.** An earlier
+version of this entry read the tree — on `main`, at `v2.13.0-1-g2928de8`
+within the hour of that release — as VU2OY self-building, and drew a
+conclusion about `main` being a third party's production input. Wrong:
+**Manoj built it there himself, over a RustDesk remote desktop session**,
+which is how that box was maintained until 2026-08-30. Ranjith does not build
+or deploy; the box is administered from here.
 
-Two things follow, and both are easy to trip over:
+The evidence was consistent with either reading, and the wrong one was
+picked. `~/dxca-deploy` was genuinely absent and `known_hosts` had no entry —
+both true, both explained by RustDesk rather than by someone else's hands.
 
-- **`main` is somebody else's production input now.** Anything pushed there
-  reaches a third party's live aggregator on his next pull, tag or no tag.
-  Push to `main` accordingly.
-- **The aarch64 target must stay at `.2.36`.** He is on **bookworm, glibc
-  2.36 exactly** — the floor `Justfile`'s `aarch64-unknown-linux-gnu.2.36`
-  names, with zero headroom. The other three Pis are trixie and would not
-  notice the target being raised; his box would stop starting. If it is ever
-  raised, his install has to move to trixie first.
+One real constraint does survive from that entry: **the aarch64 target must
+stay at `.2.36`.** That Pi is on **bookworm, glibc 2.36 exactly** — the floor
+`Justfile`'s `aarch64-unknown-linux-gnu.2.36` names, with zero headroom. The
+other three Pis are trixie and would not notice the target being raised; this
+one would stop starting. Raise it only after moving that host to trixie.
 
 **First deploy from here landed 2026-08-30**, and it retires a manual method:
 until now that box was updated **over RustDesk**, a remote desktop session
@@ -784,11 +785,9 @@ on **bookworm**. All held. The binary went from 10,290,640 bytes (his native
 build) to 7,671,312 (the zigbuild cross-build), which is how you can tell the
 swap really happened, and the config md5 was identical before and after.
 
-**Two write paths now point at `/opt/dxca/dxca`** — this deploy, and his own
-`git pull && ./install.sh` from `~/dxca`. Neither knows about the other, so
-whichever ran last wins and the two can silently disagree about what is
-deployed. Worth settling with him rather than leaving to chance: either he
-stops self-building, or a deploy from here is announced.
+There is no second party writing `/opt/dxca/dxca` — the `~/dxca` tree there
+is Manoj's own RustDesk-era build, so `pi-deploy.sh` simply replaces the
+method. The tree can stay as a fallback; nothing has to be told to stop.
 
 The three Pis under `pi-deploy.sh` are aarch64 Debian 13 (trixie). The VPN
 hosts were long recorded as un-coexisting with the shack LAN; that was
