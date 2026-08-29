@@ -120,6 +120,24 @@ if not defined UPGRADE (
     )
   )
 
+  rem Second look, and in practice the better one: a SIBLING folder. Each
+  rem release unzips as dxca-<version>-windows-x64, so successive versions
+  rem normally end up side by side under one parent (C:\dxca\dxca-2.8.0-...
+  rem next to C:\dxca\dxca-2.9.0-...). Unlike reading the scheduled task,
+  rem this works on any language of Windows and needs nothing to be
+  rem running. Newest first, and the first one holding a real install wins.
+  if not defined SUGGEST (
+    for /f "delims=" %%d in ('dir /b /ad /o-d "%INSTALLDIR%\..\dxca-*" 2^>nul') do (
+      if not defined SUGGEST (
+        set "CAND=%INSTALLDIR%\..\%%d"
+        for %%f in ("!CAND!") do set "CAND=%%~ff"
+        if /i not "!CAND!"=="%INSTALLDIR%" (
+          if exist "!CAND!\config\dxca.toml" if exist "!CAND!\data\dxca.db" set "SUGGEST=!CAND!"
+        )
+      )
+    )
+  )
+
   echo.
   echo  Settings and accounts live in a DXCA folder's config\ and data\.
   echo  A new version unzips to a NEW folder, so they must be carried over

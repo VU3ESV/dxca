@@ -73,8 +73,8 @@
       </p>
     </div>
 
-    {#each [{ title: 'By band', rows: stats.bands, note: 'In band order, not by count — this reads as a band plan.' }, { title: 'By mode', rows: stats.modes, note: 'As reported by the decoder or the spot comment, so FT8 and FT4 stay apart.' }, { title: 'By source', rows: stats.sources, note: 'The feed that carried the spot — a decoder here, or the cluster node that relayed it.' }] as group (group.title)}
-      <div class="card">
+    {#each [{ title: 'By band', hue: 'band', rows: stats.bands, note: 'In band order, not by count — this reads as a band plan.' }, { title: 'By mode', hue: 'mode', rows: stats.modes, note: 'As reported by the decoder or the spot comment, so FT8 and FT4 stay apart.' }, { title: 'By source', hue: 'source', rows: stats.sources, note: 'The feed that carried the spot — a decoder here, or the cluster node that relayed it.' }] as group (group.title)}
+      <div class="card" data-hue={group.hue}>
         <h2>{group.title}</h2>
         <p class="hint sub">{group.note}</p>
         {#if !group.rows.length}
@@ -166,14 +166,56 @@
     overflow: hidden;
   }
 
+  /* One hue per CHART, not per bar.
+     
+     Colour here answers "which breakdown am I reading", which is real if
+     modest information; fifteen hues for fifteen bands would encode
+     identity the labels already carry, and would fail on colour-vision
+     grounds for nothing in return.
+
+     None of these three is a colour DXCA already means something by. Red,
+     orange and yellow are the DXCC/Slot/Mode alert levels, blue is New
+     Band and the app accent, and green is the `ok` status — an orange bar
+     in here would read as "New Slot". Teal, violet and pink are what is
+     left, and each was run through the palette validator rather than
+     picked by eye: light steps clear the chroma floor and 3:1 contrast on
+     a light surface, and dark mode gets its OWN steps (a flipped palette
+     lands outside the lightness band, which is exactly what the validator
+     is for). */
+  [data-hue='band'] {
+    --series: light-dark(#0891b2, #22a7b3);
+  }
+
+  [data-hue='mode'] {
+    --series: light-dark(#6639ba, #a371f7);
+  }
+
+  [data-hue='source'] {
+    --series: light-dark(#bf3989, #db61a2);
+  }
+
   /* Thin mark, rounded at the data end only: the baseline end stays square
      because it is anchored to zero, not a value. */
   .bar {
     display: block;
     height: 100%;
-    background: var(--accent);
+    background: var(--series, var(--accent));
     border-radius: 0 4px 4px 0;
     min-width: 2px;
+  }
+
+  /* The heading wears its chart's hue as a small marker, so the colour is
+     tied to a name rather than floating free. The heading TEXT stays in
+     the ordinary ink — text never wears the series colour. */
+  .card h2::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: 0.45rem;
+    border-radius: 2px;
+    background: var(--series, var(--accent));
+    vertical-align: middle;
   }
 
   /* Values wear text tokens, never the series colour — identity is carried

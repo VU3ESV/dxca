@@ -571,6 +571,20 @@ that chart. A fixed width truncated `UberSDR CWskim` to `UberSDR C…` — in a
 chart about which node carried what, losing the node's name is exactly the
 wrong thing to lose. Caught by looking at the render, not by a test.
 
+**Colour: one hue per chart, and every hue validated rather than chosen.**
+Teal for bands, violet for modes, pink for sources — those three because
+everything else is already spoken for in this app: red, orange and yellow
+are the DXCC/Slot/Mode alert levels, blue is New Band *and* the accent, and
+green is the `ok` status. An orange bar in Stats would read as "New Slot".
+Fifteen hues for fifteen bands was never on the table: it encodes identity
+the labels already carry and fails on colour-vision grounds for nothing.
+
+The steps came from the palette validator, not from taste. The first teal
+(`#1b7c83`) **failed the chroma floor** — it reads gray — and dark mode
+needed its **own** steps, because flipping the light ones puts violet
+outside the lightness band. Light `#0891b2 / #6639ba / #bf3989`, dark
+`#22a7b3 / #a371f7 / #db61a2`; both sets pass all six checks.
+
 
 **NEEDS TESTING ON WINDOWS (2026-08-29): the installer now imports a
 previous install's config and database.** Written but **not run** — there is
@@ -589,8 +603,17 @@ The installer already *noticed* the situation — it warns that a task exists
 but this folder has no config — and then replaced the task anyway. That is
 now the point where it offers to import.
 
-**Design note:** the reliable mechanism is the operator naming the old
-folder; auto-detection from the scheduled task is a convenience only,
+**Detection looks in two places.** First a **sibling folder** — each release
+unzips as `dxca-<version>-windows-x64`, so successive versions normally sit
+side by side under one parent, and scanning for one holding a config and
+database works on any language of Windows with nothing running. Second the
+scheduled task's own path. The sibling check is the reliable one and was
+added after Manoj asked what the Windows install path actually is: there
+isn't a fixed one, which is exactly why the README now tells people to keep
+using a single parent folder.
+
+**Design note:** the reliable mechanism is still the operator naming the old
+folder; auto-detection is a convenience only,
 because `schtasks /v /fo list` is English-only and its encoding varies by
 Windows build. Detection failing falls back to a prompt rather than
 blocking. The database is copied first — a half-done import that took the

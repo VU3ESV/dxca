@@ -95,8 +95,21 @@ needs to be. Install it in a folder you control.
  4. INSTALLING
 ----------------------------------------------------------------
 
-  1. Unzip this folder somewhere permanent, e.g. C:\dxca
-     (the installer runs the service from wherever you put it).
+  1. Unzip this folder into C:\dxca
+
+     There is no fixed install path — the service runs from wherever you
+     put it — but pick one parent folder and keep using it. Each release
+     unzips as its own dxca-<version>-windows-x64 folder, so following
+     this leaves them side by side:
+
+         C:\dxca\dxca-2.8.0-windows-x64\
+         C:\dxca\dxca-2.9.0-windows-x64\
+
+     That matters when you upgrade: the installer looks for a previous
+     install in the folder next door and offers to carry your settings
+     across (see UPGRADING below). Unzipping each version somewhere
+     unrelated — Downloads one time, Desktop the next — means it has to
+     ask you where the old one is.
   2. RIGHT-CLICK install-dxca.cmd -> "Run as administrator".
   3. Your browser opens on http://127.0.0.1:7580/ — create the admin
      account there. The installer waits for you.
@@ -132,9 +145,14 @@ run from, it looks for your previous install and offers to import it.
 
 Press Enter and your settings, database, cty.xml and LoTW list are
 copied across, and the upgrade proceeds as an in-place update. If it
-cannot find the old folder — it looks at the existing scheduled task,
-which only works on English-language Windows — it asks you to type the
-path instead. Paste it from Explorer's address bar; quotes are fine.
+cannot find the old folder it asks you to type the path instead. Paste
+it from Explorer's address bar; quotes are fine.
+
+It looks in two places: the folder next door (any dxca-*-windows-x64
+sibling holding a config and database, newest first), and the path in
+the existing scheduled task. The sibling check is the reliable one — the
+scheduled-task lookup reads an English-language listing and will not
+find anything on a localised Windows.
 
 Answer "n" only when you genuinely want a clean install with no
 accounts.
