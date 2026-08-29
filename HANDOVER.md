@@ -2,8 +2,10 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-08-29 · **Status:**
-**v2.12.0 — THE SHELL REWORK, released 2026-08-29**, on the two LAN hosts
-(noderedpi4 and Windows `192.168.1.170`). The two VPN hosts —
+**v2.12.0 — THE SHELL REWORK, released 2026-08-29.** The two LAN hosts
+(noderedpi4 and Windows `192.168.1.170`) run this exact code but were deployed
+from `0ea73aa`, before the version bump, so they still REPORT v2.11.1 in the
+header — a cosmetic lag, fixed by redeploying either at leisure. The two VPN hosts —
 `adersh@192.168.1.151` and `vu2wj@192.168.1.201` — are **still on v2.11.1** and
 update one at a time on Manoj's prompt, both `--no-seed`. This is the UI
 cleanup pass that the previous session left as the next item, and the largest
@@ -689,7 +691,12 @@ from tests — which is again where every defect came from.
 
 ### NEXT: the two VPN hosts, and an unfinished network-failure fix
 
-**v2.12.0 is released and on both LAN hosts.** What is left:
+**v2.12.0 is released**, with the Windows zip attached, and both LAN hosts run
+its code (reporting v2.11.1 until redeployed — see the status block). What is
+left:
+
+0. **Redeploy the two LAN hosts** whenever convenient, so the version they
+   report matches what they run. No functional change.
 
 1. **`adersh@192.168.1.151` then `vu2wj@192.168.1.201`**, one at a time on
    Manoj's prompt, both **`--no-seed`** — their databases carry their own
