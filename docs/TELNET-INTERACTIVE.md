@@ -1,10 +1,12 @@
 # Interactive telnet — cluster command passthrough
 
-**Status:** **milestones 1–3 built and LIVE on noderedpi4** (v2.3.0,
-`telnet_interactive = true`, 2026-08-28). Off on the adersh install, which
-is still v2.2.2. Milestone 4 (spotting) is designed, not built, and stopping
-here is a perfectly good place to stop · **Drafted:** 2026-08-28 ·
-**Phase:** 2 (post-2.0)
+**Status:** **milestones 1–3 built, live on noderedpi4 and proven against a
+real node** — `telnet_interactive = true` there; **off** on both third-party
+installs (`adersh`, `vu2wj`), which run the same binary with the feature
+disabled. Milestone 4 (spotting) is designed, not built, and stopping here is
+a perfectly good place to stop. The one piece of unfinished business is
+`IAC WILL ECHO`, which would fix both the echoed password and the shredded
+typing · **Drafted:** 2026-08-28 · **Phase:** 2 (post-2.0)
 
 DXCA's telnet server used to be a one-way loudspeaker: it shouted spots at
 whoever connected and ignored everything they said. This document designed
