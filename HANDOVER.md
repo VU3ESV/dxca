@@ -2,11 +2,12 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-08-29 · **Status:**
-**noderedpi4 is RUNNING AHEAD OF THE TAG (2026-08-29 evening).** Three changes
-landed after v2.12.0 and are deployed to the shack Pi only: the
-network-failure fix (`afc9fd0`), the ClubLog DX Dashboard embedded under
-*Stats › My ClubLog*, and Stats losing its 56rem width cap. The other three
-hosts are on v2.12.0 proper. **These want a v2.12.1** — see "Open items".
+**v2.12.1 (2026-08-29 evening)** — three changes on top of the shell rework:
+the **network-failure fix** (a dropped route no longer makes the Settings
+pages look like lost configuration), the **ClubLog DX Dashboard** embedded
+under *Stats › My ClubLog*, and **Stats filling the window** instead of
+stopping at 56rem. On both LAN hosts. The two VPN hosts stay on v2.12.0 until
+prompted.
 
 **The ClubLog embed is confirmed working in a real browser** (Manoj, Safari).
 It rendered BLANK in the sandboxed preview pane with no console error and
@@ -717,15 +718,11 @@ left:
 0. **Redeploy the two LAN hosts** whenever convenient, so the version they
    report matches what they run. No functional change.
 
-1. **Cut a v2.12.1 and level the fleet.** noderedpi4 carries three changes
-   past the tag (network-failure fix, ClubLog embed, Stats width); the other
-   three hosts do not. Same ritual as before: bump, tag, `win-bundle.sh`,
-   `gh release create` with the zip, then Windows, then the two VPN hosts one
-   at a time with `--no-seed` and a pre-migration DB copy. There is no schema
-   change in these three, so the migration step is a formality this time.
-
-   Windows also still REPORTS v2.11.1 — it was deployed from `0ea73aa`, before
-   the version bump. It runs v2.12.0's code; only the string lags.
+1. **The two VPN hosts want v2.12.1** — `adersh@192.168.1.151` and
+   `vu2wj@192.168.1.201`, one at a time on Manoj's prompt, both `--no-seed`.
+   They are on v2.12.0 and perfectly usable; v2.12.1 is three UI fixes with
+   **no schema change**, so the pre-migration DB copy is a formality this time
+   rather than the real precaution it was for v2.12.0.
 
    **The deploy recipe that worked, for next time.** Both VPN hosts:
    `deploy/pi-deploy.sh --no-seed <user>@<ip>`, with `data/dxca.db` copied to
