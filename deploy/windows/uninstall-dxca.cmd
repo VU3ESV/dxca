@@ -8,12 +8,15 @@ rem rules that install-dxca.cmd created.
 rem
 rem It deliberately does NOT delete config\ or data\. Your accounts,
 rem ClubLog matrices and settings live there; deleting them is a separate,
-rem conscious act. Remove this whole folder by hand when you mean it.
+rem conscious act. Delete %SystemDrive%\DXCA by hand when you mean it.
 rem
 rem Run this by RIGHT-CLICKING it and choosing "Run as administrator".
 rem ---------------------------------------------------------------------
 
 set "TASKNAME=dxca"
+rem The install location is fixed, so the uninstaller does not care where
+rem it is run from — it reports the same folder the installer wrote to.
+set "INSTALLDIR=%SystemDrive%\DXCA"
 
 echo.
 echo ==========================================================
@@ -50,11 +53,11 @@ echo [ok] Firewall rules removed.
 
 echo.
 echo Done. Your data was left untouched:
-echo   %~dp0config
-echo   %~dp0data
+echo   %INSTALLDIR%\config
+echo   %INSTALLDIR%\data
 echo.
 echo data\dxca.db still holds your account password hashes and any ClubLog
-echo or Telegram credentials IN PLAIN TEXT. Delete this folder if you are
+echo or Telegram credentials IN PLAIN TEXT. Delete %INSTALLDIR% if you are
 echo handing the machine on.
 echo.
 pause

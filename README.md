@@ -210,10 +210,19 @@ service to `/opt/dxca`. Everything else is the same.
 on 2026-08-28. Read this whole section before installing.
 
 Download `dxca-<version>-windows-x64.zip` from the releases page, unzip it
-somewhere permanent, then right-click **`install-dxca.cmd`** and choose *Run
-as administrator*. It installs `dxca.exe` as a LOCAL SYSTEM scheduled task
-with a boot trigger, and optionally opens the firewall. `uninstall-dxca.cmd`
-reverses both and leaves your `config\` and `data\` alone.
+anywhere — Downloads is fine — then right-click **`install-dxca.cmd`** and
+choose *Run as administrator*. It installs into **`C:\DXCA`** regardless of
+where you unzipped, and runs `dxca.exe` from there as a LOCAL SYSTEM
+scheduled task with a boot trigger, optionally opening the firewall. The
+unzipped folder is only the delivery package and can be deleted afterwards.
+`uninstall-dxca.cmd` reverses the task and firewall rules and leaves
+`C:\DXCA\config\` and `C:\DXCA\data\` alone.
+
+The fixed location is what makes upgrades uneventful — see
+[Updating](#updating). It is also locked to administrators when the
+installer creates it: a folder at the root of `C:` otherwise inherits the
+drive root's ACL, which would let any standard user replace an executable
+that Windows then runs as SYSTEM.
 
 `dxca.exe` is one self-contained file — the dashboard is embedded and every
 DLL it imports is a Windows system library or Universal CRT. No Rust, no
@@ -224,10 +233,11 @@ What you are getting, stated plainly:
 
 - **Secrets are not protected.** ClubLog app passwords and Telegram tokens
   live in plain text in `data\dxca.db`, secured on Unix by mode `0600` — a
-  `#[cfg(unix)]` path that Windows skips entirely. The file is left with
-  inherited ACLs. Do not install on a shared machine, and use a ClubLog *app
-  password*, never your main one. This is the one gap that keeps Windows from
-  being "supported" rather than "works".
+  `#[cfg(unix)]` path that Windows skips entirely. The installer's ACL on
+  `C:\DXCA` keeps non-administrators out of the file, which is not the same
+  as protecting its contents: anyone who can elevate reads it. Use a ClubLog
+  *app password*, never your main one. This is the one gap that keeps Windows
+  from being "supported" rather than "works".
 - **Receiving spots is untested on Windows.** No WSJT-X, JTDX or cluster node
   has fed the Windows build. Serving, storage, the web GUI, the telnet server
   and the installer are all verified; the ingest path is not.
@@ -350,11 +360,20 @@ makes both stations fight over the same node session) into that host's home
 directory. The installer correctly declines to *install* them, but the guard
 runs after the transfer — the flag is what prevents the copy.
 
-**Windows** updates by re-running the installer from a newer zip over the
-same folder: it stops the service, replaces the binary and re-registers the
-task, and it never touches `config\` or `data\`, so accounts and settings
-survive. Unzip the new release *into the existing folder* — extracting
-elsewhere gives you a second install with an empty database.
+**Windows** updates by unzipping the new release anywhere and running
+`install-dxca.cmd` as administrator. Because DXCA lives in `C:\DXCA` rather
+than in the folder you unzipped, an upgrade only stops the service, replaces
+the binary there and re-registers the task — `config\` and `data\` are
+already in place and are never touched, so accounts and settings carry over
+with nothing to answer.
+
+Installs made before v2.10.0 ran from the unzipped folder, so each release
+landed in an empty new one and had to be set up from scratch. The first run
+of a 2.10.0-or-later installer on such a machine finds no install in
+`C:\DXCA`, offers to import the old one (it looks in the folder you
+unzipped, in any `dxca-*-windows-x64` folder beside it, and in the existing
+scheduled task's path), and copies the database, config, `cty.xml` and LoTW
+list across. That question is asked once.
 
 ### If something goes wrong
 

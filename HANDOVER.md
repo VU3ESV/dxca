@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-28 · **Status:** **v2.9.1 on ALL THREE Pis** — noderedpi4, `adersh@192.168.1.151` and `vu2wj@192.168.1.201`. Every tag from v2.4.0 onward has a published GitHub release with a Windows zip (v2.3.0 and v2.3.1 remain bare tags, superseded by v2.4.0's release notes). **v2.3.0–v2.7.0 all shipped on 2026-08-28**, in order: the interactive telnet gate and read-only command passthrough (`telnet_interactive = true` on noderedpi4, still **false** on adersh); spotter attribution — Source is the feed that carried a spot, Spotter is the station that heard it — carried into Telegram and the My Alerts history, with the **first schema migration** this database has had; a spots search over call/spotter; award totals that count **current DXCC entities by default**, with an *include deleted* tickbox; skimmer identification with a **Manual only** display filter; and Telegram's own *human spots only* narrowing. Both migrations were verified against real data (91 and 102 alert rows preserved), and skimmer/spotter attribution was confirmed live on both stations.
+**Created:** 2026-08-26 · **Last updated:** 2026-08-29 · **Status:** **v2.9.1 on ALL THREE Pis** — noderedpi4, `adersh@192.168.1.151` and `vu2wj@192.168.1.201`. Every tag from v2.4.0 onward has a published GitHub release with a Windows zip (v2.3.0 and v2.3.1 remain bare tags, superseded by v2.4.0's release notes). **v2.3.0–v2.7.0 all shipped on 2026-08-28**, in order: the interactive telnet gate and read-only command passthrough (`telnet_interactive = true` on noderedpi4, still **false** on adersh); spotter attribution — Source is the feed that carried a spot, Spotter is the station that heard it — carried into Telegram and the My Alerts history, with the **first schema migration** this database has had; a spots search over call/spotter; award totals that count **current DXCC entities by default**, with an *include deleted* tickbox; skimmer identification with a **Manual only** display filter; and Telegram's own *human spots only* narrowing. Both migrations were verified against real data (91 and 102 alert rows preserved), and skimmer/spotter attribution was confirmed live on both stations.
 **Repo:** https://github.com/vu2cpl/dxca (**public** — verified via
 `gh repo view` 2026-08-27; the doc said "private" until then, and the
 "Open items" release checklist still lists the public flip as pending)
@@ -587,42 +587,84 @@ outside the lightness band. Light `#0891b2 / #6639ba / #bf3989`, dark
 `#22a7b3 / #a371f7 / #db61a2`; both sets pass all six checks.
 
 
-**NEEDS TESTING ON WINDOWS (2026-08-29): the installer now imports a
-previous install's config and database.** Written but **not run** — there is
-no Windows machine in this workflow, so the batch is unverified beyond a
-paren-balance check. **Test before trusting it.**
+**NEEDS TESTING ON WINDOWS (2026-08-29): DXCA now installs to a fixed
+location, `C:\DXCA`.** Written but **not run** — there is no Windows machine
+in this workflow, so the batch is unverified beyond a paren-balance check.
+**Test before trusting it.**
 
-**The bug it fixes is data loss, not inconvenience.** `INSTALLDIR=%~dp0` —
-the folder the installer is run from — and every release unzips into its own
-version-named folder (`dxca-2.8.0-windows-x64\`). So installing a new
-version was always a *fresh* install: new empty database, and the account,
-ClubLog credentials, log matrix and alert history left orphaned in the
-previous version's folder. That is the "every install needs reconfiguring"
-report.
+**The bug this fixes is data loss, not inconvenience.** `INSTALLDIR=%~dp0`
+meant DXCA ran from whatever folder the installer sat in, and every release
+unzips into its own version-named folder (`dxca-2.8.0-windows-x64\`). So
+installing a new version was always a *fresh* install: new empty database,
+and the account, ClubLog credentials, log matrix and alert history left
+orphaned in the previous version's folder. That is the "every install needs
+reconfiguring" report.
 
-The installer already *noticed* the situation — it warns that a task exists
-but this folder has no config — and then replaced the task anyway. That is
-now the point where it offers to import.
+The first attempt at this (v2.9.0/v2.9.1) was an **import prompt** — detect
+the old folder, offer to copy its config and database forward. It worked,
+but it treated the symptom: every single upgrade still had a question to
+answer and a folder to find, forever. Manoj's "first fix the windows
+installer" is what turned it into the real fix.
 
-**Detection looks in two places.** First a **sibling folder** — each release
-unzips as `dxca-<version>-windows-x64`, so successive versions normally sit
-side by side under one parent, and scanning for one holding a config and
-database works on any language of Windows with nothing running. Second the
-scheduled task's own path. The sibling check is the reliable one and was
-added after Manoj asked what the Windows install path actually is: there
-isn't a fixed one, which is exactly why the README now tells people to keep
-using a single parent folder.
+**The script now separates two things it had conflated:**
 
-**Design note:** the reliable mechanism is still the operator naming the old
-folder; auto-detection is a convenience only,
-because `schtasks /v /fo list` is English-only and its encoding varies by
-Windows build. Detection failing falls back to a prompt rather than
-blocking. The database is copied first — a half-done import that took the
-config but not the accounts would be the worst outcome — and the import
-sets `UPGRADE=1` so the config is then treated as the operator's and never
-rewritten.
+| | |
+|---|---|
+| `SRCDIR=%~dp0` | where the zip was unpacked — holds the new `dxca.exe`, disposable |
+| `INSTALLDIR=%SystemDrive%\DXCA` | where DXCA lives and runs — permanent |
 
-The old folder is left untouched and doubles as a backup.
+An upgrade is now: stop the task, copy `SRCDIR\dxca.exe` over
+`INSTALLDIR\dxca.exe`, re-register. `config\` and `data\` are already there
+and are not touched. **Nothing is asked.** `%SystemDrive%` rather than a
+literal `C:` for the machine that boots from another letter.
+
+`C:\DXCA` over `%ProgramData%\DXCA` was Manoj's call, and it is the right
+one for this audience: ProgramData is hidden in Explorer by default, so
+every "send me your run.log" exchange would start with unhiding system
+folders. The security argument for ProgramData is real, though — a folder
+created at the root of `C:` inherits the drive root's ACL, which lets any
+standard user write inside it, and `dxca.exe` is launched by a LOCAL SYSTEM
+task. A user-writable SYSTEM-run binary is a privilege-escalation path. So
+the installer runs `icacls /inheritance:r` on the folder it creates, granting
+Administrators and SYSTEM full control and Users read-only, by **well-known
+SID** (`*S-1-5-32-544`, `*S-1-5-18`, `*S-1-5-32-545`) because group names are
+translated on a localised Windows. It warns rather than fails if that does
+not take.
+
+**Two ordering constraints, both load-bearing:**
+
+- The `mkdir` + `icacls` block sits **before** the import block, because the
+  import does `mkdir %INSTALLDIR%\config` and cmd creates intermediate
+  folders on the way. Left where it was written, the lockdown would have
+  been skipped on exactly the installs that perform an import.
+- The `copy` of the new exe happens **after** the task is stopped and the
+  port is confirmed free. Copying over a running exe fails, and failing
+  after the service is down would leave the machine with no DXCA at all.
+
+**The import block survives, but now runs once.** It fires only when
+`C:\DXCA` holds no install, which after the first migration is never again.
+It looks in three places, in order: the scheduled task's path, the unzipped
+folder itself (someone who unzipped over their old install), and any
+`dxca-*-windows-x64` sibling of the unzipped folder, newest first. The
+sibling check is the reliable one — `schtasks /v /fo list` is English-only
+and its encoding varies by Windows build — and detection failing falls back
+to a prompt rather than blocking. The database is copied first; a half-done
+import that took the config but not the accounts would be the worst outcome.
+The import sets `UPGRADE=1` so the config is then treated as the operator's
+and never rewritten. The old folder is left untouched and doubles as a
+backup.
+
+**Harmless case worth knowing:** an operator who followed the old advice and
+kept versions under `C:\dxca` finds that folder *is* the install location —
+Windows ignores the capitals. Their old version folders end up sitting
+inside `C:\DXCA`. Untidy, not broken. Note that the pre-existing folder
+skips the `icacls` step, since re-permissioning a folder the operator made
+themselves is not the installer's business.
+
+Docs updated in the same cycle: `deploy/windows/README-WINDOWS.txt`
+(sections 3, 4 and 4a rewritten), the top-level `README.md` Windows and
+Updating sections, and `uninstall-dxca.cmd`, which now reports `C:\DXCA`
+rather than its own folder.
 
 
 **Milestones 1–2 BUILT (2026-08-29), 3–4 designed only: the phase-rotation

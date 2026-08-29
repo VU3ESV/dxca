@@ -23,14 +23,31 @@ rem ---------------------------------------------------------------------
 set "TASKNAME=dxca"
 set "WEBPORT=7580"
 set "TELNETPORT=7575"
-set "INSTALLDIR=%~dp0"
-if "%INSTALLDIR:~-1%"=="\" set "INSTALLDIR=%INSTALLDIR:~0,-1%"
+rem WHERE THE ZIP WAS UNPACKED versus WHERE DXCA LIVES — two different
+rem places, and conflating them was the bug this fixes.
+rem
+rem The installer used to run DXCA from whatever folder it was unzipped
+rem into. Every release unzips as dxca-<version>-windows-x64, so each
+rem upgrade landed in a NEW folder with no config and no database: a fresh
+rem install every time, with the account, ClubLog credentials, log matrix
+rem and alert history stranded in the previous version's folder.
+rem
+rem DXCA now lives in one fixed place and the unzipped folder is only a
+rem delivery vehicle. C:\DXCA: machine-wide rather than tied to whichever
+rem account ran the installer, short enough to type into a support
+rem question, and visible in Explorer without unhiding anything.
+rem SystemDrive rather than a literal C: for the rare machine that boots
+rem from another letter; it reads as C:\DXCA everywhere else.
+set "SRCDIR=%~dp0"
+if "%SRCDIR:~-1%"=="\" set "SRCDIR=%SRCDIR:~0,-1%"
+set "INSTALLDIR=%SystemDrive%\DXCA"
 
 echo.
 echo ==========================================================
 echo  DXCA for Windows — installer
 echo ==========================================================
-echo  Folder : %INSTALLDIR%
+echo  From   : %SRCDIR%
+echo  Install: %INSTALLDIR%
 echo  Web GUI: port %WEBPORT%
 echo  Telnet : port %TELNETPORT%
 echo.
@@ -50,7 +67,7 @@ if errorlevel 1 (
 echo [ok] Running elevated.
 
 rem --- the binary must be here -----------------------------------------
-if not exist "%INSTALLDIR%\dxca.exe" (
+if not exist "%SRCDIR%\dxca.exe" (
   echo [X] dxca.exe not found in this folder.
   echo     Keep install-dxca.cmd next to dxca.exe and re-run.
   echo.
@@ -69,10 +86,39 @@ if errorlevel 1 (
   exit /b 1
 )
 
+rem --- create the install folder, with permissions that hold ------------
+if not exist "%INSTALLDIR%" (
+  mkdir "%INSTALLDIR%"
+  rem It is made HERE, ahead of the import block, because that block does
+  rem `mkdir %INSTALLDIR%\config` and cmd creates intermediate folders on
+  rem the way — so doing this later would find the folder already present
+  rem and skip the lockdown on exactly the installs that need it.
+  rem
+  rem A new folder at the root of the system drive inherits the drive
+  rem root's permissions, and those let ANY standard user write inside it.
+  rem dxca.exe is started by a LOCAL SYSTEM task, so a writable exe is a
+  rem path from ordinary user to SYSTEM — and data\dxca.db holds ClubLog
+  rem and Telegram credentials in plain text. Both want closing.
+  rem
+  rem Well-known SIDs, not group names: "Administrators" and "Users" are
+  rem translated on a localised Windows and icacls would not match them.
+  rem   S-1-5-32-544 Administrators, S-1-5-18 SYSTEM, S-1-5-32-545 Users
+  icacls "%INSTALLDIR%" /inheritance:r /grant:r "*S-1-5-32-544:(OI)(CI)F" /grant:r "*S-1-5-18:(OI)(CI)F" /grant:r "*S-1-5-32-545:(OI)(CI)RX" >nul 2>&1
+  rem A warning, never a failure: a working install matters more, and the
+  rem operator can see and fix this afterwards.
+  if errorlevel 1 (
+    echo [--] Could not tighten permissions on %INSTALLDIR%.
+    echo      It works, but standard users on this PC can read and change
+    echo      the files there — including credentials in data\dxca.db.
+  ) else (
+    echo [ok] %INSTALLDIR% created ^(administrators only^).
+  )
+)
+
 rem --- fresh install, or an update over an existing one? -----------------
-rem An existing config + database means this folder is a live install being
-rem updated. That distinction decides everything below: an update MUST NOT
-rem rewrite config\dxca.toml, because by then it holds the operator's UDP
+rem An existing config + database in the install folder means this is a
+rem live install being updated. That distinction decides everything below:
+rem an update MUST NOT rewrite config\dxca.toml, because by then it holds the operator's UDP
 rem sources, cluster nodes and broadcast destinations as edited in the web
 rem GUI's System tab. Overwriting it would silently discard the whole
 rem station setup and look like a successful upgrade.
@@ -82,20 +128,26 @@ if exist "%INSTALLDIR%\config\dxca.toml" (
 )
 
 if defined UPGRADE (
-  echo [ok] Existing install detected — updating in place.
+  echo [ok] Existing install found in %INSTALLDIR% — updating it.
   echo      config\dxca.toml and data\ will NOT be touched.
 ) else (
-  echo [ok] No config or database in this folder.
+  echo [ok] Nothing installed in %INSTALLDIR% yet.
 )
 
 rem --- carry a previous install's settings across -------------------------
-rem Every release unzips into its OWN version-named folder, so an operator
-rem installing 2.8.0 runs this from a folder that has never held a config.
-rem Without this block that reads as a fresh install: a new empty database
-rem is created and the account, ClubLog credentials, log matrix and alert
-rem history are all left orphaned in the previous version's folder. That is
-rem the "every install needs reconfiguring" complaint, and it is data loss
-rem rather than mere inconvenience.
+rem This runs ONCE, for the machine that is moving off the old layout.
+rem
+rem Installs made before the fixed location ran DXCA from the unzipped
+rem folder, so their config and database sit in whichever version-named
+rem folder the operator last unzipped. Left alone they would be orphaned
+rem there and this would look like a fresh install — a new empty database,
+rem and the account, ClubLog credentials, log matrix and alert history all
+rem stranded. That is the "every install needs reconfiguring" complaint,
+rem and it is data loss rather than mere inconvenience.
+rem
+rem After this has run once the station lives in %INSTALLDIR% and
+rem every later upgrade is detected as one — this block is skipped entirely
+rem and nothing is ever asked again.
 rem
 rem The reliable mechanism is the operator naming the old folder; detecting
 rem it from the existing scheduled task is only a convenience, because the
@@ -120,16 +172,24 @@ if not defined UPGRADE (
     )
   )
 
-  rem Second look, and in practice the better one: a SIBLING folder. Each
-  rem release unzips as dxca-<version>-windows-x64, so successive versions
-  rem normally end up side by side under one parent (C:\dxca\dxca-2.8.0-...
-  rem next to C:\dxca\dxca-2.9.0-...). Unlike reading the scheduled task,
-  rem this works on any language of Windows and needs nothing to be
-  rem running. Newest first, and the first one holding a real install wins.
+  rem Second look: the unzipped folder itself. Before this release DXCA
+  rem ran from there, so an operator who unzipped the new version over
+  rem their old install has the whole station sitting right beside it.
   if not defined SUGGEST (
-    for /f "delims=" %%d in ('dir /b /ad /o-d "%INSTALLDIR%\..\dxca-*" 2^>nul') do (
+    if exist "%SRCDIR%\config\dxca.toml" if exist "%SRCDIR%\data\dxca.db" set "SUGGEST=%SRCDIR%"
+  )
+
+  rem Third look, and in practice the one that fires: a SIBLING folder.
+  rem Each release unzips as dxca-<version>-windows-x64, and the old
+  rem instructions had operators keep them side by side under one parent
+  rem (C:\dxca\dxca-2.8.0-... next to C:\dxca\dxca-2.9.0-...). Unlike
+  rem reading the scheduled task, this works on any language of Windows
+  rem and needs nothing running. Newest first; the first one holding a
+  rem real install wins.
+  if not defined SUGGEST (
+    for /f "delims=" %%d in ('dir /b /ad /o-d "%SRCDIR%\..\dxca-*" 2^>nul') do (
       if not defined SUGGEST (
-        set "CAND=%INSTALLDIR%\..\%%d"
+        set "CAND=%SRCDIR%\..\%%d"
         for %%f in ("!CAND!") do set "CAND=%%~ff"
         if /i not "!CAND!"=="%INSTALLDIR%" (
           if exist "!CAND!\config\dxca.toml" if exist "!CAND!\data\dxca.db" set "SUGGEST=!CAND!"
@@ -139,9 +199,10 @@ if not defined UPGRADE (
   )
 
   echo.
-  echo  Settings and accounts live in a DXCA folder's config\ and data\.
-  echo  A new version unzips to a NEW folder, so they must be carried over
-  echo  or this install starts empty and everything needs setting up again.
+  echo  DXCA will now live in %INSTALLDIR%, and stay there — future
+  echo  upgrades keep your settings automatically, with nothing to answer.
+  echo  If you ran DXCA before, its config\ and data\ are still in the
+  echo  folder you unzipped back then and can be carried over now.
   if defined SUGGEST echo  Found a previous install: !SUGGEST!
   echo.
   if defined SUGGEST (
@@ -149,7 +210,7 @@ if not defined UPGRADE (
     if "!IMPORT!"=="" set "IMPORT=Y"
     if /i "!IMPORT!"=="Y" set "IMPORT=!SUGGEST!"
   ) else (
-    set /p "IMPORT=Path of your previous DXCA folder, or blank for a fresh install: "
+    set /p "IMPORT=Path of your previous DXCA folder, or blank if this is your first install: "
   )
 
   if /i "!IMPORT!"=="n" set "IMPORT="
@@ -235,6 +296,20 @@ if defined PORTBUSY (
 
 if not exist "%INSTALLDIR%\config" mkdir "%INSTALLDIR%\config"
 if not exist "%INSTALLDIR%\data"   mkdir "%INSTALLDIR%\data"
+
+rem --- put this release's binary in the install folder --------------------
+rem After the task is stopped and the port is free, never before: copying
+rem over a running exe fails, and failing here after the service is down
+rem would leave the machine with no DXCA at all.
+copy /y "%SRCDIR%\dxca.exe" "%INSTALLDIR%\dxca.exe" >nul
+if errorlevel 1 (
+  echo [X] Could not copy dxca.exe into %INSTALLDIR%.
+  echo     Is DXCA still running, or is this folder write-protected?
+  echo.
+  pause
+  exit /b 1
+)
+echo [ok] Installed dxca.exe to %INSTALLDIR%.
 
 rem An update replaces the binary and re-registers the task, nothing else.
 rem The account already exists, so there is no setup card to protect, and
@@ -440,10 +515,16 @@ if defined LANOK (
   )
 )
 echo.
+echo   Folder: %INSTALLDIR%
 echo   Start : schtasks /run /tn %TASKNAME%
 echo   Stop  : schtasks /end /tn %TASKNAME%
 echo   Log   : %INSTALLDIR%\run.log
 echo   Remove: uninstall-dxca.cmd
+echo.
+echo   To upgrade later: unzip the new release anywhere and run
+echo   install-dxca.cmd. It installs into the folder above, so your
+echo   settings, account and log matrix carry over by themselves.
+echo   The folder you unzipped is not needed afterwards.
 echo.
 echo   Reminder: ClubLog and Telegram credentials are stored in
 echo   data\dxca.db in PLAIN TEXT. See README-WINDOWS.txt.

@@ -88,28 +88,34 @@ by hand, keep that order.
 
 THE SERVICE RUNS AS LOCAL SYSTEM. That is what allows a password-free
 start at boot. It also means the process is more privileged than it
-needs to be. Install it in a folder you control.
+needs to be.
+
+This is why the installer locks C:\DXCA down to administrators when it
+creates it. A folder made at the root of C: normally inherits the drive
+root's permissions, and those let any standard user write inside it — so
+an ordinary account could replace dxca.exe and have Windows run it as
+SYSTEM at the next boot. On a single-operator shack PC that is theory,
+but it costs one line to close, so it is closed. If the installer prints
+a warning that it could not tighten the permissions, take it seriously
+on any PC that other people log in to.
 
 
 ----------------------------------------------------------------
  4. INSTALLING
 ----------------------------------------------------------------
 
-  1. Unzip this folder into C:\dxca
+  1. Unzip this folder anywhere — Downloads is fine.
 
-     There is no fixed install path — the service runs from wherever you
-     put it — but pick one parent folder and keep using it. Each release
-     unzips as its own dxca-<version>-windows-x64 folder, so following
-     this leaves them side by side:
+     It does not matter where. DXCA always installs into
 
-         C:\dxca\dxca-2.8.0-windows-x64\
-         C:\dxca\dxca-2.9.0-windows-x64\
+         C:\DXCA\
 
-     That matters when you upgrade: the installer looks for a previous
-     install in the folder next door and offers to carry your settings
-     across (see UPGRADING below). Unzipping each version somewhere
-     unrelated — Downloads one time, Desktop the next — means it has to
-     ask you where the old one is.
+     and runs from there. The folder you unzip is only the delivery
+     package; you can delete it once the installer has finished.
+
+     One fixed location is what makes upgrades painless, and it means
+     there is a single answer to "where is my database" and "where is
+     the log" — see below.
   2. RIGHT-CLICK install-dxca.cmd -> "Run as administrator".
   3. Your browser opens on http://127.0.0.1:7580/ — create the admin
      account there. The installer waits for you.
@@ -123,36 +129,56 @@ acceptable to you, build it from source instead; see the repository.
 
   Start   schtasks /run /tn dxca
   Stop    schtasks /end /tn dxca
-  Log     run.log in the install folder
+  Log     C:\DXCA\run.log
+  Data    C:\DXCA\data\dxca.db   (this is the file to back up)
+
+Opening C:\DXCA in Explorer may show "You don't currently have
+permission to access this folder" with a Continue button. That is
+normal, and is the lockdown described in section 3 doing its job —
+click Continue and Windows grants your administrator account access.
   Remove  RIGHT-CLICK uninstall-dxca.cmd -> "Run as administrator"
 
 The uninstaller removes the scheduled task and the firewall rules. It
-deliberately leaves config\ and data\ alone — delete the folder yourself
+deliberately leaves config\ and data\ alone — delete C:\DXCA yourself
 when you actually mean to discard your accounts and settings.
 
 ----------------------------------------------------------------
  4a. UPGRADING TO A NEW VERSION
 ----------------------------------------------------------------
 
-Your account, ClubLog credentials, log matrix and alert history live in
-the install folder, in config\ and data\. Each release unzips into its
-own version-named folder, so a new version starts out knowing nothing.
+Unzip the new release anywhere and run install-dxca.cmd as
+administrator. That is the whole procedure.
 
-The installer handles this: when it finds no config in the folder it is
-run from, it looks for your previous install and offers to import it.
+Because DXCA lives in C:\DXCA rather than in the folder you unzipped,
+an upgrade only replaces dxca.exe there. Your account, ClubLog
+credentials, log matrix, alert history and config\dxca.toml are already
+in place and are not touched — there is nothing to carry across and
+nothing to answer. The installer says
+
+  [ok] Existing install found in C:\DXCA — updating it.
+
+and goes straight through.
+
+  MOVING AN OLDER INSTALL (once only)
+
+Versions before 2.10.0 ran from the folder they were unzipped into, so
+each new version landed in a new empty folder and everything had to be
+set up again. That is what the fixed location fixes.
+
+The first time you run this installer on such a machine it finds no
+install in C:\DXCA and offers to bring the old one over:
 
   Import settings from that folder? [Y/n, or type another path]
 
-Press Enter and your settings, database, cty.xml and LoTW list are
-copied across, and the upgrade proceeds as an in-place update. If it
-cannot find the old folder it asks you to type the path instead. Paste
-it from Explorer's address bar; quotes are fine.
+Press Enter and your database, config, cty.xml and LoTW list are copied
+in. It looks for the old install in three places: the folder you
+unzipped into (if you unzipped over your old install), any
+dxca-*-windows-x64 folder next door (newest first), and the path in the
+existing scheduled task. If none of them turn it up, type the path
+yourself — paste it from Explorer's address bar; quotes are fine.
 
-It looks in two places: the folder next door (any dxca-*-windows-x64
-sibling holding a config and database, newest first), and the path in
-the existing scheduled task. The sibling check is the reliable one — the
-scheduled-task lookup reads an English-language listing and will not
-find anything on a localised Windows.
+This question is asked once. After the move, every later upgrade is
+detected as an upgrade and you are never asked again.
 
 Answer "n" only when you genuinely want a clean install with no
 accounts.
@@ -165,6 +191,12 @@ Two things worth knowing:
 
   * The old folder is left untouched, so it doubles as your backup.
     Delete it once the new version has come up and you have logged in.
+
+  * If you had been keeping your versions under C:\dxca as the old
+    instructions suggested, that folder IS the new install location
+    (Windows ignores the capitals). Nothing breaks — your old
+    dxca-<version>-windows-x64 folders just end up sitting inside it.
+    Delete them once the upgrade is up.
 
 
 ----------------------------------------------------------------
