@@ -772,10 +772,23 @@ Two things follow, and both are easy to trip over:
   notice the target being raised; his box would stop starting. If it is ever
   raised, his install has to move to trixie first.
 
-Deploying to him from here now works (key + NOPASSWD are in place) but would
-replace his source build with a shipped binary. **Coordinate rather than
-surprise him**, and `--no-seed` is mandatory whatever happens: the database is
-his.
+**First deploy from here landed 2026-08-30**, and it retires a manual method:
+until now that box was updated **over RustDesk**, a remote desktop session
+driven by hand. It is now `deploy/pi-deploy.sh --no-seed
+vu2oy@192.168.220.51`, same as the other two third-party Pis.
+
+The first run was deliberately made while he was *already* on v2.13.0, so the
+functional outcome was known-good and the thing actually under test was the
+path: key auth, NOPASSWD sudo, rsync over the day-old tunnel, and `install.sh`
+on **bookworm**. All held. The binary went from 10,290,640 bytes (his native
+build) to 7,671,312 (the zigbuild cross-build), which is how you can tell the
+swap really happened, and the config md5 was identical before and after.
+
+**Two write paths now point at `/opt/dxca/dxca`** — this deploy, and his own
+`git pull && ./install.sh` from `~/dxca`. Neither knows about the other, so
+whichever ran last wins and the two can silently disagree about what is
+deployed. Worth settling with him rather than leaving to chance: either he
+stops self-building, or a deploy from here is announced.
 
 The three Pis under `pi-deploy.sh` are aarch64 Debian 13 (trixie). The VPN
 hosts were long recorded as un-coexisting with the shack LAN; that was
