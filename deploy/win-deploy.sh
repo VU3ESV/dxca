@@ -25,10 +25,19 @@
 #     needs a full admin token to control the task and write to C:\DXCA.
 #     Check with: whoami /groups | findstr S-1-5-32-544
 #   * DXCA already installed at C:\DXCA by install-dxca.cmd.
+#   * The SSH DefaultShell left as cmd.exe (the Windows default). Every
+#     remote command below is cmd syntax — `if not exist`, `move /y`, `>nul`,
+#     `&` — none of which PowerShell understands. Setting the registry's
+#     OpenSSH\DefaultShell to PowerShell breaks this script, so the check
+#     below refuses to run rather than failing halfway through a swap.
 set -euo pipefail
 
 HOST="${1:-manoj@192.168.1.170}"
 INSTALLDIR='C:\DXCA'
+# The same path with forward slashes, for scp. Modern scp speaks SFTP, whose
+# path syntax is POSIX-ish — a backslash there is an escape character, not a
+# separator, so the Windows form silently addresses the wrong file.
+INSTALLDIR_SFTP='C:/DXCA'
 WEBPORT=7580
 # Strip user@ for the HTTP check — that runs from here, over the LAN.
 HOSTNAME_ONLY="${HOST#*@}"
@@ -53,6 +62,15 @@ $SSH 'whoami /groups | findstr /c:"S-1-5-32-544" >nul' || {
   echo "            It cannot stop the task or write to $INSTALLDIR." >&2
   exit 1
 }
+# %COMSPEC% expands only in cmd; PowerShell echoes it back literally. A
+# cheap, exact test for the one thing every command below depends on.
+if [ "$($SSH 'echo %COMSPEC%' 2>/dev/null | tr -d '\r')" = "%COMSPEC%" ]; then
+  echo "win-deploy: $HOST's SSH shell is PowerShell, not cmd.exe." >&2
+  echo "            Every remote command here is cmd syntax. Either reset" >&2
+  echo "            HKLM:\\SOFTWARE\\OpenSSH\\DefaultShell to cmd.exe (or" >&2
+  echo "            delete the value), or update this script." >&2
+  exit 1
+fi
 
 echo "Building web UI + Windows binary..."
 pnpm -C web-ui install && pnpm -C web-ui build
@@ -63,7 +81,7 @@ EXE=target/x86_64-pc-windows-gnu/release/dxca.exe
 # Upload BEFORE stopping anything. A transfer that fails then costs nothing
 # but time — the running install is untouched and still serving.
 echo "Uploading $(du -h "$EXE" | cut -f1) to $INSTALLDIR\\dxca.exe.new ..."
-scp -q "$EXE" "$HOST:$INSTALLDIR\\dxca.exe.new"
+scp -q "$EXE" "$HOST:$INSTALLDIR_SFTP/dxca.exe.new"
 
 echo "Stopping the service..."
 # taskkill as well as schtasks /end: the task ending does not guarantee the

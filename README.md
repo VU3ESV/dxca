@@ -381,8 +381,10 @@ deploy/win-deploy.sh user@192.168.1.170
 It **updates**, it does not install: it registers nothing, so the first
 install on any machine is still `install-dxca.cmd` from the release zip.
 The SSH user must be in `BUILTIN\Administrators` with the group enabled, or
-the session cannot control the task — the script checks that, and every
-other precondition, *before* it stops anything.
+the session cannot control the task. Leave the SSH `DefaultShell` as
+`cmd.exe` too — every remote command in the script is cmd syntax, which
+PowerShell does not understand. Both, and every other precondition, are
+checked *before* anything stops.
 
 Installs made before v2.10.0 ran from the unzipped folder, so each release
 landed in an empty new one and had to be set up from scratch. The first run
