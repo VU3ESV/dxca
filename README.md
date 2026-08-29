@@ -25,7 +25,7 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
-**v2.12.1** (2026-08-29): dxca is the
+**v2.13.0** (2026-08-30): dxca is the
 live shack aggregator with a real web GUI, and **runs on
 Windows**, with a prebuilt `.exe` and installer as a release asset (read
 [Windows](#windows) first; it is the least proven of the four platforms). Decoder UDP sources and
@@ -52,7 +52,9 @@ toggle pins one. SQLite-backed accounts (argon2 + session
 cookies, first-run setup card) each carry their own ClubLog matrix,
 re-downloaded on a per-account schedule (daily by default) so a QSO worked
 today stops showing as new tomorrow, with ClubLog's own DX Dashboard embedded
-under My ClubLog; the shared LoTW users list refreshes
+under My ClubLog and a **band × mode grid** of entities worked and confirmed —
+a row per mode class against every band, with a Total column and a Mixed row,
+the RUMlog layout; the shared LoTW users list refreshes
 server-wide, weekly by default. Every spot classifies per user with
 Telegram alerts and per-callsign cooldown; a send that fails in transit
 (handshake or response timeout) is retried once, and every send — including
