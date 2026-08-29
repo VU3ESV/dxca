@@ -2,7 +2,12 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-08-29 · **Status:**
-**v2.11.0 on ALL FOUR HOSTS** (2026-08-29) — the band mask moved to sun
+**v2.11.1 on ALL FOUR HOSTS** (2026-08-29) — UI polish on the mask and the
+station card, all from Manoj looking at the running screen: the mode selector
+reads **dim / hide**, the Telegram tick leads with **Band mask** and states
+the New DXCC exemption on its own label, and **include deleted entities**
+moved under the totals it changes instead of floating at the card's right
+edge. Previously **v2.11.0 on all four** (2026-08-29) — the band mask moved to sun
 phases (Dawn/Day/Dusk/Night) around a **tunable grey-line window**, default
 45 minutes, plus milestone 4: hide mode and the Telegram narrowing. Ported
 from Meridian's greyline model so the two programs agree about the phase.
@@ -603,6 +608,25 @@ needed its **own** steps, because flipping the light ones puts violet
 outside the lightness band. Light `#0891b2 / #6639ba / #bf3989`, dark
 `#22a7b3 / #a371f7 / #db61a2`; both sets pass all six checks.
 
+
+**Not a bug, but it looked exactly like one (2026-08-29): a UI-only change
+appeared not to reach the binary.** After editing only a `.svelte` file and
+running `just web` + `cargo build`, the browser rendered the OLD layout;
+touching a `.rs` file "fixed" it. That reads as `include_dir!` failing to
+invalidate — which would mean every deploy could ship a **stale dashboard**,
+silently.
+
+It was **browser cache**. No hard reload had happened between the edit and
+the screenshot. Tested properly afterwards: marker into a `.svelte`, `just
+web`, `cargo build` with **no** `.rs` touched, and the marker appeared in the
+bundle the server handed out. `build.rs`'s `cargo:rerun-if-changed` on
+`web-ui/dist` works, because vite rewrites the directory and moves its mtime.
+
+Worth keeping because the failure mode is so plausible and the consequence so
+bad. **When a UI change seems not to have deployed, hard-reload before
+suspecting the build** — on Safari, Shift-click reload. The cheap check is
+comparing the `index-*.js` name the server serves against the one in
+`web-ui/dist/assets/`; the deploy scripts now get that check by habit.
 
 **The band mask now runs on sun PHASES around a tunable grey-line window,
 and milestone 4 is built (2026-08-29).** Manoj: *"m4 next and add a twilight
