@@ -145,8 +145,10 @@
       class="manual-only"
       title="Hold alerts for bands the sun says are not workable from your QTH right now. Needs a locator on My ClubLog. New DXCC always pings whatever the sun is doing, and a band the model says nothing about always pings too."
     >
-      <input type="checkbox" bind:checked={cfg.notify_respect_band_mask} />Only
-      ping for bands that are plausibly open right now (band mask)
+      <input type="checkbox" bind:checked={cfg.notify_respect_band_mask} /><b
+        >Band mask</b
+      > — only ping for bands that are plausibly open right now.
+      <span class="always">New DXCC always pings.</span>
     </label>
 
     <div class="actions">
@@ -209,6 +211,13 @@
 </div>
 
 <style>
+  /* The exemption is the reason this tick is safe to enable, so it is on
+     the label rather than in a tooltip nobody hovers. Muted, because it is
+     a reassurance about what CANNOT happen, not another instruction. */
+  .always {
+    color: var(--muted);
+  }
+
   .manual-only {
     display: flex;
     align-items: center;

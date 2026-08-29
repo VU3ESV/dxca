@@ -302,8 +302,10 @@ both, use what is given, do not ask for more.
    alert is a spot the operator never learns about at all rather than one
    they can hover:
 
-   - **New DXCC is exempt.** The screen never dims it; Telegram never holds
-     it. If the model is ever wrong, being wrong about the rarest catch of
+   - **New DXCC is exempt**, and the tickbox says so on its own label
+     rather than in a tooltip — it is the reassurance that makes the setting
+     safe to enable, and a reassurance nobody reads is not one. The screen
+     never dims it; Telegram never holds it. If the model is ever wrong, being wrong about the rarest catch of
      the year is the one failure that would end this feature's welcome.
    - **No opinion never suppresses.** No locator, or a band the model says
      nothing about, sends as it always did. `telegram_band_mask_fails_open`
