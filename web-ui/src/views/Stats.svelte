@@ -104,6 +104,17 @@
   let shownBandMode = $derived(
     station ? pick(station.by_band_mode, station.by_band_mode_current) : null,
   );
+
+  /// The callsign ClubLog knows this account by — the LOG's callsign, which
+  /// can differ from the login (a /P or a club log). Lowercased because that
+  /// is the form clublog.org's own URLs use.
+  ///
+  /// Empty until a log has been downloaded, and the embed is skipped entirely
+  /// then: framing `clublog.org/dx-dash/` with no callsign would show a
+  /// stranger's error page inside our own card.
+  let logCall = $derived(
+    (station?.log_callsign ?? station?.callsign ?? '').trim().toLowerCase(),
+  );
 </script>
 
 <div class="page narrow">
@@ -287,6 +298,54 @@
             </tr>
           </tbody>
         </table>
+      </div>
+    {/if}
+
+    <!-- ClubLog's own view of the same log, embedded exactly as vu2cpl.com
+         embeds it. It comes AFTER our own tables on purpose: the numbers
+         above are what the alert levels are actually computed from, and are
+         the ones the Spots station line must agree with. This is the same log
+         drawn by someone else — a cross-check and a map, not the source of
+         truth.
+
+         Nothing is requested until this segment is opened, because the
+         segment is `{#if}`-gated rather than merely hidden: an operator who
+         never looks at it never makes a third-party request. -->
+    {#if logCall}
+      <div class="card">
+        <h2>
+          ClubLog DX Dashboard
+          <HelpTip label="ClubLog DX Dashboard">
+            <span class="para">
+              Live from <b>clublog.org</b>, for <b>{logCall.toUpperCase()}</b> —
+              their own charts and map for the log DXCA downloaded.
+            </span>
+            <span class="para">
+              It is a page from ClubLog, not part of DXCA: your browser fetches
+              it directly, it wears ClubLog's own styling rather than this
+              app's, and it needs the internet even though the rest of this
+              screen does not.
+            </span>
+          </HelpTip>
+        </h2>
+        <div class="embed">
+          <div class="embed-head">
+            <span class="embed-src mono">clublog.org/dx-dash/{logCall}</span>
+            <a
+              class="embed-out"
+              href="https://clublog.org/logsearch/{logCall.toUpperCase()}"
+              target="_blank"
+              rel="noopener noreferrer">Full log search ↗</a
+            >
+          </div>
+          <iframe
+            src="https://clublog.org/dx-dash/{logCall}"
+            title="{logCall.toUpperCase()} DX Dashboard, from ClubLog"
+            height="1075"
+            scrolling="no"
+            loading="lazy"
+          ></iframe>
+        </div>
       </div>
     {/if}
   {:else}
@@ -510,6 +569,67 @@
      and blanking it would hide the gap worth working. */
   .zero {
     opacity: 0.35;
+  }
+
+  /* --- The ClubLog embed ---
+     Framed and captioned so it reads as somebody else's page shown inside
+     ours, rather than as part of DXCA. It wears ClubLog's own styling, which
+     is theirs to choose — they run their own light/dark switch off the hour
+     of day and a `dxd-theme` cookie, so it will not always agree with this
+     app's appearance. Filtering it to match would misrepresent what is being
+     shown.
+
+     The attributes on the iframe deliberately MATCH vu2cpl.com's working
+     embed rather than improving on it — same fixed height, same
+     `scrolling="no"`. A `referrerpolicy="no-referrer"` was tried and dropped:
+     the page sets its own `<meta name="referrer" content="same-origin">`, and
+     guessing at a privacy tightening that the proven configuration does not
+     have is not worth risking a blank frame nobody can debug from here. */
+  .embed {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+  }
+
+  .embed-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.4rem 0.7rem;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Names the origin, because an embedded third-party page that does not say
+     where it came from is the kind of thing an operator should be suspicious
+     of in their own shack software. */
+  .embed-src {
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+
+  .embed-out {
+    font-size: 0.72rem;
+    color: var(--accent);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .embed-out:hover {
+    text-decoration: underline;
+  }
+
+  /* Fixed height: the frame is cross-origin, so its content cannot report how
+     tall it is and nothing can size it automatically. 1075px is what fits the
+     dashboard whole — the same figure vu2cpl.com settled on. If ClubLog
+     changes the dashboard's length this is the number to revisit; there is no
+     way to make it adapt. */
+  .embed iframe {
+    display: block;
+    width: 100%;
+    border: none;
   }
 
   /* Sits between the card title and what it describes, so it takes the gap
