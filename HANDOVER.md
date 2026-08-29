@@ -725,6 +725,39 @@ left:
 0. **Redeploy the two LAN hosts** whenever convenient, so the version they
    report matches what they run. No functional change.
 
+### NEXT: a detailed help file — setup and use (Manoj, 2026-08-29)
+
+**The next piece of work is a proper help document for DXCA**, covering both
+setup and day-to-day use, and **especially how to get ClubLog and Telegram
+working** — those two are the steps that actually block a new operator, and
+neither is obvious from the outside:
+
+- **ClubLog** needs an *app password* (not the account password), the log's
+  own callsign (which may not be the login), and — separately, once per
+  server and admin-only — an **API key** that fetches cty.xml and is nothing
+  to do with downloading a log. That split confuses people and is exactly
+  what the existing `?` tips try to explain in two sentences.
+- **Telegram** needs a bot from @BotFather, its token, and a **chat id**,
+  which is the part with no obvious route: there is no UI anywhere that tells
+  you your own chat id. Whatever the help says here has to be a real
+  procedure, not "enter your chat id".
+
+**Ask before designing it — the format is genuinely open**, and there are two
+different answers already half-present in the tree:
+
+- A **document** — `docs/` already holds `PLAN.md`, `TELNET-INTERACTIVE.md`
+  and `PHASE-ROTATION-MASK.md`, and the README is already long and
+  install-focused.
+- **In-app help.** v2.12.0 ported Meridian's `HelpTip` (the `?` popovers) but
+  deliberately **not** its `HelpDrawer` or the backend help index behind it —
+  Meridian serves a help topic per key, with a summary in the popover and a
+  full body in a drawer. The `?` component here is already shaped to grow a
+  "Learn more" affordance if that is the direction. See
+  `~/projects/meridian/web-ui/default/src/lib/help.svelte.ts` for the
+  contract, and note it is a real backend feature there, not just UI.
+
+The two are not exclusive — a document could be the source the drawer serves.
+
 1. **Nothing outstanding on the fleet.** All four hosts are on v2.12.1.
    `main` is one commit ahead of the tag — the embed no longer falls back to
    the login callsign when no ClubLog callsign is set. That path is
