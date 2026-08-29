@@ -18,11 +18,16 @@
     // Optional per-option colour token, used by the level picker so a chip
     // wears the same hue as the row it will show.
     levelKeys = false,
+    // Label ABOVE the chips rather than beside them. For the Spots filter
+    // rail, which is 12rem wide: inline, the label eats a third of the row and
+    // the chips wrap after two.
+    stacked = false,
   }: {
     label: string;
     options: { key: string; label: string }[];
     selected: Set<string>;
     levelKeys?: boolean;
+    stacked?: boolean;
   } = $props();
 
   function toggle(key: string) {
@@ -35,7 +40,7 @@
   const allOn = $derived(selected.size === 0);
 </script>
 
-<div class="chipgroup">
+<div class="chipgroup" class:stacked>
   <span class="grouplabel">{label}</span>
   <button
     class="filter-chip all"
@@ -70,6 +75,22 @@
     color: var(--muted);
     font-size: 0.8rem;
     margin-right: 0.15rem;
+  }
+
+  /* Stacked: the label becomes a rail heading and takes the whole first line,
+     so the chips below it get the full 12rem to wrap in. Same vocabulary as
+     `.rail-head` in app.css, because in the rail that is exactly what it is. */
+  .chipgroup.stacked {
+    gap: 0.25rem;
+  }
+
+  .chipgroup.stacked .grouplabel {
+    flex-basis: 100%;
+    margin-right: 0;
+    font-size: 0.62rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.11em;
   }
 
   /* Picked = accent ring, not the level's own hue: the dot already says WHICH

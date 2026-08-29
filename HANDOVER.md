@@ -2,7 +2,17 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-08-29 · **Status:**
-**v2.11.1 on ALL FOUR HOSTS** (2026-08-29) — UI polish on the mask and the
+**THE SHELL REWORK — committed, on the two LAN hosts, NOT YET RELEASED**
+(2026-08-29). The version string still reads **v2.11.1** everywhere because no
+tag has been cut: this is the UI cleanup pass that the previous session left as
+the next item, and it is the largest single change the web UI has had. Three
+tabs (**Spots · Alerts · Stats**) plus a **gear** into Settings, Meridian's
+arrangement; every setup screen moved behind it; the Spots and Alerts feeds
+rebuilt on a fixed measured grid with a collapsible filter rail. Four Rust
+files changed with it, including **a schema migration that has already run
+against production** (`snr_db` on `alerts_sent`). See the session entry below
+for the whole list, and "Open items" for what a release still needs.
+Previously **v2.11.1 on ALL FOUR HOSTS** (2026-08-29) — UI polish on the mask and the
 station card, all from Manoj looking at the running screen: the mode selector
 reads **dim / hide**, the Telegram tick leads with **Band mask** and states
 the New DXCC exemption on its own label, and **include deleted entities**
@@ -46,6 +56,108 @@ and the web GUI's design system from the same repo's
 `web-ui/default/src/` (app.css + the theme module and switcher).
 **Production runs on noderedpi4 (192.168.1.169) since the 2026-08-27
 cutover**; the 1.x macOS app is the retained fallback (maintenance mode).
+
+## Session 2026-08-29 (afternoon) — the shell rework
+
+Manoj asked for the UI cleanup the last session had parked, then drove it from
+the running screen over roughly twenty rounds. Everything below was found by
+LOOKING, which is the same lesson the previous session recorded.
+
+### What changed
+
+**The shell.** Seven tabs became three — **Spots · Alerts · Stats** — plus a
+gear that swaps the view for **Settings**, exactly as Meridian does, because
+one muscle memory across the two shack apps beats any local improvement. The
+Settings rail groups by OWNERSHIP (My station / Server / Access) and carries a
+search that matches topic keywords, not just page names: `token` finds
+Telegram, `blacklist` finds Reference data, `mqtt` finds Broadcast
+destinations.
+
+**Screens that moved.** My ClubLog split three ways: credentials + the alert
+ladder to *Settings › My station › ClubLog account*, locator and grey line to
+their own page, and the log statistics to *Stats › My ClubLog*. Users and
+Blacklist left the tab strip; System dissolved into the Server group. MQTT
+folded into Broadcast destinations (one page, two Saves — the UDP rows live in
+the TOML, the MQTT rows in the 0600 database). Blacklist folded into Reference
+data, because it is the same kind of thing as cty.xml: one server-wide list
+every account is subject to.
+
+**The feed grid.** Both tables are `table-layout: fixed` on measured widths, so
+a column lands on the same x in every row instead of re-flowing as the stream
+runs. Order is now identical on both: Time · DX · DE · Source · Freq · Mode ·
+dB · Band · DXCC · Alert · Message/Status. Centred, except kHz and dB (right,
+so decimals line up) and Message (left, it is prose).
+
+**The rail.** The five stacked filter rows above the Spots feed moved sideways
+into a collapsible rail. Chrome went from **61% of the window to 16%** — the
+first spot row was 615px down a 1010px window and is now 143px down 900px.
+Collapsed, the spine carries a badge counting active narrowings, because the
+house rule is that a narrowing which changes the screen without saying so is
+indistinguishable from a feed going quiet. Alerts uses the same rail.
+
+**Contextual help.** Standing prose moved into `?` popovers ported from
+Meridian's `HelpTip` — hover to read, click to pin. Empty states, live readings
+and per-row tooltips were deliberately left alone.
+
+### Server changes (four Rust files)
+
+- **Grey line ceiling 180 → 360 minutes.** `put_station` refused anything above
+  180, so raising it in the UI alone would have produced a save error. Six
+  hours is defensible: on the low bands a high-latitude path near the solstices
+  stays enhanced that long.
+- **`snr_db` on `alerts_sent`** so the Alerts history can carry the same dB
+  column the feed does. **Nullable with no default** — every row already in the
+  table was written without an SNR, and 0 dB is a real report, so `DEFAULT 0`
+  would have put a plausible lie in the history. Added to the existing
+  idempotent `ADDED_COLUMNS` list; **ran against production, 199 rows preserved,
+  all NULL**.
+- **Three-way Telegram spotter gate.** `notify_manual_only` (bool) could only
+  ever take skimmers away; `notify_spotter_kind` is `all` / `human` / `skimmer`.
+  No migration — the notify config is a JSON blob. The upgrade path is the
+  careful part: the new field defaults to EMPTY, which means "predates the
+  field", and `notify_config` adopts the old boolean on read; `set_notify_config`
+  writes both in step so the adoption can never re-fire over a deliberate
+  choice. Unrecognised values **fail open**, and a typo is refused at the API.
+
+### Bugs found by looking, not by tests
+
+- The `?` popover **could not be pinned with a mouse**: the click toggled
+  openness, and hovering had already opened it, so every click closed it.
+- A popover inherited `white-space: nowrap` from the `.pill` it hung off and
+  ran its prose out through the right border. Fixed in `HelpTip` — every feed
+  cell is nowrap too, so it would have recurred.
+- The Alerts `failed` marker was folded into the 6.5rem Alert cell, which
+  clips — so on exactly the rows worth seeing, it was **silently cut off**. It
+  has its own `Status` column now, with a header, showing ✓ or Failed either
+  way.
+- The Alerts table had **no elastic column**: all nine fixed, so nothing could
+  give and it truncated on the right under ~1200px.
+- Time clipped to `09…` because the column was cut to 4rem without allowing for
+  the extra 1rem of left padding the first cell carries.
+- `dB` and `Band` were too narrow for their own headers once the sort caret's
+  0.75rem was counted.
+- A header row was updated while its body edit silently failed to match — **10
+  headers against 9 cells**, every column from Freq rightward showing the wrong
+  data. Now checked by asserting `colgroup`/`th`/`td` counts agree.
+- `.gear` was **already** the shared icon-button class ThemeSwitcher documents
+  relying on; the new Settings button had quietly duplicated it.
+- Stats landed on the feed charts and the ClubLog data sat behind an unlabelled
+  segmented control — read as decoration, so the log statistics looked lost.
+  Labelled `Statistics for`, and the choice persists.
+
+### Decisions worth keeping
+
+- **DXCC names are NOT abbreviated.** The question a clipped column has to
+  answer is not "does it fit" but "can two entities ever look the same". All
+  340 current names were run through `canvas.measureText` at the feed's real
+  13.6px system-ui: at **11.5rem** exactly 25 clip and **none collides**. The
+  only pair that ever collides is REPUBLIC OF SOUTH AFRICA / SOUTH SUDAN, and
+  only at 10.5rem or below. So cty.xml stays the single source of truth and the
+  full name is one hover away — a 37-entry override table was drafted and
+  binned.
+- **Source names capped at 14 characters** in the UDP sources and Cluster nodes
+  editors, with a `max` marker at the limit. It is the one column whose widest
+  value an operator chooses, so an unbounded name would silently break the fit.
 
 ## Session 2026-08-27 (afternoon) — the "2.1 wave"
 
@@ -566,30 +678,42 @@ last *published* release, because tags can outrun releases.
 
 ## Open items → next session
 
-### NEXT: a UI cleanup pass (Manoj, 2026-08-29)
+### DONE: the UI cleanup pass (2026-08-29) — see the session entry above
 
-**The next piece of work is a UI cleanup**, asked for at the close of the
-2026-08-29 session with no further detail — so treat the scope as open and
-**ask before designing**, rather than assuming this list is it.
+Closed. Everything the note asked for landed: the crowded Spots filter row is
+now a collapsible rail, My ClubLog's three unrelated things are three separate
+places, and the whole pass was driven in front of the rendered app rather than
+from tests — which is again where every defect came from.
 
-What this session already learned about the screens, which is the obvious
-place to start looking:
+### NEXT: cut a release for the shell rework
 
-- Every UI defect fixed today was found by **looking at the running app**,
-  never by a test: `include deleted entities` orphaned at the card's right
-  edge, the three Stats charts starting their bars at three different x
-  positions, `in memory— about 32 min` missing its space, `about 0 min of
-  feed` on a fresh instance. A cleanup pass should therefore be **done in
-  front of the rendered pages**, at more than one width, in both themes.
-- The **Spots filter row is crowded** — search, four tickboxes, a mask mode
-  selector, a phase badge and two counts, all on one line that wraps
-  unpredictably. It is the densest part of the app and the likeliest thing
-  Manoj means.
-- **My ClubLog now carries three unrelated things** (ClubLog credentials, My
-  station, Alert levels) under one Save button. That was deliberate — one
-  card, one Save — but the page has grown.
-- **Hard-refresh before judging any UI change.** Browser cache cost this
-  session a wrong diagnosis; see the stale-asset note further down.
+The work is **committed and running on the two LAN hosts, but unreleased** —
+every host still reports **v2.11.1**, which is now a lie about what they are
+running. To finish it:
+
+1. **Bump the version** (this is a 2.12.0 — new screens, a schema change and a
+   new config field, all backward compatible).
+2. **Tag, and publish a GitHub release with the Windows zip.** A tag is not a
+   release; see the release convention above.
+3. **Then the two VPN hosts**, one at a time on Manoj's prompt —
+   `adersh@192.168.1.151` and `vu2wj@192.168.1.201`, both `--no-seed`.
+
+**Two things a reviewer should look at first**, because they are the parts that
+touch existing data:
+
+- The `snr_db` migration has **already run on noderedpi4**. It is additive and
+  verified (199 rows preserved, all NULL), and there is a
+  `dxca.db.post-snr-migration` snapshot beside the live file — but note it is a
+  POST-migration copy. I ran the migration without taking a pre-migration
+  backup first, which the `.pre-v2.4.0` / `.pre-v2.9.0` files show is the habit
+  here. **Take the backup first on the next one.**
+- The `notify_spotter_kind` adoption. Read `notify_config` and
+  `set_notify_config` together: the empty-string default is what makes adopting
+  the old boolean possible, and writing both fields in step is what stops the
+  adoption re-firing over a deliberate choice. Both pinned by tests.
+
+**Hard-refresh before judging any UI change.** Browser cache cost an earlier
+session a wrong diagnosis; see the stale-asset note further down.
 
 
 **SHIPPED as v2.9.0, then v2.9.1 (2026-08-29): the Stats tab** (coloured in

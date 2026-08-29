@@ -38,8 +38,15 @@ per-user alert row tints, LoTW markers. Spots are flagged across **eight
 alert levels** — New DXCC/Band/Mode/Slot for never worked, and ? DXCC/Band/
 Mode/Slot for worked-but-unconfirmed — each independently switchable, and
 narrowable by level, mode class (CW/Phone/Data) and band (160m–70cm) both
-on screen and, separately, for Telegram. The GUI wears Meridian's design system
-(2026-08-27): one card/pill/table vocabulary across every screen, and
+on screen and, separately, for Telegram. The shell is **three tabs — Spots,
+Alerts, Stats — and a gear** (2026-08-29): what you watch is a tab, everything
+you set up lives behind the gear in **Settings**, grouped by whose it is (My
+station / Server / Access) and searchable by topic. Both feeds are laid out on
+one fixed measured grid, so a column lands on the same x in every row while the
+stream runs, and each screen's narrowing sits in a collapsible left rail that
+reports how much it is holding back even when folded. The GUI wears Meridian's
+design system (2026-08-27): one card/pill/table vocabulary across every screen,
+contextual `?` help on hover, and
 **light and dark appearances** that follow the OS unless the header's
 toggle pins one. SQLite-backed accounts (argon2 + session
 cookies, first-run setup card) each carry their own ClubLog matrix,
@@ -48,12 +55,12 @@ today stops showing as new tomorrow; the shared LoTW users list refreshes
 server-wide, weekly by default. Every spot classifies per user with
 Telegram alerts and per-callsign cooldown; a send that fails in transit
 (handshake or response timeout) is retried once, and every send — including
-failures, with Telegram's own error text — lands in the My Alerts history.
+failures, with Telegram's own error text — lands in the Alerts history.
 Proven end-to-end in tests against fake ClubLog/Telegram
 servers and by the live validations along the way (RUMlog click-to-fill,
 honest-yellow flaky node, exact matrix parity with the 1.x app's own
 artifacts). Sources, cluster nodes, and broadcast destinations are
-edited in the System tab and hot-apply — listeners rebind, nodes redial,
+edited under Settings › Server and hot-apply — listeners rebind, nodes redial,
 destinations re-point, and `config/dxca.toml` is rewritten so restarts
 agree. Ships as a launchd agent (macOS) or systemd service (Pi);
 **in production on the shack's Raspberry Pi since 2026-08-27**, and on a
@@ -276,12 +283,12 @@ password are yours alone; nothing is pre-seeded.
 
 Then, in order of what actually matters:
 
-1. **System tab → ClubLog API key.** Without it, cty.xml never downloads and
+1. **Settings › Server › Reference data → ClubLog API key.** Without it, cty.xml never downloads and
    no spot can be resolved to a DXCC entity. Get a key from
    [clublog.org](https://clublog.org).
-2. **System tab → cluster nodes.** Add the DX-cluster node(s) you want
+2. **Settings › Server › Cluster nodes.** Add the DX-cluster node(s) you want
    ingested, with your callsign as the login.
-3. **My ClubLog tab.** Your ClubLog credentials, so your own log loads and
+3. **Settings › My station › ClubLog account.** Your ClubLog credentials, so your own log loads and
    New-DXCC highlighting means something for your station.
 4. **Point your decoders at it.** WSJT-X/JTDX/MSHV UDP to ports 2333 (MSHV),
    2334 (JTDX), 2335 (WSJT-X). Point your logger's telnet cluster at port
@@ -508,7 +515,7 @@ The aarch64 binary targets glibc ≥ 2.36 (Raspberry Pi OS Bookworm+,
 
 Global (admin) settings live in `config/dxca.toml` — see the committed
 [example](config/dxca.example.toml) — and, once the server runs, in the
-web UI's System tab (hot-applies and rewrites the file). Defaults keep
+web UI's Settings › Server pages (hot-applies and rewrites the file). Defaults keep
 the shack wiring: web GUI **7580**, telnet cluster server **7575**,
 decoder sources MSHV **2333** / JTDX **2334** / WSJTX **2335**,
 passthrough → RUMlog **2237**.
@@ -559,7 +566,7 @@ so a `reject/rbn` sent to the node would narrow everyone's feed and persist
 on the node account — which is why the telnet passthrough refuses those
 commands and this exists instead.
 
-**My Alerts** records the spotter alongside the source for every alert, so
+**Alerts** records the spotter alongside the source for every alert, so
 the history answers the same question after the fact. Alerts sent before
 this shipped show `—`: the column was added to existing databases on
 upgrade, and there was nothing to back-fill it with.
@@ -586,7 +593,7 @@ Bands rotate through the day. At local midday 160m is dead for anything but
 ground wave, and a New-Band flag on a 160m spot is an interruption you can
 do nothing about; at 0200 local it is the most valuable line on the screen.
 
-Set your **Locator** on *My ClubLog* — a 4- or 6-character Maidenhead square
+Set your **Locator** under *Settings › My station › Locator & grey line* — a 4- or 6-character Maidenhead square
 — and a **Band mask** tickbox appears with the other narrowings on Spots.
 With it on, spots whose band is not plausibly workable from your QTH at this
 moment are **dimmed, never hidden**, and hovering a dimmed row restores it in
@@ -612,7 +619,7 @@ that window lasts is **yours to set**, in minutes, beside the locator —
 season and the path. It is the one number in this feature you are expected to
 nudge.
 
-**Telegram narrows separately.** On *My Alerts*, "only ping for bands that are
+**Telegram narrows separately.** On *Alerts*, "only ping for bands that are
 plausibly open right now" applies the same mask to your alerts while the
 screen keeps showing everything. It fails open harder than the screen does: a
 New DXCC always pings, and so does a band the model says nothing about,
@@ -632,7 +639,7 @@ score nothing toward current DXCC or the Challenge.
 
 **Award totals count current entities by default**, which is what the ARRL
 publishes and therefore what you are comparing against. An *include deleted
-entities* tickbox on the **Spots** station card and the **My ClubLog**
+entities* tickbox on the **Spots** station line and the **Stats › My ClubLog**
 statistics adds them back when you want the historical figure. One shared
 preference, so the two screens can never disagree, remembered per browser;
 both sets of totals are sent together, so toggling is instant.
@@ -702,7 +709,7 @@ operating phone low in 40m can be inferred wrongly.
 
 ### Alert history
 
-**My Alerts** lists what actually went to your Telegram — newest first, in
+**Alerts** lists what actually went to your Telegram — newest first, in
 the same row vocabulary as the Spots feed, with the level tint. Before it
 existed the fan-out was invisible: a spot that was flagged, narrowed away by
 your band/mode chips, held by the per-callsign cooldown, or refused by
@@ -714,7 +721,7 @@ the last 500 alerts, and the list refreshes every 15 seconds.
 
 ### MQTT destinations
 
-Beside the UDP broadcast destinations, the System tab has an admin-only
+Beside the UDP broadcast destinations, Settings › Server has an admin-only
 **MQTT destinations** editor — broker host, port, username, password, base
 topic and client ID — for feeding a panadapter overlay (FlexRadio, Aether)
 or anything else that speaks MQTT.
@@ -759,7 +766,7 @@ a display filter; the band and mode chips are that.
 > which at ~100 spots/min is about five minutes, while genuinely new spots
 > arrive a few times an hour. Working as intended, but worth knowing before
 > concluding the highlighting has broken. The Telegram alert history in
-> **My Alerts** is the reliable record of what was new.
+> **Alerts** is the reliable record of what was new.
 
 
 Matching is exact and case-insensitive against the **spotted** station's

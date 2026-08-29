@@ -257,6 +257,88 @@ nav.tabs button.active {
   font-family: var(--mono);
 }
 
+/* Settings has no tab strip, so the section name takes that slot and inherits
+   its divider: the header always names what is open. */
+.section-label {
+  padding-left: 1.25rem;
+  border-left: 1px solid var(--border);
+  font-size: var(--fs-card-title);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+/* --- The left rail ---------------------------------------------------------
+   One rail vocabulary, two users: Settings navigates with it, Spots filters
+   with it. Sharing the shape is the point — a rail on the left of the content
+   means the same thing on both screens, and neither can drift. */
+
+.rail-shell {
+  display: grid;
+  grid-template-columns: var(--rail-w, 12rem) minmax(0, 1fr);
+  align-items: start;
+}
+
+.rail {
+  position: sticky;
+  top: 0;
+  border-right: 1px solid var(--border);
+  padding: 1.25rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  /* Its own scroll: a long rail must never push the content it navigates. */
+  max-height: 100vh;
+  overflow-y: auto;
+}
+
+.rail-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+/* A group heading, NOT a card title. The card scale deliberately sets a title
+   smaller than its own contents — the settings-app idiom — but that reasoning
+   does not carry to a nav rail: here the heading is a signpost you scan for,
+   and set below its own items it read as a caption on them. Same size as the
+   items, separated by ink and weight instead. */
+.rail-head {
+  font-size: var(--fs-item);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: CanvasText;
+  padding: 0 0.5rem 0.35rem;
+}
+
+/* Air above each group but the first, so the headings read as dividers. */
+.rail-group + .rail-group .rail-head {
+  padding-top: 0.35rem;
+}
+
+.rail-item {
+  text-align: left;
+  padding: 0.28rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--fs-item);
+  cursor: pointer;
+}
+
+.rail-item:hover {
+  color: CanvasText;
+  background: var(--card-bg);
+}
+
+.rail-item.active {
+  background: var(--card-bg);
+  border-color: var(--border);
+  color: CanvasText;
+}
+
 /* --- Header popovers -------------------------------------------------------
    The small header dropdown — a trigger's list of mutually exclusive picks.
    Shared rather than restyled per widget so the header's menus can't drift. */
@@ -360,6 +442,16 @@ button.primary:hover:not(:disabled) {
 
 .gear.menu-open {
   border-color: var(--accent);
+}
+
+/* Settings is a MODE you enter and leave rather than a tab you visit, so its
+   control is this same icon button, latched while the mode is open. Distinct
+   from `.menu-open`, which means "a dropdown is hanging off me right now" —
+   this one outlives the click. */
+.gear.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--card-bg);
 }
 
 input,
@@ -467,6 +559,41 @@ td.num {
   color: var(--muted);
 }
 
+/* --- Segmented control -----------------------------------------------------
+   Two or three mutually exclusive VIEWS of one screen — not a filter, which is
+   what the chips are for. Used by Stats to hold the feed breakdowns and the
+   ClubLog totals under one tab without pretending they are one dataset. */
+
+.segmented {
+  display: inline-flex;
+  gap: 0.15rem;
+  padding: 0.15rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card-bg);
+}
+
+.segmented button {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.15rem 0.7rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.segmented button:hover {
+  color: CanvasText;
+}
+
+.segmented button.active {
+  background: Canvas;
+  color: CanvasText;
+  box-shadow: 0 1px 2px color-mix(in srgb, CanvasText 12%, transparent);
+}
+
 /* A status word inside a pill is part of the pill's line, not a paragraph of
    its own — it takes the colour from `.ok` / `.err` and the size from here. */
 .pill .ok,
@@ -572,6 +699,74 @@ td.num {
 .settings-form > input,
 .settings-form > select {
   max-width: 24rem;
+}
+
+/* --- List editors ----------------------------------------------------------
+   The add-a-row grid the four Server pages share: sources, nodes, broadcast
+   destinations, MQTT. One vocabulary rather than four near-copies, because
+   they are the same surface asked four times. */
+
+/* An editor row wider than the window scrolls inside its own card instead of
+   dragging the whole page sideways. The MQTT row is eleven columns — broker,
+   port, user, password, topic, client id, sources — and comes to roughly
+   77rem, which overflows a 1280px laptop outright. */
+.editor-scroll {
+  overflow-x: auto;
+}
+
+/* Sized to its fields, not to the page: at `width: 100%` the table hands all
+   the slack to the first column and a source name gets a 30rem box. */
+.editor {
+  width: auto;
+}
+
+/* An editor row is fields, not readings: it gets air the dense feed table
+   deliberately refuses, and no rule under each row to fight the inputs. */
+.editor td {
+  padding: 0.25rem 0.5rem 0.25rem 0;
+  border-bottom: none;
+}
+
+.editor td input:not([type='checkbox']),
+.editor td select {
+  width: 9rem;
+}
+
+.editor td input.port { width: 5rem; }
+.editor td input.host { width: 12rem; }
+.editor td input.call { width: 7rem; }
+.editor td input.csv { width: 14rem; }
+
+/* Square, quiet, and only red on approach — a delete that shouts from rest
+   turns every row into a warning. */
+.editor .drop {
+  padding: 0.15rem 0.45rem;
+  color: var(--muted);
+}
+
+.editor .drop:hover {
+  color: var(--err);
+  border-color: var(--err);
+}
+
+/* States a length limit at the moment it bites, rather than silently refusing
+   the next keystroke — a maxlength with no feedback reads as a broken key. */
+.editor .cap {
+  margin-left: 0.35rem;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--warn);
+  cursor: help;
+}
+
+/* Two cards that are one errand — a roster and the form that adds to it. Side
+   by side where there is room, stacked where there is not. */
+.settings-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: 1.25rem;
+  align-items: start;
 }
 
 /* A row of related toggles under a sub-heading. */

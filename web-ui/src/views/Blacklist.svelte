@@ -5,6 +5,7 @@
   // once — not a display filter, which is what the band/mode chips are for.
   import { api } from '../lib/api';
   import { onMount } from 'svelte';
+  import HelpTip from '../lib/HelpTip.svelte';
 
   let calls = $state<string[]>([]);
   let callsign = $state('');
@@ -49,15 +50,18 @@
   }
 </script>
 
-<div class="page card-grid">
+<div class="settings-pair">
   <div class="card">
-    <h2>Blocked calls</h2>
+    <h2>
+      Blocked calls
+      <HelpTip label="Blocked calls">
+        A call added here is dropped the moment it arrives — it will not appear
+        in Spots, will not reach your logger over telnet or the filtered UDP
+        destinations, and will not raise a Telegram alert.
+      </HelpTip>
+    </h2>
     {#if loaded && calls.length === 0}
-      <p class="hint">
-        Nothing blocked. A call added here is dropped the moment it arrives —
-        it will not appear in Spots, will not reach your logger over telnet or
-        the filtered UDP destinations, and will not raise a Telegram alert.
-      </p>
+      <p class="hint">Nothing blocked.</p>
     {:else}
       <table>
         <thead><tr><th>Callsign</th><th></th></tr></thead>
@@ -78,7 +82,23 @@
   </div>
 
   <form class="card" onsubmit={add}>
-    <h2>Block a call</h2>
+    <h2>
+      Block a call
+      <HelpTip label="Block a call">
+        <span class="para">
+          Matched exactly against the spotted station's callsign,
+          case-insensitively. No wildcards: <code>R1ABC</code> blocks that call
+          and nothing else.
+        </span>
+        <span class="para">
+          One list for the whole server — it applies to every account, because
+          the spot is discarded before anyone sees it. The verbatim UDP
+          passthrough is the single exception: it forwards decoder datagrams
+          untouched, before any parsing, so a blocked call can still reach a
+          logger that way.
+        </span>
+      </HelpTip>
+    </h2>
     <div class="settings-form">
       <span class="label">Callsign</span>
       <input bind:value={callsign} autocapitalize="characters" placeholder="e.g. R1ABC" />
@@ -86,16 +106,6 @@
     <div class="actions">
       <button class="primary">Block</button>
     </div>
-    <p class="hint">
-      Matched exactly against the spotted station's callsign, case-insensitively.
-      No wildcards: <code>R1ABC</code> blocks that call and nothing else.
-    </p>
-    <p class="hint">
-      One list for the whole server — it applies to every account, because the
-      spot is discarded before anyone sees it. The verbatim UDP passthrough is
-      the single exception: it forwards decoder datagrams untouched, before
-      any parsing, so a blocked call can still reach a logger that way.
-    </p>
   </form>
 </div>
 

@@ -332,7 +332,7 @@ impl UserService {
             // interrupted by a spot a person bothered to send can say so.
             // Independent of the Spots screen's own Manual-only, like the
             // band/mode narrowing above it.
-            if !notify.passes_skimmer(spot.is_skimmer) {
+            if !notify.passes_spotter(spot.is_skimmer) {
                 continue;
             }
             // The band mask, if this account asked for it on Telegram
@@ -381,6 +381,7 @@ impl UserService {
                     .unwrap_or_default(),
                 source: spot.source_name.clone(),
                 spotter: spot.spotter.clone().unwrap_or_default(),
+                snr_db: Some(spot.snr_db as i64),
                 delivered: true,
                 error: String::new(),
             };

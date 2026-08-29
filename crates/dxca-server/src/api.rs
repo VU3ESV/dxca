@@ -903,6 +903,18 @@ async fn put_notify(
     headers: HeaderMap,
     Json(cfg): Json<NotifyUserConfig>,
 ) -> Response {
+    // Empty is allowed and normalised to `all` on write — that is what an
+    // older client, which knows nothing of this field, will send. Anything
+    // else unrecognised is refused rather than quietly treated as `all`: a
+    // typo that silently widens who wakes you is worse than an error.
+    use crate::db::{SPOTTER_ALL, SPOTTER_HUMAN, SPOTTER_SKIMMER};
+    let kind = cfg.notify_spotter_kind.as_str();
+    if !matches!(kind, "" | SPOTTER_ALL | SPOTTER_HUMAN | SPOTTER_SKIMMER) {
+        return err(
+            StatusCode::BAD_REQUEST,
+            "spotter kind must be all, human or skimmer",
+        );
+    }
     match require_user(&app, &headers) {
         Ok(user) => match app.users.db.set_notify_config(user.id, &cfg) {
             Ok(()) => Json(serde_json::json!({"ok": true})).into_response(),
@@ -953,14 +965,23 @@ async fn put_station(
         );
     }
     // Bounded rather than free. Below 5 minutes the grey line is too narrow
-    // to be a phase at all; above 180 it stops being a grey line and starts
-    // being "most of the day", at which point the mask is saying nothing.
+    // to be a phase at all; at the top end it stops being a grey line and
+    // starts being "most of the day", at which point the mask says nothing.
+    //
+    // The ceiling was 180 and is now 360 (2026-08-29, VU2CPL). Three hours is
+    // a fair description of the enhancement at mid latitudes, but it is not the whole
+    // story: on the low bands a high-latitude path can stay open for hours
+    // either side of the terminator, and near the solstices the sun crosses
+    // the horizon so obliquely that the transition genuinely lasts that long.
+    // An operator chasing 160m to Scandinavia in December is not misusing the
+    // control by asking for six hours.
+    //
     // Refused rather than clamped: silently changing a number the operator
     // typed is how they end up not trusting the screen.
-    if !(5..=180).contains(&cfg.greyline_window_min) {
+    if !(5..=360).contains(&cfg.greyline_window_min) {
         return err(
             StatusCode::BAD_REQUEST,
-            "greyline window must be between 5 and 180 minutes",
+            "greyline window must be between 5 and 360 minutes",
         );
     }
     match app.users.db.set_station_config(user.id, &cfg) {

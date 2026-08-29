@@ -104,9 +104,9 @@
   }
 </script>
 
-<!-- Two short cards: the masonry columns let the roster and the form sit
-     side by side on a wide window and stack on a narrow one. -->
-<div class="page card-grid">
+<!-- No page wrapper: this is a Settings rail page now, and the shell supplies
+     the gutter and the column. -->
+<div class="settings-pair">
   <div class="card">
     <h2>Users</h2>
     <table>

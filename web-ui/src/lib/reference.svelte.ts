@@ -54,7 +54,8 @@ export const modes = () => state.modes;
 export const levels = () => state.levels;
 export const referenceLoaded = () => state.loaded;
 
-/** Level key → its human label, for rendering the Alert cell. */
+/** Level key → its human label, for the Alert cell or a chip. */
 export function levelLabel(key: string): string {
   return state.levels.find((l) => l.key === key)?.label ?? '';
 }
+

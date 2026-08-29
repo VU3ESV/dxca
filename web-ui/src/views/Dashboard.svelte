@@ -5,6 +5,9 @@
   import { api, openStream, hhmm, ago } from '../lib/api';
   import { onMount } from 'svelte';
   import ChipGroup from '../lib/ChipGroup.svelte';
+  import FilterRail from '../lib/FilterRail.svelte';
+  import HelpTip from '../lib/HelpTip.svelte';
+  import { setStatus } from '../lib/status.svelte';
   import { awards, pick, canFilter } from '../lib/awards.svelte';
   import { bandMask, masked, hidden } from '../lib/bandmask.svelte';
   import { loadReference, bands, modes, levels, levelLabel } from '../lib/reference.svelte';
@@ -27,10 +30,16 @@
   /// Deliberately not persisted: a forgotten search that survives a reload
   /// looks exactly like a broken feed.
   let search = $state('');
-  /// Hide skimmer spots. A skimmer's `-#` marker is stripped off the
+  /// Who did the spotting. A skimmer's `-#` marker is stripped off the
   /// callsign, so without the server's flag `W3LPL` and `W3LPL-#` are
   /// indistinguishable here — and they are not the same kind of spot.
-  let manualOnly = $state(false);
+  ///
+  /// Three-way rather than the old "Manual only" tick, which could only ever
+  /// take skimmers AWAY. Skimmers are most of the feed on a busy band, so
+  /// "show me only what the machines heard" is as real a question as its
+  /// opposite — a CW skimmer sweep is exactly where a rare prefix surfaces
+  /// first, and there was no way to ask for it.
+  let spotterKind = $state<'all' | 'human' | 'skimmer'>('all');
   let cqOnly = $state(false);
   let hideDupes = $state(true);
   let sourceFilter = $state<Set<string>>(new Set());
@@ -77,6 +86,7 @@
       if (r.json?.spots) spots = r.json.spots;
       const s = await api('GET', '/api/status');
       status = s.json;
+      setStatus(s.json);
       const st = await api('GET', '/api/me/station');
       if (st.status === 200) station = st.json;
       const q = await api('GET', '/api/config/me/station');
@@ -92,6 +102,9 @@
         spots = [frame.spot, ...spots].slice(0, MAX_ROWS);
       } else if (frame.type === 'status') {
         status = frame.status;
+        // The header pill reads the shared store, so hand it the live frame
+        // rather than letting it poll a second, slower answer of its own.
+        setStatus(frame.status);
       }
     });
     return () => {
@@ -153,7 +166,8 @@
         const hay = `${s.dx_call ?? ''} ${s.spotter ?? ''}`.toUpperCase();
         if (!hay.includes(searchTerm)) return false;
       }
-      if (manualOnly && s.is_skimmer) return false;
+      if (spotterKind === 'human' && s.is_skimmer) return false;
+      if (spotterKind === 'skimmer' && !s.is_skimmer) return false;
       if (cqOnly && !s.is_cq) return false;
       if (sourceFilter.size && !sourceFilter.has(s.source_name)) return false;
       if (bandFilter.size && (!s.band || !bandFilter.has(s.band))) return false;
@@ -214,6 +228,7 @@
   // app.css's [data-level] table. Adding a ninth level needs no edit here.
   const flagged = (s: any) => s.alert && s.alert !== 'worked' && s.alert !== 'none';
 
+
   // The mask is NOT a narrowing — it never removes a row, so it plays no
   // part in `visible` and cannot empty the table. It only counts what it
   // has receded, which is what the badge beside the spot count reports.
@@ -231,7 +246,23 @@
       modeFilter.size > 0 ||
       bandFilter.size > 0 ||
       sourceFilter.size > 0 ||
-      cqOnly,
+      cqOnly ||
+      spotterKind !== 'all',
+  );
+
+  // What the collapsed rail's badge reports. Counted per CONTROL, not per
+  // chip: "3" should mean three things are narrowing the feed, not that three
+  // bands are ticked. `hideDupes` is deliberately absent — it is on by default
+  // and collapses repeats of a spot rather than withholding one, so counting
+  // it would leave the badge permanently lit and mean nothing.
+  let activeFilters = $derived(
+    (searchTerm ? 1 : 0) +
+      (spotterKind !== 'all' ? 1 : 0) +
+      (cqOnly ? 1 : 0) +
+      (levelFilter.size ? 1 : 0) +
+      (modeFilter.size ? 1 : 0) +
+      (bandFilter.size ? 1 : 0) +
+      (sourceFilter.size ? 1 : 0),
   );
 
   function clearFilters() {
@@ -240,6 +271,7 @@
     bandFilter = new Set();
     sourceFilter = new Set();
     cqOnly = false;
+    spotterKind = 'all';
   }
 
   // Node state in the shared status-dot vocabulary: proven = up, connected
@@ -248,376 +280,357 @@
     n.proven ? 'on' : n.connected ? 'warn' : 'err';
 </script>
 
-<div class="page feedpage">
-  <!-- The station card: whose log is driving the highlighting, and how far
-       along it is. Worked/confirmed sit side by side because the gap between
-       them IS the thing the ? levels exist to close. -->
-  {#if station}
-    <div class="card station">
-      <div class="ident">
-        <span class="call mono">{station.log_callsign ?? station.callsign}</span>
+<!-- Rail on the left, feed on the right. The five filter rows that used to
+     stack above the table are the same controls in the same order — they have
+     simply stopped competing with the feed for the one axis it needs. -->
+<div class="feedpage">
+  <FilterRail activeCount={activeFilters}>
+    <div class="railgroup">
+      <input
+        class="search"
+        type="search"
+        placeholder="Call or spotter"
+        bind:value={search}
+        aria-label="Filter spots by callsign or spotter"
+      />
+      {#if searchTerm}
+        <button class="clear" onclick={() => (search = '')}>Clear search</button>
+      {/if}
+    </div>
+
+    <div class="railgroup">
+      <span class="railhead">Show</span>
+      <label class="flabel"><input type="checkbox" bind:checked={hideDupes} />Hide duplicates</label>
+      <label class="flabel"><input type="checkbox" bind:checked={cqOnly} />CQ only</label>
+      <!-- Who heard it. Beside Hide duplicates because both answer "which
+           copies of this do I want to see", not "which spots interest me" —
+           the chips below are for that. -->
+      <div class="spotterkind">
+        <span class="railhead">Spotted by</span>
+        <div class="segmented" role="group" aria-label="Who made the spot">
+          <button class:active={spotterKind === 'all'} onclick={() => (spotterKind = 'all')}
+            title="Every spot, however it was heard.">All</button>
+          <button class:active={spotterKind === 'human'} onclick={() => (spotterKind = 'human')}
+            title="Only spots a person typed — skimmers (the -# callsigns) removed.">Human</button>
+          <button class:active={spotterKind === 'skimmer'} onclick={() => (spotterKind = 'skimmer')}
+            title="Only what the skimmers heard. A rare prefix usually shows up on a CW skimmer sweep before anyone types it.">Skimmer</button>
+        </div>
+      </div>
+      <!-- Only offered once a locator exists, because without one the server
+           sends no band advice and a permanently dead checkbox is worse than
+           no checkbox. The route to it is the note beside the Locator field
+           in Settings. -->
+      {#if locator}
+        <label
+          class="flabel"
+          title="Recede spots on bands the sun says are not plausibly workable from {locator} right now. New DXCC is never masked — see docs/PHASE-ROTATION-MASK.md."
+          ><input type="checkbox" bind:checked={bandMask.on} />Band mask</label
+        >
+        <!-- Only offered once the mask is on: a mode selector for a switched
+             off feature is a control that does nothing. Dim is the default and
+             stays first — hide is the deliberate choice, not the obvious one. -->
+        {#if bandMask.on}
+          <div class="maskrow">
+            <select
+              class="maskmode"
+              bind:value={bandMask.mode}
+              aria-label="What the band mask does to masked spots"
+              title="Dim keeps every spot on the page, receded, and restores it on hover — it cannot cost you a contact. Hide removes them from the list, which is cleaner on a busy feed."
+            >
+              <option value="dim">dim</option>
+              <option value="hide">hide</option>
+            </select>
+            <!-- What the mask is reasoning from, shown rather than trusted. The
+                 phase is the whole input to the model, and the two times are how
+                 an operator judges whether the greyline window is set right. -->
+            {#if sun}
+              <span
+                class="phase"
+                data-phase={sun.phase}
+                title="Sunrise {hhmmUtc(sun.sunrise_unix)}, sunset {hhmmUtc(
+                  sun.sunset_unix,
+                )} at {sun.locator}. Grey line is {sun.greyline_window_min} min either side — change it in Settings › My station."
+                >{PHASE_LABEL[sun.phase] ?? sun.phase}</span
+              >
+            {/if}
+          </div>
+        {/if}
+      {/if}
+    </div>
+
+    <ChipGroup
+      stacked
+      label="Sources"
+      options={sourceNames.map((n) => ({ key: n, label: n }))}
+      bind:selected={sourceFilter}
+    />
+    <ChipGroup stacked label="Alerts" options={levels()} bind:selected={levelFilter} levelKeys />
+    <ChipGroup stacked label="Modes" options={modes()} bind:selected={modeFilter} />
+    <ChipGroup stacked label="Bands" options={bands()} bind:selected={bandFilter} />
+  </FilterRail>
+
+  <div class="feedmain">
+    <!-- The station card, flattened to a line. Whose log is driving the
+         highlighting and how far along it is are still the first thing on the
+         screen; they just no longer cost 190px to say. Worked sits beside
+         confirmed because the gap between them IS what the ? levels close. -->
+    {#if station}
+      <div class="stationline">
+        <span class="who mono">{station.log_callsign ?? station.callsign}</span>
         {#if station.display_name}<span class="opname">{station.display_name}</span>{/if}
         {#if station.log_callsign && station.log_callsign !== station.callsign}
-          <span class="hint">log · signed in as {station.callsign}</span>
+          <span class="opname">log · signed in as {station.callsign}</span>
+        {/if}
+        {#if station.stats}
+          <span class="award">DXCC <b>{shownStats.dxcc_worked}</b><span class="sep">/</span><span class="conf">{shownStats.dxcc_confirmed}</span></span>
+          <span class="award">Challenge <b>{shownStats.challenge_worked}</b><span class="sep">/</span><span class="conf">{shownStats.challenge_confirmed}</span></span>
+          <span class="award">Slots <b>{shownStats.slots_worked}</b><span class="sep">/</span><span class="conf">{shownStats.slots_confirmed}</span></span>
+          {#if station.qso_count}
+            <span class="award">QSOs <b>{station.qso_count}</b></span>
+            <span class="opname">refreshed {ago(station.last_refresh_unix)} ago</span>
+          {/if}
+          <HelpTip label="Your totals">
+            <span class="para">
+              <b>Worked / confirmed</b> throughout — the gap between the two is
+              the QSL chase the <b>?</b> levels exist to close.
+            </span>
+            <span class="para">
+              <b>Challenge</b> is one point per entity per band over 160–6m (60m
+              excluded, WARC included), mode-agnostic; 1000 confirmed points to
+              claim. <b>Slots</b> are band × mode combinations — a different
+              count, which is why the two are never added together.
+            </span>
+          </HelpTip>
+          {#if canFilter(station.stats_current)}
+            <label
+              class="include-deleted"
+              title="Totals count current DXCC entities by default, matching the ARRL standings. Tick to add the 62 deleted entities — Abu Ail, Blenheim Reef, British North Borneo and the rest. Those QSOs are in your log either way; they just score nothing."
+            >
+              <input type="checkbox" bind:checked={awards.includeDeleted} />incl. deleted
+            </label>
+          {/if}
+        {:else}
+          <span class="opname">
+            No log loaded — set your ClubLog credentials in <b>Settings › My
+            station</b> and refresh to get New/? highlighting.
+          </span>
+        {/if}
+        <span class="counts">
+        <span class="count muted">{visible.length} spots</span>
+        <!-- Never silent: a mask that changes the screen without saying so is
+             indistinguishable from a feed going quiet. Nothing is removed in
+             dim mode, so the count says "dimmed", not "hidden". -->
+        {#if bandMask.on && maskedCount > 0}
+          <span
+            class="count masked-count"
+            title={bandMask.mode === 'hide'
+              ? 'Removed from the list by the band mask. New DXCC is never hidden — switch to "dim" to see these again.'
+              : 'Dimmed, not hidden — every one of them is still in the table and still sortable. New DXCC is never dimmed.'}
+            >{maskedCount} {bandMask.mode === 'hide' ? 'hidden' : 'dimmed'}</span
+          >
+        {/if}
+        </span>
+      </div>
+    {/if}
+
+    <div class="card feed">
+      <div class="table-wrap">
+        <!-- FIXED widths, declared once here rather than left to the content.
+             Auto layout sized each column to whatever happened to be in view,
+             so a wide DXCC name arriving on the stream shifted every column
+             right of it — the table re-flowed under the eye several times a
+             second. Every width below is measured: the widest real value the
+             column can hold (or its own header plus the sort caret, which is
+             what sizes Time), at the feed's own 0.85rem system-ui, plus the
+             0.9rem cell padding. DXCC is the exception — it is set to the
+             narrowest width at which no two of the 340 current entity names
+             clip to the same string, which is 11.5rem; 25 of them show an
+             ellipsis and carry the full name on hover. -->
+        <table>
+          <colgroup>
+            <col class="c-time" /><col class="c-call" /><col class="c-spot" />
+            <col class="c-src" /><col class="c-freq" /><col class="c-mode" />
+            <col class="c-db" /><col class="c-band" /><col class="c-dxcc" />
+            <col class="c-al" /><col class="c-msg" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th onclick={() => sortBy('time_unix')}>Time<i>{caret('time_unix')}</i></th>
+              <!-- DX and DE, the operator's own words: the station being
+                   spotted, and the station reporting it. "DX Call" and
+                   "Spotter" said the same thing in twice the width, and the
+                   two now sit side by side where the pair reads as a pair. -->
+              <th onclick={() => sortBy('dx_call')} title="The station being spotted">DX<i>{caret('dx_call')}</i></th>
+              <th onclick={() => sortBy('spotter')} title="The station that heard it">DE<i>{caret('spotter')}</i></th>
+              <th onclick={() => sortBy('source_name')} title="The feed that carried the spot">Source<i>{caret('source_name')}</i></th>
+              <th onclick={() => sortBy('freq')} title="Frequency in kHz">Freq<i>{caret('freq')}</i></th>
+              <th onclick={() => sortBy('mode')}>Mode<i>{caret('mode')}</i></th>
+              <th onclick={() => sortBy('snr_db')} title="Signal-to-noise, dB">dB<i>{caret('snr_db')}</i></th>
+              <th onclick={() => sortBy('band')}>Band<i>{caret('band')}</i></th>
+              <th onclick={() => sortBy('dxcc_name')}>DXCC<i>{caret('dxcc_name')}</i></th>
+              <th onclick={() => sortBy('alert')}>Alert<i>{caret('alert')}</i></th>
+              <th>Message</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each visible as s}
+              <!-- A cluster spot's `message` is synthesised; `comment` is what
+                   the spotter actually typed, so prefer it. Hoisted to the
+                   top of the block because `{@const}` may only be an
+                   immediate child of the `{#each}`. -->
+              {@const msg = `${s.is_beacon ? '[BEACON] ' : ''}${s.comment || s.message}`}
+              <tr
+                class:flagged={flagged(s)}
+                class:beacon={!flagged(s) && s.is_beacon}
+                class:masked={masked(s)}
+                data-level={flagged(s) ? s.alert : undefined}
+                title={masked(s)
+                  ? `${s.band} is not plausibly open from ${locator} at this hour — dimmed, not hidden`
+                  : undefined}
+              >
+                <td class="mono">{hhmm(s.time_unix)}Z</td>
+                <td class="mono call">
+                  {s.dx_call ?? '—'}{#if s.is_lotw}<span class="lotw" title="LoTW user">●</span>{/if}
+                </td>
+                <td
+                  class="mono spotter"
+                  title={s.spotter
+                    ? `Spotted by ${s.spotter}${s.is_skimmer ? ' (skimmer)' : ''}, relayed by ${s.source_name}`
+                    : 'Decoded here'}
+                >
+                  {s.spotter ?? '—'}{#if s.is_skimmer}<span class="skim" title="Skimmer"
+                    >#</span
+                  >{/if}
+                </td>
+                <td title={s.source_name}>{s.source_name}</td>
+                <td class="mono">{freqKHz(s).toFixed(1)}</td>
+                <td class="mode">
+                  {#if s.mode_inferred}
+                    <span
+                      class="inferred"
+                      title="Guessed from the frequency — this spot's comment carried no mode"
+                      >{s.mode}</span
+                    >
+                  {:else if s.mode}
+                    {s.mode}
+                  {:else}
+                    <span class="unknown" title="No mode reported and none could be inferred">—</span>
+                  {/if}
+                </td>
+                <td class="mono">{s.snr_db}</td>
+                <td>{s.band ?? ''}</td>
+                <!-- The 25 longest entity names clip here; the title is what
+                     makes that safe, so it is unconditional rather than
+                     computed — a cell that fits simply repeats itself. -->
+                <td title={s.dxcc_name ?? ''}>{s.dxcc_name ?? ''}</td>
+                <td class="alert">{flagged(s) ? levelLabel(s.alert) : ''}</td>
+                <td class="muted msg" title={msg}>{msg}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+        <!-- A narrowed feed that shows nothing looks identical to a dead feed.
+             Say which of the two it is, and name the way out. -->
+        {#if visible.length === 0}
+          <p class="empty hint">
+            {#if spots.length === 0}
+              No spots yet — waiting for the first one.
+            {:else if narrowed}
+              None of the {spots.length} spots held match this narrowing.
+              <button class="link" onclick={clearFilters}>Show everything</button>
+            {:else}
+              Nothing to show.
+            {/if}
+          </p>
         {/if}
       </div>
-      {#if station.stats}
-        <!-- The totals and the tickbox that changes what they count are ONE
-             thing, so they are one column. Floated hard right with
-             margin-left:auto the tickbox read as a stray control belonging
-             to the card rather than to the numbers. -->
-        <div class="totals">
-        <dl class="awards">
-          <div>
-            <dt>DXCC</dt>
-            <dd><b>{shownStats.dxcc_worked}</b><span class="sep">/</span><span class="conf">{shownStats.dxcc_confirmed}</span></dd>
-            <dd class="cap">worked / confirmed</dd>
-          </div>
-          <!-- Challenge sits next to DXCC, not next to Slots: it is an award
-               total like DXCC is, and putting it beside the band×mode slot
-               count is what makes people read the two as the same thing. -->
-          <div title="DXCC Challenge: one point per entity per band over 160-6m (60m excluded, WARC included). Mode-agnostic. 1000 confirmed points to claim.">
-            <dt>Challenge</dt>
-            <dd><b>{shownStats.challenge_worked}</b><span class="sep">/</span><span class="conf">{shownStats.challenge_confirmed}</span></dd>
-            <dd class="cap">worked / confirmed</dd>
-          </div>
-          <div title="Band x mode combinations. Distinct from Challenge points, which ignore mode and exclude 60m.">
-            <dt>Slots</dt>
-            <dd><b>{shownStats.slots_worked}</b><span class="sep">/</span><span class="conf">{shownStats.slots_confirmed}</span></dd>
-            <dd class="cap">worked / confirmed</dd>
-          </div>
-          {#if station.qso_count}
-            <div>
-              <dt>QSOs</dt>
-              <dd><b>{station.qso_count}</b></dd>
-              <dd class="cap">refreshed {ago(station.last_refresh_unix)} ago</dd>
-            </div>
-          {/if}
-        </dl>
-        {#if canFilter(station.stats_current)}
-          <label
-            class="include-deleted"
-            title="Totals count current DXCC entities by default, matching the ARRL standings. Tick to add the 62 deleted entities — Abu Ail, Blenheim Reef, British North Borneo and the rest. Those QSOs are in your log either way; they just score nothing."
-          >
-            <input type="checkbox" bind:checked={awards.includeDeleted} />include
-            deleted entities
-          </label>
-        {/if}
-        </div>
-      {:else}
-        <span class="hint">
-          No log loaded — set your ClubLog credentials in <b>My ClubLog</b> and
-          refresh to get New/? highlighting.
-        </span>
-      {/if}
-    </div>
-  {/if}
-
-  {#if status}
-    <!-- Every cluster node also feeds `spots_per_source` (process_spot counts
-         every spot by source name), so listing both maps flat printed each
-         node twice with identical counts. Decoders are therefore the sources
-         that are NOT nodes; a node's count lives in its own box, once. -->
-    {@const nodeNames = new Set(Object.keys(status.cluster_nodes ?? {}))}
-    {@const decoders = Object.entries(status.spots_per_source ?? {}).filter(
-      ([name]) => !nodeNames.has(name),
-    )}
-    <div class="statusbar">
-      <section class="statusbox">
-        <h3>Decoders</h3>
-        <div class="statusitems">
-          {#each decoders as [name, count]}
-            <span class="pill"><span class="status-dot on"></span>{name} <b>{count}</b></span>
-          {:else}
-            <span class="muted empty">nothing decoding</span>
-          {/each}
-        </div>
-      </section>
-
-      <section class="statusbox">
-        <h3>Cluster nodes</h3>
-        <div class="statusitems">
-          {#each Object.entries(status.cluster_nodes ?? {}) as [name, n]}
-            <span class="pill" title={n.state}>
-              <span class="status-dot {nodeDot(n)}"></span>{name}
-              <b>{n.spot_count}</b><span class="muted">{ago(n.last_spot_unix)}</span>
-            </span>
-          {:else}
-            <span class="muted empty">none configured</span>
-          {/each}
-        </div>
-      </section>
-
-      <section class="statusbox">
-        <h3>Feeds out</h3>
-        <div class="statusitems">
-          <span class="pill">TCP <b>{status.telnet_clients}</b></span>
-          <span class="pill"
-            >UDP <b>{status.udp_sent}</b>{#if status.udp_failed}<span class="err"
-                >{status.udp_failed} fail</span
-              >{/if}</span
-          >
-        </div>
-      </section>
-
-      <section class="statusbox">
-        <h3>Reference</h3>
-        <div class="statusitems">
-          <span class="pill">cty <b>{status.cty_entities}</b></span>
-          <span class="pill">LoTW <b>{status.lotw_users}</b></span>
-        </div>
-      </section>
-    </div>
-  {/if}
-
-  <!-- Sources was a checkbox dropdown while every other narrowing on this
-       screen was a chip row, so it hid both what was available and what was
-       picked. Same ChipGroup as Alerts / Modes / Bands: All, then one chip
-       per source, empty set meaning everything. -->
-  <ChipGroup
-    label="Sources"
-    options={sourceNames.map((n) => ({ key: n, label: n }))}
-    bind:selected={sourceFilter}
-  />
-
-  <div class="filters">
-    <input
-      class="search"
-      type="search"
-      placeholder="Search call or spotter"
-      bind:value={search}
-      aria-label="Filter spots by callsign or spotter"
-    />
-    {#if searchTerm}
-      <button class="clear" onclick={() => (search = '')} title="Clear the search">clear</button>
-    {/if}
-    <label
-      class="flabel"
-      title="Hide spots made by skimmers (callsigns that arrived with the -# marker), leaving the ones a human typed."
-      ><input type="checkbox" bind:checked={manualOnly} />Manual only</label
-    >
-    <label class="flabel"><input type="checkbox" bind:checked={cqOnly} />CQ only</label>
-    <label class="flabel"><input type="checkbox" bind:checked={hideDupes} />Hide duplicates</label>
-    <!-- Only offered once a locator exists, because without one the server
-         sends no band advice and a permanently dead checkbox is worse than
-         no checkbox. The route to it is the note beside the Locator field
-         on My ClubLog. -->
-    {#if locator}
-      <label
-        class="flabel"
-        title="Recede spots on bands the sun says are not plausibly workable from {locator} right now. New DXCC is never masked — see docs/PHASE-ROTATION-MASK.md."
-        ><input type="checkbox" bind:checked={bandMask.on} />Band mask</label
-      >
-      <!-- Only offered once the mask is on: a mode selector for a switched
-           off feature is a control that does nothing. Dim is the default and
-           stays first — hide is the deliberate choice, not the obvious one. -->
-      {#if bandMask.on}
-        <select
-          class="maskmode"
-          bind:value={bandMask.mode}
-          aria-label="What the band mask does to masked spots"
-          title="Dim keeps every spot on the page, receded, and restores it on hover — it cannot cost you a contact. Hide removes them from the list, which is cleaner on a busy feed."
-        >
-          <option value="dim">dim</option>
-          <option value="hide">hide</option>
-        </select>
-        <!-- What the mask is reasoning from, shown rather than trusted. The
-             phase is the whole input to the model, and the two times are how
-             an operator judges whether the greyline window is set right. -->
-        {#if sun}
-          <span
-            class="phase"
-            data-phase={sun.phase}
-            title="Sunrise {hhmmUtc(sun.sunrise_unix)}, sunset {hhmmUtc(
-              sun.sunset_unix,
-            )} at {sun.locator}. Grey line is {sun.greyline_window_min} min either side — change it on My ClubLog."
-            >{PHASE_LABEL[sun.phase] ?? sun.phase}</span
-          >
-        {/if}
-      {/if}
-    {/if}
-    <span class="count muted">{visible.length} spots</span>
-    <!-- Never silent: a mask that changes the screen without saying so is
-         indistinguishable from a feed going quiet. Nothing is removed in
-         dim mode, so the count says "dimmed", not "hidden". -->
-    {#if bandMask.on && maskedCount > 0}
-      <span
-        class="count masked-count"
-        title={bandMask.mode === 'hide'
-          ? 'Removed from the list by the band mask. New DXCC is never hidden — switch to "dim" to see these again.'
-          : 'Dimmed, not hidden — every one of them is still in the table and still sortable. New DXCC is never dimmed.'}
-        >{maskedCount} {bandMask.mode === 'hide' ? 'hidden' : 'dimmed'}</span
-      >
-    {/if}
-  </div>
-
-  <!-- The three narrowings, one row each so a long band list wraps on its own
-       line instead of shoving the others around. Remembered per browser. -->
-  <div class="pickers">
-    <ChipGroup label="Alerts" options={levels()} bind:selected={levelFilter} levelKeys />
-    <ChipGroup label="Modes" options={modes()} bind:selected={modeFilter} />
-    <ChipGroup label="Bands" options={bands()} bind:selected={bandFilter} />
-  </div>
-
-  <div class="card feed">
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th onclick={() => sortBy('time_unix')}>Time<i>{caret('time_unix')}</i></th>
-            <th onclick={() => sortBy('source_name')}>Source<i>{caret('source_name')}</i></th>
-            <th onclick={() => sortBy('spotter')}>Spotter<i>{caret('spotter')}</i></th>
-            <th onclick={() => sortBy('dx_call')}>DX Call<i>{caret('dx_call')}</i></th>
-            <th onclick={() => sortBy('freq')}>kHz<i>{caret('freq')}</i></th>
-            <th onclick={() => sortBy('mode')}>Mode<i>{caret('mode')}</i></th>
-            <th onclick={() => sortBy('snr_db')}>dB<i>{caret('snr_db')}</i></th>
-            <th onclick={() => sortBy('band')}>Band<i>{caret('band')}</i></th>
-            <th onclick={() => sortBy('dxcc_name')}>DXCC<i>{caret('dxcc_name')}</i></th>
-            <th onclick={() => sortBy('alert')}>Alert<i>{caret('alert')}</i></th>
-            <th>Message</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each visible as s}
-            <tr
-              class:flagged={flagged(s)}
-              class:beacon={!flagged(s) && s.is_beacon}
-              class:masked={masked(s)}
-              data-level={flagged(s) ? s.alert : undefined}
-              title={masked(s)
-                ? `${s.band} is not plausibly open from ${locator} at this hour — dimmed, not hidden`
-                : undefined}
-            >
-              <td class="mono">{hhmm(s.time_unix)}Z</td>
-              <td>{s.source_name}</td>
-              <td
-                class="mono spotter"
-                title={s.spotter
-                  ? `Spotted by ${s.spotter}${s.is_skimmer ? ' (skimmer)' : ''}, relayed by ${s.source_name}`
-                  : 'Decoded here'}
-              >
-                {s.spotter ?? '—'}{#if s.is_skimmer}<span class="skim" title="Skimmer"
-                  >#</span
-                >{/if}
-              </td>
-              <td class="mono call">
-                {s.dx_call ?? '—'}{#if s.is_lotw}<span class="lotw" title="LoTW user">●</span>{/if}
-              </td>
-              <td class="mono">{freqKHz(s).toFixed(1)}</td>
-              <td class="mode">
-                {#if s.mode_inferred}
-                  <span
-                    class="inferred"
-                    title="Guessed from the frequency — this spot's comment carried no mode"
-                    >{s.mode}</span
-                  >
-                {:else if s.mode}
-                  {s.mode}
-                {:else}
-                  <span class="unknown" title="No mode reported and none could be inferred">—</span>
-                {/if}
-              </td>
-              <td class="mono">{s.snr_db}</td>
-              <td>{s.band ?? ''}</td>
-              <td>{s.dxcc_name ?? ''}</td>
-              <td class="alert">{flagged(s) ? levelLabel(s.alert) : ''}</td>
-              <!-- A cluster spot's `message` is synthesised; `comment` is
-                   what the spotter actually typed, so prefer it. -->
-              <td class="muted msg">{s.is_beacon ? '[BEACON] ' : ''}{s.comment || s.message}</td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-      <!-- A narrowed feed that shows nothing looks identical to a dead feed.
-           Say which of the two it is, and name the way out. -->
-      {#if visible.length === 0}
-        <p class="empty hint">
-          {#if spots.length === 0}
-            No spots yet — waiting for the first one.
-          {:else if narrowed}
-            None of the {spots.length} spots held match this narrowing.
-            <button class="link" onclick={clearFilters}>Show everything</button>
-          {:else}
-            Nothing to show.
-          {/if}
-        </p>
-      {/if}
     </div>
   </div>
 </div>
 
 <style>
-  /* The feed owns the window: the head keeps its own air and the table card
-     takes whatever height is left, so the newest spot is never below the fold. */
+  /* Rail | feed. `minmax(0, 1fr)` on the second track, not `1fr`: a grid item's
+     default `min-width: auto` is its CONTENT width, and the feed table is
+     sixty rem of nowrap columns — without the zero minimum the track refuses
+     to shrink and the whole page grows a horizontal scrollbar instead of the
+     card. */
   .feedpage {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
   }
 
-  /* Status is four labelled boxes rather than one long pill run: the flat
-     row put decoders, nodes, output counters and reference data on the same
-     footing, so nothing told you which number belonged to which category. */
-  .statusbar {
+  /* The feed owns the window: the station line keeps its own air and the table
+     card takes whatever height is left, so the newest spot is never below the
+     fold. This carries the page gutter itself — `.page` would have put the
+     padding outside the rail too, and the rail is meant to be flush. */
+  .feedmain {
+    min-width: 0;
+    padding: 0.9rem 1.25rem 1.25rem;
     display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
+    flex-direction: column;
     gap: 0.6rem;
   }
 
-  .statusbox {
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--card-bg);
-    padding: 0.45rem 0.65rem 0.55rem;
+  /* --- The rail's own furniture --- */
+  .railgroup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
   }
 
-  /* Natural width, no stretching: a box has exactly as much room as its
-     contents need, so an idle Decoders box does not occupy a third of the
-     bar announcing that nothing is decoding. The row wraps instead. */
-  .statusbox {
-    flex: 0 1 auto;
-  }
-
-  .statusbox h3 {
-    margin: 0 0 0.35rem;
+  .railhead {
     font-size: 0.62rem;
     font-weight: 600;
-    letter-spacing: 0.08em;
     text-transform: uppercase;
+    letter-spacing: 0.11em;
     color: var(--muted);
   }
 
-  .statusitems {
+  .maskrow {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
     gap: 0.35rem;
+    padding-left: 1.35rem;
   }
 
-  .empty {
-    font-size: 0.78rem;
-  }
-
-  /* --- Station card --- */
-  .station {
-    display: flex;
-    align-items: center;
-    gap: 2rem;
-    flex-wrap: wrap;
-    padding: 0.9rem 1.25rem;
-  }
-
-  .ident {
+  /* Its own line under the tickboxes: three segments do not sit on a tick's
+     baseline, and at 12rem the rail has no room beside one anyway. */
+  .spotterkind {
     display: flex;
     flex-direction: column;
-    gap: 0.1rem;
+    gap: 0.25rem;
+    margin-top: 0.35rem;
   }
 
-  .station .call {
-    font-size: 1.35rem;
+  .spotterkind .segmented {
+    width: 100%;
+  }
+
+  .spotterkind .segmented button {
+    flex: 1;
+    padding: 0.15rem 0.2rem;
+    font-size: 0.75rem;
+  }
+
+  /* --- The station line ---
+     What was a 190px card. Every fact it carried is still here; they are on
+     one line because they are all short, and none of them is worth a row of
+     its own on the screen where height is the scarce thing. */
+  .stationline {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.25rem 1.1rem;
+    font-size: var(--fs-hint);
+    color: var(--muted);
+  }
+
+  .stationline .who {
+    font-size: 1.05rem;
     font-weight: 600;
     letter-spacing: 0.02em;
+    color: CanvasText;
   }
 
   .opname {
@@ -625,76 +638,36 @@
     color: var(--muted);
   }
 
-  /* The totals and their scope switch, stacked as one unit. */
-  .totals {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
+  .award {
+    font-variant-numeric: tabular-nums;
   }
 
-  /* Sits with the totals it changes, not in the filter row — it is part of
-     reading the card, not part of narrowing the feed. Directly BENEATH them
-     and aligned to their left edge, so it reads as a footnote on the
-     numbers. It was previously floated hard right with margin-left:auto,
-     which put it at the far edge of the card touching nothing it affects —
-     an orphan. Subordinate on purpose: it changes the numbers, it is not
-     one of them. */
+  .award b {
+    color: CanvasText;
+    font-weight: 600;
+  }
+
+  .award .sep {
+    color: var(--muted);
+    margin: 0 0.1rem;
+  }
+
+  /* Confirmed is the number that counts for an award; worked beside it is the
+     chase still open. */
+  .award .conf {
+    color: var(--ok);
+  }
+
+  /* Sits with the totals it changes — it is part of reading the line, not part
+     of narrowing the feed, which is why it is here and not in the rail. */
   .include-deleted {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 0.3rem;
     color: var(--muted);
     font-size: 0.72rem;
     white-space: nowrap;
     cursor: pointer;
-  }
-
-  .awards {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem 2rem;
-    margin: 0;
-  }
-
-  .awards dt {
-    font-size: var(--fs-hint);
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  .awards dd {
-    margin: 0.1rem 0 0;
-    font-size: 1.15rem;
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* Worked reads as the headline, confirmed as the qualifier under it —
-     the gap between the two is what the ? levels exist to close. */
-  .awards dd b {
-    font-weight: 600;
-  }
-
-  .awards .sep {
-    color: var(--muted);
-    margin: 0 0.2rem;
-    font-weight: 400;
-  }
-
-  .awards .conf {
-    color: var(--ok);
-  }
-
-  .awards dd.cap {
-    font-size: 0.7rem;
-    color: var(--muted);
-    letter-spacing: 0.02em;
-  }
-
-  .pickers {
-    display: flex;
-    flex-direction: column;
-    gap: 0.3rem;
   }
 
   .empty {
@@ -717,22 +690,14 @@
     text-decoration: underline;
   }
 
-  /* One line: the two subset menus, then the boolean narrowings, then the
-     count. Each stays a unit so a wrap breaks BETWEEN controls, not inside. */
-  .filters {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.35rem 0.75rem;
-  }
-
   /* Inherits the card/field vocabulary rather than inventing a control:
-     same border, radius and focus ring as the System tab's inputs. */
+     same border, radius and focus ring as the Settings inputs. */
   .search {
     font: inherit;
     font-size: 0.8rem;
     padding: 0.25rem 0.5rem;
-    min-width: 12rem;
+    width: 100%;
+    min-width: 0;
     color: var(--fg);
     background: var(--bg);
     border: 1px solid var(--border);
@@ -777,9 +742,20 @@
   }
 
   .count {
-    margin-left: auto;
     font-size: 0.8rem;
     font-variant-numeric: tabular-nums;
+  }
+
+  /* The counts are the line's last fact, so they take the slack — the awards
+     stay grouped on the left and the numbers sit at the right margin. They are
+     wrapped rather than pushed individually because `:first-of-type` selects
+     by TAG, and the first <span> on this line is the callsign. */
+  .stationline .counts {
+    margin-left: auto;
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    white-space: nowrap;
   }
 
   /* The card holds the scroll rather than the page, so the header rule and
@@ -790,9 +766,70 @@
     overflow: hidden;
   }
 
+  /* Taller than it used to be, by exactly what the status boxes and the
+     stacked filter rows gave back. */
   .table-wrap {
     overflow: auto;
-    max-height: calc(100vh - 15rem);
+    max-height: calc(100vh - 8.5rem);
+  }
+
+  /* --- The fixed grid ---
+     `table-layout: fixed` is the whole point: it makes the browser take the
+     widths from the colgroup and stop measuring content, so a column lands on
+     the same x in every row and stays there while the stream runs. */
+  table {
+    table-layout: fixed;
+  }
+
+  /* Measured at 0.85rem system-ui, plus the 0.9rem cell padding, plus the
+     0.75rem the sort caret reserves on every header. Time is set by its own
+     header rather than by a timestamp; DXCC is set by the clip threshold (see
+     the note in the markup); Message takes what is left. */
+  col.c-time { width: 4.75rem; }
+  col.c-call { width: 6.75rem; }
+  col.c-spot { width: 6rem; }
+  col.c-src  { width: 8rem; }
+  col.c-freq { width: 5.75rem; }
+  col.c-mode { width: 4.5rem; }
+  col.c-db   { width: 3rem; }
+  col.c-band { width: 4rem; }
+  col.c-dxcc { width: 11.5rem; }
+  col.c-al   { width: 5.75rem; }
+  col.c-msg  { width: auto; }
+
+  /* Every cell clips rather than widening its column — and every cell that can
+     clip carries a `title`, so the full value is always one hover away. */
+  td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* --- Alignment ---
+     Fixed columns leave slack, and left-aligning every value pinned each one
+     to the far edge of its box: "SYRIA" sat at the left of an 11.5rem DXCC
+     column with an inch of nothing before the next field, so the row read as
+     scattered rather than as a row. Centred, each value sits in its own cell.
+
+     The two NUMERIC columns are the exception and stay right-aligned: kHz and
+     dB are read by comparing them down the column, and centring
+     "7040.0" over "14090.7" puts the decimal points in different places,
+     which is the one thing tabular figures exist to prevent.
+
+     Free prose stays left — a centred paragraph has no edge to read from. */
+  th,
+  td {
+    text-align: center;
+  }
+
+  /* kHz and dB. */
+  th:nth-child(5), td:nth-child(5),
+  th:nth-child(7), td:nth-child(7) {
+    text-align: right;
+  }
+
+  /* Message. */
+  th:nth-child(11), td:nth-child(11) {
+    text-align: left;
   }
 
   th {
@@ -806,6 +843,7 @@
     user-select: none;
     padding-top: 0.6rem;
     padding-bottom: 0.4rem;
+    overflow: hidden;
   }
 
   th:first-child,
@@ -819,7 +857,7 @@
   }
 
   /* The sort marker: reserved width on every header so turning it on doesn't
-     shove the row sideways. */
+     shove the row sideways. Counted into every column width above. */
   th i {
     display: inline-block;
     width: 0.75rem;
@@ -853,14 +891,6 @@
 
   .unknown {
     opacity: 0.5;
-  }
-
-  /* The message is the widest column and the least urgent — it may run out
-     rather than force the nine fixed columns off-screen. */
-  .msg {
-    max-width: 26rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   .lotw {
@@ -897,11 +927,8 @@
   tr.masked td { opacity: 0.45; }
   tr.masked:hover td { opacity: 1; }
 
-  /* Sits beside the spot count, not in place of it — the operator needs
-     both numbers to read the screen. Muted ink, because this is
-     information about the view, not a condition to act on. */
-  /* Compact, and sized to sit in the filter row rather than dominate it —
-     it is a modifier on a tickbox, not a control in its own right. */
+  /* Compact, and sized to sit in the rail rather than dominate it — it is a
+     modifier on a tickbox, not a control in its own right. */
   .maskmode {
     font-size: 0.8rem;
     padding: 0.1rem 0.2rem;
@@ -928,8 +955,9 @@
     border-color: color-mix(in srgb, CanvasText 45%, Canvas);
   }
 
+  /* Sits beside the spot count, not in place of it — the operator needs both
+     numbers to read the screen. */
   .masked-count {
-    margin-left: 0.6rem;
     color: var(--muted);
     font-style: italic;
   }

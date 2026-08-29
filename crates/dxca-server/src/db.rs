@@ -222,17 +222,31 @@ pub struct NotifyUserConfig {
     // ("20M"), modes are award buckets ("CW"/"PHONE"/"DATA").
     pub notify_bands: Vec<String>,
     pub notify_modes: Vec<String>,
-    /// Ping only for spots a **human** typed, never a skimmer's.
-    ///
-    /// Off by default, so an existing account keeps behaving exactly as it
-    /// did. Stored in the notify JSON blob, so an old row without the key
-    /// simply deserializes to `false` — no migration.
-    ///
-    /// This is the Telegram half of the Spots screen's "Manual only", and
-    /// independent of it on purpose: the whole point of the split is to be
-    /// able to watch everything on screen while only being pinged for the
-    /// spots a person bothered to send.
+    /// LEGACY. Superseded by [`Self::notify_spotter_kind`], and kept only so
+    /// an account configured before the three-way control existed is adopted
+    /// rather than silently reset. Always written in step with the new field
+    /// (`true` exactly when the kind is `human`), so the adoption below can
+    /// never fire twice or fight a deliberate choice.
+    #[serde(default)]
     pub notify_manual_only: bool,
+
+    /// Who has to have made the spot for it to ping: `all`, `human` or
+    /// `skimmer`.
+    ///
+    /// Three-way rather than the old "manual only" boolean, which could only
+    /// ever take skimmers AWAY. Skimmers are most of the feed on a busy band,
+    /// so "wake me only for what the machines heard" is as real a request as
+    /// its opposite — a CW skimmer sweep is where a rare prefix usually
+    /// surfaces first.
+    ///
+    /// Defaults to EMPTY, not to `all`: empty means "this account predates the
+    /// field", which is what lets `notify_config` adopt the old boolean. A
+    /// saved config always carries a real value.
+    ///
+    /// The Telegram half of the Spots screen's "Spotted by", and independent
+    /// of it on purpose: watch everything on screen, be woken for one slice.
+    #[serde(default)]
+    pub notify_spotter_kind: String,
     /// Apply the phase-rotation band mask to Telegram alerts too.
     pub notify_respect_band_mask: bool,
 }
@@ -255,6 +269,7 @@ impl Default for NotifyUserConfig {
             notify_bands: Vec::new(),
             notify_modes: Vec::new(),
             notify_manual_only: false,
+            notify_spotter_kind: SPOTTER_ALL.into(),
             notify_respect_band_mask: false,
         }
     }
@@ -263,12 +278,18 @@ impl Default for NotifyUserConfig {
 impl NotifyUserConfig {
     /// Does this spot's band/mode survive the Telegram narrowing? Empty list
     /// = no narrowing on that axis.
-    /// Should a spot from a **skimmer** ping this account?
+    /// Should a spot with this provenance ping the account?
     ///
-    /// Narrows like `passes_band_mode`: `false` only when the operator has
-    /// asked for human spots and this one is a machine's.
-    pub fn passes_skimmer(&self, is_skimmer: bool) -> bool {
-        !(self.notify_manual_only && is_skimmer)
+    /// Narrows like `passes_band_mode`. An unrecognised kind — including the
+    /// empty string an unadopted config would carry — reads as `all`, so a
+    /// malformed value can never silence Telegram. Failing OPEN is the rule
+    /// throughout this gate: a suppressed alert is a spot never learned about.
+    pub fn passes_spotter(&self, is_skimmer: bool) -> bool {
+        match self.notify_spotter_kind.as_str() {
+            SPOTTER_HUMAN => !is_skimmer,
+            SPOTTER_SKIMMER => is_skimmer,
+            _ => true,
+        }
     }
 
     /// The band mask, applied to Telegram (`docs/PHASE-ROTATION-MASK.md`
@@ -348,10 +369,25 @@ pub struct SentAlert {
     /// for locally decoded spots, where `source` already names the receiver.
     #[serde(default)]
     pub spotter: String,
+    /// Signal-to-noise as reported, so the Alerts history can carry the same
+    /// dB column the spots feed does.
+    ///
+    /// `Option` rather than a plain integer with a default, because rows
+    /// written before this column existed genuinely have no reading — and 0 dB
+    /// is a real, rather good signal report. Storing 0 for "we never knew"
+    /// would put a plausible lie in the history; `None` renders as an em dash.
+    #[serde(default)]
+    pub snr_db: Option<i64>,
     pub delivered: bool,
     /// Telegram's complaint when `delivered` is false; empty otherwise.
     pub error: String,
 }
+
+/// The three answers to "who has to have made the spot". Named here so the
+/// gate, the validator and the adoption cannot drift from one another.
+pub const SPOTTER_ALL: &str = "all";
+pub const SPOTTER_HUMAN: &str = "human";
+pub const SPOTTER_SKIMMER: &str = "skimmer";
 
 /// `meta` key holding the MQTT destination list as a JSON array.
 const MQTT_DESTINATIONS: &str = "mqtt_destinations";
@@ -409,7 +445,8 @@ CREATE TABLE IF NOT EXISTS alerts_sent (
     source TEXT NOT NULL,
     delivered INTEGER NOT NULL,
     error TEXT NOT NULL DEFAULT '',
-    spotter TEXT NOT NULL DEFAULT ''
+    spotter TEXT NOT NULL DEFAULT '',
+    snr_db INTEGER
 );
 CREATE INDEX IF NOT EXISTS alerts_sent_user_time
     ON alerts_sent (user_id, time_unix DESC);
@@ -451,6 +488,11 @@ const ADDED_COLUMNS: &[(&str, &str, &str)] = &[
         "station_json",
         "station_json TEXT NOT NULL DEFAULT '{}'",
     ),
+    // Nullable with no default on purpose: every row already in the table was
+    // written without an SNR, and NULL is the only value that says so. A
+    // `DEFAULT 0` would silently claim every historical alert was a 0 dB
+    // report.
+    ("alerts_sent", "snr_db", "snr_db INTEGER"),
 ];
 
 /// Bring an existing database up to the current shape. Runs on every open;
@@ -686,8 +728,8 @@ impl Db {
         conn.execute(
             "INSERT INTO alerts_sent
                (user_id, time_unix, callsign, frequency_hz, mode, band,
-                dxcc_name, level, source, spotter, delivered, error)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                dxcc_name, level, source, spotter, snr_db, delivered, error)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             params![
                 user_id,
                 a.time_unix,
@@ -699,6 +741,7 @@ impl Db {
                 a.level,
                 a.source,
                 a.spotter,
+                a.snr_db,
                 a.delivered as i64,
                 a.error,
             ],
@@ -721,7 +764,8 @@ impl Db {
         let mut stmt = conn
             .prepare(
                 "SELECT time_unix, callsign, frequency_hz, mode, band,
-                        dxcc_name, level, source, spotter, delivered, error
+                        dxcc_name, level, source, spotter, snr_db,
+                        delivered, error
                  FROM alerts_sent WHERE user_id = ?1
                  ORDER BY time_unix DESC, id DESC LIMIT ?2",
             )
@@ -738,8 +782,9 @@ impl Db {
                     level: r.get(6)?,
                     source: r.get(7)?,
                     spotter: r.get(8)?,
-                    delivered: r.get::<_, i64>(9)? != 0,
-                    error: r.get(10)?,
+                    snr_db: r.get(9)?,
+                    delivered: r.get::<_, i64>(10)? != 0,
+                    error: r.get(11)?,
                 })
             })
             .map_err(db_err)?;
@@ -874,7 +919,20 @@ impl Db {
     }
 
     pub fn notify_config(&self, user_id: i64) -> DbResult<NotifyUserConfig> {
-        self.config_json(user_id, "notify_json")
+        let mut cfg: NotifyUserConfig = self.config_json(user_id, "notify_json")?;
+        // An account saved before the three-way control existed carries no
+        // `notify_spotter_kind` at all. Adopt what it DID say rather than
+        // resetting it to "all" — someone who asked for human spots only must
+        // not start being woken by skimmers because the control grew a third
+        // option.
+        if cfg.notify_spotter_kind.is_empty() {
+            cfg.notify_spotter_kind = if cfg.notify_manual_only {
+                SPOTTER_HUMAN.into()
+            } else {
+                SPOTTER_ALL.into()
+            };
+        }
+        Ok(cfg)
     }
 
     pub fn station_config(&self, user_id: i64) -> DbResult<StationConfig> {
@@ -885,7 +943,16 @@ impl Db {
         self.set_config_json(user_id, "station_json", cfg)
     }
 
+    /// Writes both the new field and the legacy boolean, in step. Keeping
+    /// them consistent is what stops the adoption in `notify_config` from
+    /// re-firing and overriding a deliberate `all` or `skimmer`.
     pub fn set_notify_config(&self, user_id: i64, cfg: &NotifyUserConfig) -> DbResult<()> {
+        let mut cfg = cfg.clone();
+        if cfg.notify_spotter_kind.is_empty() {
+            cfg.notify_spotter_kind = SPOTTER_ALL.into();
+        }
+        cfg.notify_manual_only = cfg.notify_spotter_kind == SPOTTER_HUMAN;
+        let cfg = &cfg;
         self.set_config_json(user_id, "notify_json", cfg)
     }
 
@@ -1108,15 +1175,69 @@ mod tests {
     }
 
     #[test]
-    fn manual_only_narrows_skimmers_and_nothing_else() {
+    fn spotter_kind_narrows_in_both_directions_and_fails_open() {
         let mut n = NotifyUserConfig::default();
-        // Off by default: every spot passes, machine or not.
-        assert!(n.passes_skimmer(true));
-        assert!(n.passes_skimmer(false));
+        // `all` by default: every spot passes, machine or not.
+        assert!(n.passes_spotter(true));
+        assert!(n.passes_spotter(false));
 
-        n.notify_manual_only = true;
-        assert!(!n.passes_skimmer(true), "a skimmer spot is held back");
-        assert!(n.passes_skimmer(false), "a human's still pings");
+        n.notify_spotter_kind = SPOTTER_HUMAN.into();
+        assert!(!n.passes_spotter(true), "a skimmer spot is held back");
+        assert!(n.passes_spotter(false), "a human's still pings");
+
+        // The direction the old boolean could not express.
+        n.notify_spotter_kind = SPOTTER_SKIMMER.into();
+        assert!(n.passes_spotter(true), "only the machines now");
+        assert!(!n.passes_spotter(false), "a human's is held back");
+
+        // Anything unrecognised must FAIL OPEN. A suppressed Telegram is a
+        // spot never learned about, so a bad value may not silence the gate.
+        n.notify_spotter_kind = "nonsense".into();
+        assert!(n.passes_spotter(true));
+        assert!(n.passes_spotter(false));
+        n.notify_spotter_kind = String::new();
+        assert!(n.passes_spotter(true), "an unadopted config pings for everything");
+    }
+
+    #[test]
+    /// The upgrade path: an account configured with the OLD boolean must keep
+    /// behaving as it did. Silently resetting it to `all` would start waking
+    /// the operator for the skimmer spam they had explicitly turned off.
+    fn a_config_predating_the_field_adopts_the_old_manual_only_flag() {
+        let (db, _p) = temp_db();
+        let uid = db.create_user("VU2CPL", "h", "", "admin").unwrap();
+
+        // Written the way an older build would have: manual_only, no kind.
+        db.set_config_json(
+            uid,
+            "notify_json",
+            &serde_json::json!({ "telegram_enabled": true, "notify_manual_only": true }),
+        )
+        .unwrap();
+        let cfg = db.notify_config(uid).unwrap();
+        assert_eq!(cfg.notify_spotter_kind, SPOTTER_HUMAN, "adopted, not reset");
+        assert!(!cfg.passes_spotter(true), "and it still holds skimmers back");
+
+        // The same for an account that never set it: `all`, not `human`.
+        let other = db.create_user("K1ABC", "h", "", "user").unwrap();
+        db.set_config_json(other, "notify_json", &serde_json::json!({}))
+            .unwrap();
+        assert_eq!(
+            db.notify_config(other).unwrap().notify_spotter_kind,
+            SPOTTER_ALL
+        );
+
+        // And a deliberate choice must survive a round trip — the adoption
+        // may not re-fire and drag it back to `human`.
+        let mut cfg = db.notify_config(uid).unwrap();
+        cfg.notify_spotter_kind = SPOTTER_ALL.into();
+        db.set_notify_config(uid, &cfg).unwrap();
+        let back = db.notify_config(uid).unwrap();
+        assert_eq!(back.notify_spotter_kind, SPOTTER_ALL, "the choice sticks");
+        assert!(
+            !back.notify_manual_only,
+            "and the legacy flag was written in step, so adoption cannot re-fire"
+        );
     }
 
     #[test]
@@ -1172,7 +1293,7 @@ mod tests {
     /// OLD alerts_sent shape, opens it through `Db::open`, and checks the
     /// column arrives with existing rows intact.
     #[test]
-    fn opening_an_old_database_adds_the_spotter_column_without_losing_rows() {
+    fn opening_an_old_database_adds_the_new_columns_without_losing_rows() {
         // Unique per run: a previous failure leaves the directory behind
         // (the panic skips the cleanup at the end), and reusing the path
         // would then fail with "table users already exists" — masking the
@@ -1186,7 +1307,8 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("dxca.db");
 
-        // A pre-migration database, written by hand: no `spotter` column.
+        // A pre-migration database, written by hand: no `spotter` column and
+        // no `snr_db` either, so this fixture covers both additions.
         {
             let conn = Connection::open(&path).unwrap();
             conn.execute_batch(
@@ -1219,6 +1341,12 @@ mod tests {
         assert_eq!(rows.len(), 1, "the existing row survives");
         assert_eq!(rows[0].callsign, "OLDCALL");
         assert_eq!(rows[0].spotter, "", "back-filled with the default");
+        // NULL, not 0: the row was written before anyone recorded an SNR, and
+        // 0 dB is a real report. The UI renders None as an em dash.
+        assert_eq!(
+            rows[0].snr_db, None,
+            "a pre-migration row must not claim a 0 dB report"
+        );
 
         // And a new row round-trips the spotter.
         db.record_sent_alert(
@@ -1233,6 +1361,7 @@ mod tests {
                 level: "newDXCC".into(),
                 source: "N2WQ-2".into(),
                 spotter: "VU2XYZ".into(),
+                snr_db: Some(-11),
                 delivered: true,
                 error: String::new(),
             },
@@ -1240,6 +1369,7 @@ mod tests {
         .unwrap();
         let rows = db.sent_alerts(1, 10).unwrap();
         assert_eq!(rows[0].spotter, "VU2XYZ", "newest first");
+        assert_eq!(rows[0].snr_db, Some(-11), "and the SNR round-trips");
 
         // Idempotent: opening again must not try to add it twice.
         drop(db);
@@ -1264,6 +1394,7 @@ mod tests {
             level: "newDXCC".into(),
             source: "VU2OY".into(),
             spotter: String::new(),
+            snr_db: Some(-7),
             delivered,
             error: error.into(),
         };

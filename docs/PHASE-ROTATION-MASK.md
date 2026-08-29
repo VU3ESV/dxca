@@ -174,10 +174,10 @@ it saves a lookup, and an operator who has never typed their locator into
 DXCA has certainly typed it into their logger.
 
 **The grey-line window lives beside the locator**, as a stepper defaulting
-to 45 minutes, bounded to 5–180 and **refused rather than clamped** outside
+to 45 minutes, bounded to 5–360 and **refused rather than clamped** outside
 that: silently changing a number the operator typed is how they stop trusting
 the screen. Below 5 minutes the grey line is too narrow to be a phase; above
-180 it stops being a grey line and starts being most of the day, at which
+360 it stops being a grey line and starts being most of the day, at which
 point the mask is saying nothing.
 
 **6-character precision is pointless here** and 4 is plenty: a grid square
@@ -244,7 +244,8 @@ both, use what is given, do not ask for more.
    default, remembered per browser in `localStorage`. It appears **only once
    a locator is set** — without one the server sends no advice, and a
    permanently dead checkbox is worse than no checkbox. The route to it is
-   the note beside the Locator field on My ClubLog, which names the feature.
+   the note beside the Locator field in Settings › My station, which names
+   the feature.
 
    Masked rows are **dimmed to 45% and restored in full on hover**. That
    hover rule is the safety valve made physical: a receded row is always one

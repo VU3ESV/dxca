@@ -1,24 +1,57 @@
 <script lang="ts">
-  // What the feed is made of: one headline number and three breakdowns.
+  // Stats: two segments, two different questions.
   //
-  // **Bars, not pie charts.** The job here is magnitude comparison — "which
-  // band carries most of my spots" — across up to fifteen categories with
-  // long names like "UberSDR CWskim". A pie with fifteen slices is
-  // unreadable and cannot hold its own labels; horizontal bars compare
-  // exactly, sort meaningfully, and leave room for the text.
+  // **Feed** — what the spot ring is made of right now. **ClubLog** — what your
+  // log holds. They are under one tab because "how am I doing" is one errand,
+  // and behind a segmented control rather than stacked because they count
+  // completely different things and must not be mistaken for one dataset: one
+  // counts spots in a rolling window, the other counts DXCC entities since
+  // 1945.
   //
-  // Each chart is a SINGLE series, so there is no legend: the heading names
-  // it, and colour carries no meaning beyond "this is the bar". Fifteen
-  // different hues for fifteen bands would be encoding identity that the
-  // labels already carry, and would fail on colour-vision grounds for
-  // nothing in return.
-  import { api } from '../lib/api';
+  // The ClubLog half used to be the bottom of the My ClubLog tab, under the
+  // same Save button as the credentials that fetch it. Those went to Settings;
+  // this is the reading that was left.
+  //
+  // **Bars, not pie charts.** The job on the feed side is magnitude comparison
+  // — "which band carries most of my spots" — across up to fifteen categories
+  // with long names like "UberSDR CWskim". A pie with fifteen slices is
+  // unreadable and cannot hold its own labels; horizontal bars compare exactly,
+  // sort meaningfully, and leave room for the text.
+  //
+  // Each chart is a SINGLE series, so there is no legend: the heading names it,
+  // and colour carries no meaning beyond "this is the bar".
+  import { api, ago } from '../lib/api';
   import { onMount } from 'svelte';
+  import HelpTip from '../lib/HelpTip.svelte';
+  import { awards, pick, canFilter } from '../lib/awards.svelte';
 
+  // Which half is showing. Persisted per browser, because the segmented
+  // control turned out to be easy to miss entirely: the page lands on the feed
+  // charts, and an operator who came looking for their log statistics saw
+  // three bar charts and concluded the table had been lost in the rework.
+  // Remembering the choice means it has to be found once, not every visit.
+  const SEG_KEY = 'dxca.statsseg';
+  function restoreSeg(): 'feed' | 'clublog' {
+    try {
+      return localStorage.getItem(SEG_KEY) === 'clublog' ? 'clublog' : 'feed';
+    } catch {
+      return 'feed';
+    }
+  }
+  let seg = $state<'feed' | 'clublog'>(restoreSeg());
+  $effect(() => {
+    try {
+      localStorage.setItem(SEG_KEY, seg);
+    } catch {
+      // Private mode / storage disabled — the switch still works this session.
+    }
+  });
+
+  // --- Feed ------------------------------------------------------------------
   let stats = $state<any>(null);
   let error = $state('');
 
-  async function load() {
+  async function loadFeed() {
     const r = await api('GET', '/api/spot-stats');
     if (r.status === 200) {
       stats = r.json;
@@ -29,10 +62,11 @@
   }
 
   onMount(() => {
-    load();
+    loadFeed();
+    loadStation();
     // The ring turns over in under an hour on a busy feed, so a static
     // snapshot goes stale while you look at it.
-    const t = setInterval(load, 15000);
+    const t = setInterval(loadFeed, 15000);
     return () => clearInterval(t);
   });
 
@@ -55,68 +89,231 @@
     if (m < 90) return `about ${m} min`;
     return `about ${(m / 60).toFixed(1)} hours`;
   }
+
+  // --- ClubLog ---------------------------------------------------------------
+  // The same endpoint the Spots station line uses, so the two can never
+  // disagree about what the log holds.
+  let station = $state<any>(null);
+  async function loadStation() {
+    const r = await api('GET', '/api/me/station');
+    if (r.status === 200) station = r.json;
+  }
+  // Both screens read the same shared preference, so the totals here and the
+  // station line on Spots can never disagree about which entities count.
+  let shownStats = $derived(station ? pick(station.stats, station.stats_current) : null);
+  let shownBandMode = $derived(
+    station ? pick(station.by_band_mode, station.by_band_mode_current) : null,
+  );
 </script>
 
 <div class="page narrow">
-  {#if error}
-    <div class="card"><p class="err">{error}</p></div>
-  {:else if !stats}
-    <div class="card"><p class="hint">Counting…</p></div>
-  {:else}
-    <!-- The headline is a number, not a chart: one value has no shape to
-         plot, and a gauge or a single-slice pie would be decoration. -->
-    <div class="card total-card">
-      <div class="total">
-        <span class="num">{stats.total.toLocaleString()}</span>
-        <span class="cap">spots held</span>
-      </div>
-      <p class="hint">
-        <!-- {' '} rather than a literal space: Svelte trims the leading
-             whitespace of a block's content wherever it is written, so both
-             "memory{#if}\n — about" and "memory{#if} — about" render as
-             "memory— about". An explicit expression is the only form that
-             survives, and the space cannot move outside the block — it
-             would leave "memory ." on an instance with no span yet. -->
-        Everything DXCA currently has in memory{#if stats.span_secs}{' '}—
-          {span(stats.span_secs)} of feed{/if}. The ring keeps the most
-        recent spots and discards the oldest, so this is a window, not a
-        running total since startup.
-      </p>
+  <div class="segrow">
+    <!-- Labelled, because unlabelled it read as decoration rather than as the
+         switch between two different datasets. -->
+    <span class="seglabel">Statistics for</span>
+    <div class="segmented" role="tablist" aria-label="Which statistics">
+      <button role="tab" aria-selected={seg === 'feed'} class:active={seg === 'feed'} onclick={() => (seg = 'feed')}
+        >The spot feed</button
+      >
+      <button role="tab" aria-selected={seg === 'clublog'} class:active={seg === 'clublog'} onclick={() => (seg = 'clublog')}
+        >My ClubLog</button
+      >
     </div>
+    <HelpTip label="Two kinds of statistic">
+      <span class="para">
+        <b>Feed</b> counts the spots DXCA is holding in memory right now — a
+        rolling window, shared by every account on this server.
+      </span>
+      <span class="para">
+        <b>ClubLog</b> counts DXCC entities in <em>your</em> log since 1945.
+        Different units, different scope: they are never added together, which
+        is why they sit behind a switch rather than on one page.
+      </span>
+    </HelpTip>
+  </div>
 
-    {#each [{ title: 'By band', hue: 'band', rows: stats.bands, note: 'In band order, not by count — this reads as a band plan.' }, { title: 'By mode', hue: 'mode', rows: stats.modes, note: 'As reported by the decoder or the spot comment, so FT8 and FT4 stay apart.' }, { title: 'By source', hue: 'source', rows: stats.sources, note: 'The feed that carried the spot — a decoder here, or the cluster node that relayed it.' }] as group (group.title)}
-      <div class="card" data-hue={group.hue}>
-        <h2>{group.title}</h2>
-        <p class="hint sub">{group.note}</p>
-        {#if !group.rows.length}
-          <p class="hint">Nothing yet.</p>
-        {:else}
-          <div class="bars">
-            {#each group.rows as row (row.key)}
-              <div class="row">
-                <span
-                  class="key"
-                  title="{row.key}: {row.count} spots ({pct(row.count, stats.total)}% of the ring)"
-                  >{row.key}</span
-                >
-                <span class="track">
-                  <span
-                    class="bar"
-                    style="width: {(row.count / peak(group.rows)) * 100}%"
-                  ></span>
-                </span>
-                <span class="val mono">{row.count.toLocaleString()}</span>
-                <span class="share mono">{pct(row.count, stats.total)}%</span>
-              </div>
-            {/each}
-          </div>
+  {#if seg === 'feed'}
+    {#if error}
+      <div class="card"><p class="err">{error}</p></div>
+    {:else if !stats}
+      <div class="card"><p class="hint">Counting…</p></div>
+    {:else}
+      <!-- The headline is a number, not a chart: one value has no shape to
+           plot, and a gauge or a single-slice pie would be decoration. -->
+      <div class="card total-card">
+        <div class="total">
+          <span class="num">{stats.total.toLocaleString()}</span>
+          <span class="cap">
+            spots held
+            <HelpTip label="Spots held">
+              Everything DXCA currently has in memory. The ring keeps the most
+              recent spots and discards the oldest, so this is a window, not a
+              running total since startup.
+            </HelpTip>
+          </span>
+        </div>
+        <!-- The one thing here that is a READING rather than an explanation —
+             how much feed the ring is currently holding. On a freshly started
+             instance there is no span yet and the line is absent entirely,
+             rather than claiming "about 0 min of feed". -->
+        {#if stats.span_secs}
+          <p class="hint">{span(stats.span_secs)} of feed</p>
         {/if}
       </div>
-    {/each}
+
+      {#each [{ title: 'By band', hue: 'band', rows: stats.bands, note: 'In band order, not by count — this reads as a band plan.' }, { title: 'By mode', hue: 'mode', rows: stats.modes, note: 'As reported by the decoder or the spot comment, so FT8 and FT4 stay apart.' }, { title: 'By source', hue: 'source', rows: stats.sources, note: 'The feed that carried the spot — a decoder here, or the cluster node that relayed it.' }] as group (group.title)}
+        <div class="card" data-hue={group.hue}>
+          <h2>
+            {group.title}
+            <HelpTip label={group.title}>{group.note}</HelpTip>
+          </h2>
+          {#if !group.rows.length}
+            <p class="hint">Nothing yet.</p>
+          {:else}
+            <div class="bars">
+              {#each group.rows as row (row.key)}
+                <div class="row">
+                  <span
+                    class="key"
+                    title="{row.key}: {row.count} spots ({pct(row.count, stats.total)}% of the ring)"
+                    >{row.key}</span
+                  >
+                  <span class="track">
+                    <span class="bar" style="width: {(row.count / peak(group.rows)) * 100}%"></span>
+                  </span>
+                  <span class="val mono">{row.count.toLocaleString()}</span>
+                  <span class="share mono">{pct(row.count, stats.total)}%</span>
+                </div>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/each}
+    {/if}
+  {:else if station?.stats}
+    <!-- Every number is entities, not QSOs, because that is what the awards
+         count — and worked sits beside confirmed throughout, since the gap
+         between them IS the QSL chase. -->
+    <div class="card">
+      <h2>Log statistics</h2>
+      <p class="hint sub">
+        {station.qso_count ?? 0} QSOs
+        {#if station.log_callsign}for <b>{station.log_callsign}</b>{/if}
+        {#if station.last_refresh_unix}· refreshed {ago(station.last_refresh_unix)} ago{/if}
+      </p>
+
+      {#if canFilter(station.stats_current)}
+        <label
+          class="include-deleted"
+          title="Totals count current DXCC entities by default, matching the ARRL standings. Tick to add the 62 deleted entities — Abu Ail, Blenheim Reef, British North Borneo and the rest. Those QSOs are in your log either way; they just score nothing."
+        >
+          <input type="checkbox" bind:checked={awards.includeDeleted} />include deleted entities
+        </label>
+      {/if}
+
+      <dl class="stats">
+        <div><dt>DXCC worked</dt><dd class="num">{shownStats.dxcc_worked}</dd></div>
+        <div><dt>DXCC confirmed</dt><dd class="num ok-num">{shownStats.dxcc_confirmed}</dd></div>
+        <div><dt>Challenge worked</dt><dd class="num">{shownStats.challenge_worked}</dd></div>
+        <div><dt>Challenge confirmed</dt><dd class="num ok-num">{shownStats.challenge_confirmed}</dd></div>
+        <div><dt>Slots worked</dt><dd class="num">{shownStats.slots_worked}</dd></div>
+        <div><dt>Slots confirmed</dt><dd class="num ok-num">{shownStats.slots_confirmed}</dd></div>
+      </dl>
+    </div>
+
+    {#if shownBandMode}
+      <div class="card">
+        <h2>
+          Entities per band
+          <HelpTip label="Entities per band">
+            Counts are <b>entities</b>, not QSOs: a band's figure is how many
+            DXCC entities you have at least one contact with there. A zero is
+            left visible — an empty band is the most useful row here.
+          </HelpTip>
+        </h2>
+        <!-- Sixteen columns; it scrolls inside the card rather than widening
+             the page, the same rule the Settings editors follow. -->
+        <div class="editor-scroll">
+          <table class="slices">
+            <thead>
+              <tr>
+                <th>Band</th>
+                {#each shownBandMode.bands as b (b.key)}<th class="num">{b.key}</th>{/each}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Worked</td>
+                {#each shownBandMode.bands as b (b.key)}
+                  <td class="num" class:zero={!b.worked}>{b.worked}</td>
+                {/each}
+              </tr>
+              <tr>
+                <td>Confirmed</td>
+                {#each shownBandMode.bands as b (b.key)}
+                  <td class="num ok-num" class:zero={!b.confirmed}>{b.confirmed}</td>
+                {/each}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 class="sub-head">
+          Entities per mode
+          <HelpTip label="Entities per mode">
+            Counted the same way as the band table — <b>entities</b>, not QSOs.
+            Digital modes share one DATA bucket, matching the DXCC award rules.
+          </HelpTip>
+        </h2>
+        <table class="slices">
+          <thead>
+            <tr>
+              <th>Mode</th>
+              {#each shownBandMode.modes as m (m.key)}<th class="num">{m.key}</th>{/each}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Worked</td>
+              {#each shownBandMode.modes as m (m.key)}
+                <td class="num" class:zero={!m.worked}>{m.worked}</td>
+              {/each}
+            </tr>
+            <tr>
+              <td>Confirmed</td>
+              {#each shownBandMode.modes as m (m.key)}
+                <td class="num ok-num" class:zero={!m.confirmed}>{m.confirmed}</td>
+              {/each}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    {/if}
+  {:else}
+    <div class="card">
+      <h2>Log statistics</h2>
+      <p class="hint">
+        No log loaded yet. Set your ClubLog credentials in
+        <b>Settings › My station › ClubLog account</b> and press
+        <b>Refresh log now</b> — the statistics appear here once it downloads.
+      </p>
+    </div>
   {/if}
 </div>
 
 <style>
+  .segrow {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .seglabel {
+    font-size: var(--fs-hint);
+    color: var(--muted);
+  }
+
   .total-card {
     display: flex;
     flex-direction: column;
@@ -189,7 +386,7 @@
   }
 
   /* One hue per CHART, not per bar.
-     
+
      Colour here answers "which breakdown am I reading", which is real if
      modest information; fifteen hues for fifteen bands would encode
      identity the labels already carry, and would fail on colour-vision
@@ -200,10 +397,7 @@
      Band and the app accent, and green is the `ok` status — an orange bar
      in here would read as "New Slot". Teal, violet and pink are what is
      left, and each was run through the palette validator rather than
-     picked by eye: light steps clear the chroma floor and 3:1 contrast on
-     a light surface, and dark mode gets its OWN steps (a flipped palette
-     lands outside the lightness band, which is exactly what the validator
-     is for). */
+     picked by eye. */
   [data-hue='band'] {
     --series: light-dark(#0891b2, #22a7b3);
   }
@@ -229,7 +423,7 @@
   /* The heading wears its chart's hue as a small marker, so the colour is
      tied to a name rather than floating free. The heading TEXT stays in
      the ordinary ink — text never wears the series colour. */
-  .card h2::before {
+  .card[data-hue] h2::before {
     content: '';
     display: inline-block;
     width: 8px;
@@ -254,8 +448,79 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* --- The ClubLog segment --- */
+  .include-deleted {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin: -0.2rem 0 0.7rem;
+    color: var(--muted);
+    font-size: 0.78rem;
+    cursor: pointer;
+  }
+
+  .sub-head {
+    margin: 1.25rem 0 0.5rem;
+    font-size: 0.95rem;
+  }
+
+  .stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.9rem 2rem;
+    margin: 0;
+  }
+
+  .stats dt {
+    font-size: var(--fs-hint);
+    color: var(--muted);
+  }
+
+  .stats dd {
+    margin: 0.1rem 0 0;
+    font-size: 1.05rem;
+  }
+
+  .stats dd.num {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .slices {
+    width: auto;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .slices th,
+  .slices td {
+    padding: 0.2rem 0.75rem 0.2rem 0;
+    white-space: nowrap;
+  }
+
+  .slices .num {
+    text-align: right;
+  }
+
+  /* Confirmed is the number that counts for an award, so it reads as the
+     positive one; worked beside it is the chase still open. */
+  .ok-num {
+    color: var(--accent);
+  }
+
+  /* A zero is deliberately quiet but present: an empty band is information,
+     and blanking it would hide the gap worth working. */
+  .zero {
+    opacity: 0.35;
+  }
+
+  /* Sits between the card title and what it describes, so it takes the gap
+     rather than adding one. */
   .sub {
     margin: -0.35rem 0 0.7rem;
     line-height: 1.45;
+    max-width: 34rem;
+  }
+
+  p {
+    margin: 0.75rem 0 0;
   }
 </style>
