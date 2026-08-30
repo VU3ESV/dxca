@@ -1007,9 +1007,31 @@ Against VU2CPL's real log it reports three, all `V55DX` in 2016 — invalid
 from 2016-01-01 onwards — and all three were already uncounted, because
 ClubLog exports them with no DXCC field. Totals unchanged, but now visible.
 
-**The next refresh on `adersh@192.168.1.151` prints the ZL8AC line with its
-date.** That is the outstanding question: `journalctl -u dxca | grep "no DXCC
-credit"`.
+**It ran, and the answer is `ZL8AC 20220927 011545Z 40M FT8` — 27 September
+2022 at 0115Z.** Manoj says no such QSO exists in his log; the date is what he
+now has to check it against. DXCA read it out of the ADIF ClubLog served, and
+cannot have put it there (two endpoints, both reads).
+
+**VU24DX has 18 uncredited contacts, and all 18 stand up to inspection:**
+
+- **6 × EP3FS** — a ClubLog `<exception>` mapping the call to **adif 0**, a
+  non-DX operation, from 2016-03-13 onwards, and on the invalid list too.
+- **11 whitelist rejections, 9 of them Iranian.** Iran is whitelisted from
+  2019-01-01 precisely because of its history of unlicensed operations, and
+  EP3GMR / EP3IXF / EP5JMS / EP2ACH / EP5HD have no exception record at all.
+  EP7AAD *is* listed — but only from 2024-06-16, and the QSO is 2022.
+- **T31TTT 2023-09-22** — listed for Central Kiribati only for
+  2026-03-27..06-03. A different, uncredited use of the call two and a half
+  years earlier, not a boundary artifact.
+- **ZL8AC**, the original.
+
+**The validation that matters: 313 worked and 307 confirmed, both matching
+ClubLog exactly, and `slots_confirmed` unchanged at 2,647 — not one confirmed
+QSO was rejected.** That is the false-rejection tell from the Wake Island
+case, and it reads clean. `slots_worked` fell 2,973 → 2,971: Kermadec's
+40M-DATA (the entity went with it) and Central Kiribati's 10M-DATA (the 2023
+T31TTT). Iran lost no slot — every EP rejection sat on a band/mode already
+held by a whitelisted call.
 
 **What was ruled out first, and the method is worth keeping.** Before adding
 anything: `zl8ac` is at line 22,079 of the stored `workedCalls` (an exact
