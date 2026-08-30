@@ -70,30 +70,55 @@ pub struct FlexSpot {
     pub lifetime_secs: u64,
 }
 
+/// The radio's comment field, in characters.
+pub const COMMENT_MAX: usize = 20;
+
 /// Space-free, and short enough for the radio's comment field.
 ///
-/// Whitespace to `_` and clipped to 20 **characters** — the Node-RED flow's
-/// `.replace(/\s+/g,'_').substring(0,20)`. Byte-slicing would panic on a
-/// multi-byte boundary, which a callsign will not produce but a comment
-/// might once entity names are in play.
+/// Whitespace to `_` and clipped to `max` **characters** — the Node-RED
+/// flow's `.replace(/\s+/g,'_').substring(0,20)`. Byte-slicing would panic
+/// on a multi-byte boundary, which a callsign will not produce but an entity
+/// name might.
 fn sanitize(s: &str, max: usize) -> String {
     let mut out = String::with_capacity(s.len());
+    let mut kept = 0usize;
     let mut last_was_us = false;
     for ch in s.chars() {
+        if kept >= max {
+            break;
+        }
         if ch.is_whitespace() {
             if !last_was_us {
                 out.push('_');
                 last_was_us = true;
+                kept += 1;
             }
         } else {
             out.push(ch);
             last_was_us = false;
-        }
-        if out.chars().count() >= max {
-            break;
+            kept += 1;
         }
     }
     out
+}
+
+/// The comment for one alert: `"<level> <entity>"` when it fits, otherwise
+/// the **entity alone**.
+///
+/// Twenty characters is not many, and "NEW DXCC DPRK (NORTH KOREA)" clipped
+/// to fit reads `NEW_DXCC_DPRK_(NORTH` — the level twice over (the colour
+/// already says it) and the entity cut mid-word. When both will not fit, the
+/// entity is the half worth keeping.
+pub fn comment_for(level_label: &str, entity: Option<&str>) -> String {
+    let Some(entity) = entity.filter(|e| !e.is_empty()) else {
+        return level_label.to_string();
+    };
+    let both = format!("{level_label} {entity}");
+    if sanitize(&both, usize::MAX).chars().count() <= COMMENT_MAX {
+        both
+    } else {
+        entity.to_string()
+    }
 }
 
 /// Build one `spot add` command, newline-terminated.
@@ -107,7 +132,7 @@ pub fn spot_command(seq: u64, s: &FlexSpot) -> String {
         s.freq_mhz,
         sanitize(&s.callsign, 32),
         sanitize(&s.mode, 16),
-        sanitize(&s.comment, 20),
+        sanitize(&s.comment, COMMENT_MAX),
         sanitize(&s.spotter, 32),
         s.timestamp_unix,
         sanitize(&s.color, 16),
@@ -218,6 +243,18 @@ fn dial(target: &str) -> Option<TcpStream> {
     };
     let _ = stream.set_write_timeout(Some(WRITE_TIMEOUT));
     let _ = stream.set_nodelay(true);
+    // NOTHING is sent on connect. `C1|client program DXCA` was tried against
+    // the real radio and refused — `R1|10000002|unknown client program`, so
+    // SmartSDR validates the name against a list it knows rather than taking
+    // any string. A rejected command every reconnect buys nothing, so the
+    // handshake stays empty, which is also what the Node-RED flow this was
+    // ported from always did.
+    //
+    // `client gui` is the command that would claim a station and its slices.
+    // DXCA never sends it, never parses the handle the radio offers, and
+    // issues nothing but `spot add`. A passive connect was checked against
+    // the radio and creates nothing: `slices=3` in its greeting was Aether's,
+    // already there.
     // The drain. Without it the radio's continuous status stream fills our
     // receive buffer and blocks its sends — see the module docs.
     if let Ok(reader) = stream.try_clone() {
@@ -354,11 +391,48 @@ mod tests {
             .recv_timeout(Duration::from_secs(5))
             .expect("second should reuse the same session");
 
+        // The FIRST thing on the wire is a spot — nothing is sent on
+        // connect, and `client gui` in particular is never sent, because
+        // that is the command that would claim a station.
         assert!(first.starts_with("C7001|spot add "), "{first}");
+        assert!(!first.contains("client"), "no handshake: {first}");
         assert!(first.contains("callsign=3Y0J"), "{first}");
         assert!(second.starts_with("C7002|"), "sequence advances: {second}");
         assert_eq!(client.counters.sent.load(Ordering::Relaxed), 2);
         assert_eq!(client.counters.failed.load(Ordering::Relaxed), 0);
+    }
+
+    /// Twenty characters is not many. When level and entity both fit, both
+    /// go; when they do not, the entity wins, because the spot's colour has
+    /// already said which level it is.
+    #[test]
+    fn the_comment_prefers_the_entity_over_the_level() {
+        // Fits: 8 + 1 + 6 = 15.
+        assert_eq!(comment_for("NEW DXCC", Some("Bouvet")), "NEW DXCC Bouvet");
+
+        // Does not: the real case that prompted this — the old behaviour
+        // rendered `NEW_DXCC_DPRK_(NORTH`, saying the level twice and cutting
+        // the entity mid-word.
+        assert_eq!(
+            comment_for("NEW DXCC", Some("DPRK (NORTH KOREA)")),
+            "DPRK (NORTH KOREA)"
+        );
+        // ...and on the wire that is the whole entity, not a fragment.
+        let s = sanitize(
+            &comment_for("NEW DXCC", Some("DPRK (NORTH KOREA)")),
+            COMMENT_MAX,
+        );
+        assert_eq!(s, "DPRK_(NORTH_KOREA)");
+
+        // No entity at all: the level is all there is to say.
+        assert_eq!(comment_for("NEW DXCC", None), "NEW DXCC");
+        assert_eq!(comment_for("NEW DXCC", Some("")), "NEW DXCC");
+
+        // An entity too long even alone is still clipped by `spot_command`,
+        // and clipped entity beats clipped level-plus-entity.
+        let long = comment_for("? Slot", Some("SOUTH SANDWICH ISLANDS"));
+        assert_eq!(long, "SOUTH SANDWICH ISLANDS");
+        assert_eq!(sanitize(&long, COMMENT_MAX), "SOUTH_SANDWICH_ISLAN");
     }
 
     /// A radio that is not there must not panic, block, or lose the client —

@@ -1047,6 +1047,25 @@ alerts directly and Aether pushing every cluster spot, each alert would land
 twice. The panadapter now shows alerts only — sparse and high-signal. Aether
 stays the SmartSDR client, just not the spot source.
 
+**Checked against the real radio, twice, and both checks changed the code.**
+A passive connect showed the greeting — `V1.4.0.0`, a handle, `M…|Client
+connected from IP`, then `S<handle>|radio slices=3 panadapters=3` — proving
+no slice is claimed (that 3 was Aether's) and measuring the status stream at
+**1,424 bytes in six idle seconds**, which is the drain justified rather than
+theorised. Then `C1|client program DXCA` was tried and **refused**:
+`R1|10000002|unknown client program`. SmartSDR validates the name against a
+list it knows, so the handshake stays empty — which is what the Node-RED flow
+always did, now for a recorded reason. A test asserts the first line on the
+wire contains no `client` command at all, so `client gui` cannot creep in.
+
+The dummy spot went through on the first try: `R7001|0|4328` — code 0,
+spot index 4328, P5ABC on 28.095 in red on the panadapter.
+
+**Comments prefer the entity.** `NEW DXCC DPRK (NORTH KOREA)` clipped to 20
+read `NEW_DXCC_DPRK_(NORTH` — the level twice (the colour says it already)
+and the entity cut mid-word. `flex::comment_for` now drops the label when
+both will not fit, giving `DPRK_(NORTH_KOREA)` whole.
+
 **Tested against a real socket, not just as a string.** `TcpListener` on an
 ephemeral port, a stand-in radio that talks first and never stops, asserting
 connect, write, session reuse across two spots, and the sequence advancing —

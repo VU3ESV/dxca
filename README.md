@@ -824,7 +824,12 @@ Three things worth knowing about the implementation:
 - **No value may contain a space.** The command is space-delimited
   `key=value`, so a comment with a space in it truncates the command and the
   radio parses the rest as nonsense. Comments are underscored and clipped to
-  20 characters.
+  20 characters — and where level and entity will not both fit, the **entity
+  wins**, since the colour has already said which level it is.
+- **Nothing is sent on connect.** `client program` was tried against a real
+  radio and refused (`unknown client program`), so the handshake stays empty.
+  `client gui` — the command that claims a station and its slices — is never
+  sent, so DXCA cannot capture a slice.
 
 ### Telnet login (optional, off by default)
 

@@ -472,13 +472,10 @@ impl UserService {
                 .or_insert_with(|| Arc::new(flex::FlexClient::connect(&notify.flex_host, port)))
                 .clone()
         };
-        // "NEW DXCC · Bouvet" would lose everything after the first space on
-        // the wire; `FlexSpot` sanitises, and the label is built to survive
-        // the 20-character clip with the entity still legible.
-        let comment = match &c.dxcc_name {
-            Some(name) if !name.is_empty() => format!("{} {}", c.level.label(), name),
-            _ => c.level.label().to_string(),
-        };
+        // Level plus entity when they fit in the radio's 20 characters, the
+        // entity alone when they do not — the colour already says which
+        // level it is, so the entity is the half worth keeping.
+        let comment = flex::comment_for(c.level.label(), c.dxcc_name.as_deref());
         let minutes = if notify.flex_lifetime_minutes == 0 {
             20
         } else {
