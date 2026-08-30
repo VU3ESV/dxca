@@ -1,23 +1,53 @@
 <script lang="ts">
-  // Settings › Server › Spot outputs — every way a spot leaves DXCA.
+  // Settings › Server › Destinations — every way a spot leaves DXCA.
   //
-  // Renamed from "Broadcast destinations": nothing here broadcasts, they are
-  // unicast UDP sends and MQTT publishes, and "outputs" pairs with the UDP
-  // sources and cluster nodes above, which are where spots come IN.
+  // Three kinds, one question: where do spots go out. UDP sends, MQTT
+  // publishes, and the FlexRadio panadapter, which used to be its own entry
+  // under My station until it was pointed out that a radio is a destination
+  // like any other.
   //
-  // UDP and MQTT are one page because they answer one question: where do spots
-  // go out. They keep SEPARATE save buttons, which looks like an inconsistency
-  // and is not — the UDP rows live in config/dxca.toml, the MQTT rows carry a
-  // broker password and live in the 0600 database. One button would have to
-  // write two stores and half-succeed.
+  // Called "Destinations" rather than "Spot outputs" because "outputs" reads
+  // oddly for a radio; and not "Broadcast destinations", the older name,
+  // because nothing here broadcasts — they are unicast sends and publishes.
+  //
+  // Each tab keeps its OWN save button, which looks like an inconsistency and
+  // is not: the UDP rows live in config/dxca.toml, the MQTT rows carry a
+  // broker password and live in the 0600 database, and the Flex settings are
+  // in the account's notify row. One button would have to write three stores
+  // and could half-succeed.
   import { onMount } from 'svelte';
   import HelpTip from '../../lib/HelpTip.svelte';
   import ApplySave from '../../lib/ApplySave.svelte';
   import ConfigGate from '../../lib/ConfigGate.svelte';
   import Mqtt from './Mqtt.svelte';
+  import FlexRadio from './FlexRadio.svelte';
   import { server, loadServerConfig, drop } from '../../lib/serverconfig.svelte';
 
   onMount(loadServerConfig);
+
+  // Which tab is showing, remembered per browser — the same reasoning as the
+  // Stats segmented control: a control that has to be found again on every
+  // visit gets missed, and someone who came for the panadapter settings would
+  // conclude they had gone.
+  const SEG_KEY = 'dxca.destseg';
+  type Seg = 'udp' | 'mqtt' | 'flex';
+  function restoreSeg(): Seg {
+    try {
+      const v = localStorage.getItem(SEG_KEY);
+      return v === 'mqtt' || v === 'flex' ? v : 'udp';
+    } catch {
+      return 'udp';
+    }
+  }
+  let seg = $state<Seg>(restoreSeg());
+  function pick(v: Seg) {
+    seg = v;
+    try {
+      localStorage.setItem(SEG_KEY, v);
+    } catch {
+      // Private mode or storage disabled: the tab still works this session.
+    }
+  }
 
   const add = () =>
     (server.cfg.broadcast_destinations = [
@@ -30,10 +60,20 @@
 </script>
 
 <ConfigGate>
+  <div class="segmented" role="tablist" aria-label="Which destinations">
+    <button role="tab" aria-selected={seg === 'udp'} class:active={seg === 'udp'}
+      onclick={() => pick('udp')}>UDP</button>
+    <button role="tab" aria-selected={seg === 'mqtt'} class:active={seg === 'mqtt'}
+      onclick={() => pick('mqtt')}>MQTT</button>
+    <button role="tab" aria-selected={seg === 'flex'} class:active={seg === 'flex'}
+      onclick={() => pick('flex')}>FlexRadio</button>
+  </div>
+
+  {#if seg === 'udp'}
   <div class="card">
     <h2>
-      Spot outputs
-      <HelpTip label="Spot outputs">
+      UDP destinations
+      <HelpTip label="UDP destinations">
         <span class="para">
           Each row is one UDP feed out. <b>cluster</b> sends the plain
           DX-cluster line, <b>wsjtx</b> the WSJT-X decode datagram, and
@@ -92,6 +132,9 @@
     <div class="actions"><button onclick={add}>+ Add destination</button></div>
     <ApplySave />
   </div>
-
-  <Mqtt />
+  {:else if seg === 'mqtt'}
+    <Mqtt />
+  {:else}
+    <FlexRadio />
+  {/if}
 </ConfigGate>

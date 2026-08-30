@@ -25,22 +25,15 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
-**v2.15.1** (2026-08-30): alerts can now go straight to a **FlexRadio
-panadapter** over the SmartSDR API, colour-coded by level and with a
-**per-level lifetime** — an hour for New DXCC, a quarter of it for Band and
-Mode, a minute for the rest
-([FlexRadio panadapter](#flexradio-panadapter)). Plus **health alerts** —
-Telegram when DXCA is running and nothing is reaching it
-([Health alerts](#health-alerts)). Award totals
-agree with ClubLog's own, and every uncredited contact is **named in the log
-at refresh time** rather than just vanishing from the totals. DXCA
-honours both lists cty.xml carries for
-**[operations ClubLog does not credit](#operations-clublog-does-not-credit)** —
-the ~2,800 invalid operations, and the 59 **whitelisted** entities where only
-explicitly listed callsigns count. **Existing installs need one ClubLog
+**v2.16.0** (2026-08-30): the Settings rail is down to seven entries.
+Everywhere a spot arrives from is one **Sources** page (UDP decoders, cluster
+nodes), everywhere it leaves by is one **Destinations** page (UDP, MQTT,
+FlexRadio) — each with tabs, and the FlexRadio panadapter settings moved there
+from their own entry. Award totals agree with ClubLog's own, every uncredited
+contact is named in the log at refresh time, and Telegram carries **health
+alerts** and a green ❇️ on LoTW stations. **Existing installs need one ClubLog
 refresh** before their totals move; stored matrices are not rebuilt on
-upgrade. Telegram alerts also mark **LoTW stations with a green ❇️** after the
-callsign. dxca is the
+upgrade. dxca is the
 live shack aggregator with a real web GUI, and **runs on
 Windows**, with a prebuilt `.exe` and installer as a release asset (read
 [Windows](#windows) first; it is the least proven of the four platforms). Decoder UDP sources and
@@ -790,12 +783,12 @@ reported, so a still-quiet feed is announced once more a threshold later.
 ### FlexRadio panadapter
 
 DXCA can put **your alerts** on a Flex panadapter itself, over the SmartSDR
-API on TCP **4992**. Set the radio's IP under **Settings › My station ›
+API on TCP **4992**. Set the radio's IP under **Settings › Server › Destinations ›
 FlexRadio**.
 
-It is under **My station**, not with the spot outputs, because it is
-per-account config — the Server settings are admin-only, and this belongs to
-whoever's radio it is.
+It is a tab on **Destinations**, with the UDP and MQTT outputs: a radio is
+somewhere spots go. The settings are still per-account, so two operators on
+one server each point at their own radio.
 
 Each spot is placed with a colour matching the **Spots screen's own palette**,
 so a red mark means on the radio what a red row means on screen:

@@ -1,10 +1,15 @@
 <script lang="ts">
-  // Settings › My station › FlexRadio — alerts onto the panadapter.
+  // Settings › Server › Destinations › FlexRadio — alerts onto the panadapter.
   //
-  // Under **My station**, not Server, and that is deliberate: the Server
-  // group is admin-only, while this is per-account config living in the
-  // operator's own `notify_json`. Filed beside the spot outputs it would be
-  // invisible to any non-admin whose radio it actually is.
+  // A tab on Destinations rather than its own page: a radio is somewhere
+  // spots go, like a UDP feed or an MQTT topic, and it read oddly on its own
+  // under My station.
+  //
+  // That page is admin-only, so this is too. It matches the deployment —
+  // admin is the main user and owns the local network; guests log in, set
+  // their ClubLog credentials, and choose what their Telegram alerts on.
+  // The settings themselves are still per-account, in the operator's own
+  // `notify_json`, so nothing had to move server-side.
   //
   // Like the Telegram and Alerts pages it edits ONE shared `notifications`
   // row that the server replaces wholesale, so it loads the WHOLE object and
