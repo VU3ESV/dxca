@@ -1,0 +1,163 @@
+# Multi-station DXCA — moving sources, nodes and outputs to the user
+
+**Status: design note, nothing built.** Written 2026-08-30 against v2.15.1.
+
+## The model
+
+Today DXCA is a *station's* server that happens to have accounts on it.
+Sources, nodes and destinations are server-wide; accounts carry only a
+ClubLog log and alert preferences. The five installs in the field are five
+copies of that, one operator each.
+
+The model this note describes is different: **one server, many stations.**
+
+> Admin is only to maintain the Pi/server. Individual users or callsigns are
+> different stations and decide what nodes they want to log into and ingest.
+> Only LoTW data and ClubLog are of common nature. Other users decide their
+> sources and destinations. — Manoj, 2026-08-30
+
+And, decisively for the internals:
+
+> It's going to be only one stream of spots, but filtered and displayed or
+> alerted in a different user-level way.
+
+So ingestion stays **one pipeline**. What moves is *ownership*: each account
+owns its sources, its nodes and its outputs, and sees the stream through the
+window of what it owns.
+
+| | owner | why |
+|---|---|---|
+| cty.xml, LoTW list, ClubLog API key, blacklist | **admin** | one copy, every account classifies against it |
+| user accounts | **admin** | account management |
+| **passthrough destinations** | **admin** | see [Passthrough](#passthrough-stays-server-wide) |
+| UDP sources | **user** | that station's decoders |
+| cluster nodes | **user** | that station's logins, under its own callsign |
+| UDP + MQTT destinations | **user** | that station's loggers |
+| ClubLog log, alerts, Telegram, Flex | **user** | already is |
+
+## The finding that shapes everything: the name is the key
+
+Both hot-apply paths diff by **name**, and the name is load-bearing far
+beyond configuration:
+
+- `PipelineState::apply_sources` keys its listener map on `(name, port)`
+- `NodeManager::apply` keys `clients` and `statuses` on `name`
+- every spot carries `source_name` — a decoder name *or* a node name, one
+  namespace (README, *Who spotted it*)
+- `/api/status` reports `spots_per_source` and `cluster_nodes` by name
+- destinations filter on `allowed_sources`, by name
+
+So the moment two accounts both name a node `N2WQ-2`, they collide — in the
+client map, in the status map, and in every spot either produces.
+
+**Proposal: namespace internally, show bare names to the owner.** Store the
+key as `<callsign>:<name>` — `VU2CPL:N2WQ-2` — and display only `N2WQ-2` on
+that operator's screens. Two consequences, both wanted:
+
+1. Collisions become impossible without asking operators to coordinate names
+   across stations that have never met.
+2. **Ownership becomes derivable from the spot itself.** `source_name` already
+   travels with every spot through the pipeline, the ring, the telnet feed and
+   the destinations. Prefixing it means a user's filter is a prefix test, with
+   no second lookup and no new field on `Spot`.
+
+That last point is what makes "one stream, filtered per user" nearly free:
+the filter is already plumbed everywhere, it just has nothing to key on yet.
+
+## What has to change
+
+### Aggregate, then apply
+
+`apply_sources` and `NodeManager::apply` already diff correctly against a
+desired list. Neither needs rewriting — they need a different *caller*.
+Instead of `cfg.udp_sources` and `cfg.cluster_nodes`, build the wanted list by
+walking every account and concatenating theirs, namespaced. Add, remove or
+re-point a user's node and the same diff starts or retires exactly that
+session.
+
+### UDP ports must be unique across accounts
+
+One socket per port; DXCA is the sole listener. Two stations both choosing
+2333 is a bind failure, and `apply_sources` binds additions before retiring
+anything precisely so it surfaces as an error rather than dying in a task.
+Under per-user ownership that error would arrive on *someone else's* save, so
+the check has to move earlier: **validate the port is free across all
+accounts at save time**, and reject with the owning callsign named.
+
+### Node logins do not collide
+
+Each station logs in under its own callsign, so two accounts configuring the
+same host are two sessions, not a duplicate login that DXSpider would kick.
+No sharing, no coordination.
+
+Worth sizing rather than assuming: five stations × nine nodes is 45 telnet
+sessions from one IP, and some nodes cap connections per address. If that
+bites, the fallback is sharing one session when host, port *and* login
+callsign all match — but do not build that until a node actually complains.
+
+### Storage moves out of `config/dxca.toml`
+
+`udp_sources` and `cluster_nodes` move to the per-account row, joining
+ClubLog, notify and Flex. The same argument that moved MQTT applies: the file
+installs 0644 while `data/dxca.db` is 0600, and a node password has no
+business in a world-readable file.
+
+What stays in the TOML: `web_bind`, `telnet_port`, ports and paths, the
+refresh intervals, and the passthrough destinations.
+
+### Outputs
+
+Per-account UDP and MQTT destinations, dispatched where the alert fan-out
+already dispatches Telegram and Flex — `fan_out` is per-user by construction,
+so this is two more sinks in a loop that exists.
+
+**But outputs are a feed, not alerts.** `broadcast_spot` fires for every
+deduped spot; `fan_out` only runs for spots that pass a user's *alert*
+filters. A logger wants the feed. So per-user outputs need their own
+narrowing — which sources, bands and modes reach my logger — separate from
+the alert ladder. Simplest coherent answer: outputs follow the account's
+**source ownership** plus an optional band/mode narrowing of their own.
+
+## Passthrough stays server-wide
+
+`send_raw` relays a decoder's datagram **verbatim, before parsing**, which is
+what keeps RUMlog's click-to-fill working. It is keyed to a source, not a
+user, and under one shared stream it has no obvious owner.
+
+Manoj's call, 2026-08-30: **leave it admin-owned.** It is the one output that
+is genuinely about the server's own machine rather than about a station.
+
+## Open questions
+
+1. **What does the telnet server serve?** Today every connected logger gets
+   the same feed. With per-user ownership, should a logger get its owner's
+   window? `LOGIN <callsign>` already exists and would stop being optional —
+   but that changes behaviour for RUMlog, Logger32 and N1MM+, which connect
+   without logging in and must keep working.
+2. **What does a user see before they own anything?** A new account with no
+   sources and no nodes sees an empty Spots screen. Correct, but it looks
+   broken. The first-run path needs an answer.
+3. **Does the shared spot ring stay shared?** `pipeline.spots` is one
+   VecDeque serving `/api/spots`. Filtering per request is cheap and keeps one
+   buffer; the alternative is per-user rings, which is memory for no obvious
+   gain. Filtering looks right, but it means the ring holds spots a user will
+   never see.
+4. **Blacklist scope.** Currently server-wide and admin-owned. Left there by
+   default, but a station may want its own.
+
+## Migration
+
+Every install in the field has exactly one account, which is what makes this
+tractable: on first start after the upgrade, move the TOML's `udp_sources`
+and `cluster_nodes` into the sole account's row, namespaced under its
+callsign, and leave `broadcast_destinations` split — passthrough rows stay in
+the file, the rest move to that account.
+
+With more than one account and no way to guess ownership, refuse and require
+an admin to assign them. That case does not exist yet in the field and should
+not be guessed at.
+
+**Rollback is the previous binary plus the untouched TOML**, which is why the
+migration must not delete the moved sections from the file until an admin
+confirms — write the new state, leave the old, and clear it on a later
+version.
