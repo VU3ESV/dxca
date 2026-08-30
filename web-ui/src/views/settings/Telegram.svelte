@@ -24,6 +24,12 @@
     // once, not retuned while operating.
     notify_feed_quiet_minutes: 0,
     notify_node_down_minutes: 0,
+    // The panadapter sink. Independent of telegram_enabled — spots on the
+    // radio without a phone buzzing is a reasonable way to run.
+    flex_enabled: false,
+    flex_host: '',
+    flex_port: 4992,
+    flex_lifetime_minutes: 20,
   });
   let message = $state('');
   let error = $state('');
@@ -31,7 +37,15 @@
 
   onMount(async () => {
     const r = await api('GET', '/api/config/me/notifications');
-    if (r.status === 200 && r.json) cfg = { ...cfg, ...r.json };
+    if (r.status === 200 && r.json) {
+      cfg = { ...cfg, ...r.json };
+      // The server stores 0 to mean "use the default", which is right on the
+      // wire and useless to show: a port field reading 0 tells the operator
+      // nothing about what will actually be dialled. Fill in the real values
+      // for display; 0 still round-trips harmlessly.
+      if (!cfg.flex_port) cfg.flex_port = 4992;
+      if (!cfg.flex_lifetime_minutes) cfg.flex_lifetime_minutes = 20;
+    }
   });
 
   async function save() {
@@ -43,6 +57,8 @@
       // falsy but not nullish, and NaN would fail the server's deserialize.
       notify_feed_quiet_minutes: Number(cfg.notify_feed_quiet_minutes) || 0,
       notify_node_down_minutes: Number(cfg.notify_node_down_minutes) || 0,
+      flex_port: Number(cfg.flex_port) || 4992,
+      flex_lifetime_minutes: Number(cfg.flex_lifetime_minutes) || 20,
     });
     busy = false;
     if (r.status === 200) message = 'Saved.';
@@ -136,6 +152,54 @@
       min="0"
       max="1440"
       bind:value={cfg.notify_node_down_minutes}
+    />
+  </div>
+
+  <h3>
+    FlexRadio panadapter
+    <HelpTip label="FlexRadio panadapter">
+      Put these same alerts on the radio's panadapter, colour-coded by level
+      — red for New DXCC, blue New Band, amber New Mode, orange New Slot, and
+      the four <b>?</b> levels in the same hues, dimmed. The colours match the
+      Spots screen, so a red mark means on the radio what it means here.
+      <br /><br />
+      Everything that narrows Telegram narrows this too: levels, bands, modes,
+      spotter kind, band mask and the cooldown. One set of choices, two places
+      to see the result.
+      <br /><br />
+      <b>Only alerts go to the radio, never the whole feed.</b> If something
+      else is already feeding it every cluster spot, disconnect that first or
+      each alert will arrive twice.
+    </HelpTip>
+  </h3>
+
+  <label class="enable">
+    <input type="checkbox" bind:checked={cfg.flex_enabled} />Send alerts to a FlexRadio
+  </label>
+
+  <div class="settings-form">
+    <span class="label">Radio IP</span>
+    <input bind:value={cfg.flex_host} placeholder="192.168.1.148" />
+    <span class="label">
+      API port
+      <HelpTip label="API port">
+        SmartSDR's command port, 4992 unless you have changed it. This is a
+        TCP session, not one of the UDP broadcast destinations.
+      </HelpTip>
+    </span>
+    <input class="short" type="number" min="1" max="65535" bind:value={cfg.flex_port} />
+    <span class="label">
+      Spot life (min)
+      <HelpTip label="Spot life">
+        How long each spot stays on the panadapter before the radio drops it.
+      </HelpTip>
+    </span>
+    <input
+      class="short"
+      type="number"
+      min="1"
+      max="240"
+      bind:value={cfg.flex_lifetime_minutes}
     />
   </div>
 

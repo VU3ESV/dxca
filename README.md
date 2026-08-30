@@ -25,8 +25,11 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
-**v2.14.0** (2026-08-30): **health alerts** — Telegram when DXCA is running
-and nothing is reaching it ([Health alerts](#health-alerts)). Award totals
+**v2.15.0** (2026-08-30): alerts can now go straight to a **FlexRadio
+panadapter** over the SmartSDR API, colour-coded by level
+([FlexRadio panadapter](#flexradio-panadapter)). Plus **health alerts** —
+Telegram when DXCA is running and nothing is reaching it
+([Health alerts](#health-alerts)). Award totals
 agree with ClubLog's own, and every uncredited contact is **named in the log
 at refresh time** rather than just vanishing from the totals. DXCA
 honours both lists cty.xml carries for
@@ -781,6 +784,47 @@ a repeat in between: a monitor that repeats itself every tick teaches you to
 ignore it, and one that stays silent on recovery makes you go and look, which
 is the thing it was supposed to save you. A restart forgets what it had
 reported, so a still-quiet feed is announced once more a threshold later.
+
+### FlexRadio panadapter
+
+DXCA can put **your alerts** on a Flex panadapter itself, over the SmartSDR
+API on TCP **4992**. Set the radio's IP under **Settings › My station ›
+Telegram › FlexRadio panadapter**.
+
+Each spot is placed with a colour matching the **Spots screen's own palette**,
+so a red mark means on the radio what a red row means on screen:
+
+| level | colour | | level | colour |
+|---|---|---|---|---|
+| New DXCC | red | | ? DXCC | red, dimmed |
+| New Band | blue | | ? Band | blue, dimmed |
+| New Mode | amber | | ? Mode | amber, dimmed |
+| New Slot | orange | | ? Slot | orange, dimmed |
+
+**Only alerts are sent, never the whole feed** — and that is the point. The
+alert level comes from your ClubLog matrix, which nothing else on the network
+has, so this is the one route by which a panadapter can show *New DXCC*
+rather than *a spot*. Everything that narrows Telegram narrows this too:
+levels, bands, modes, spotter kind, band mask and the cooldown. It is
+independent of `telegram_enabled`, so spots on the radio without a phone
+buzzing is a perfectly good way to run.
+
+**If something else already feeds the radio, disconnect it first.** A client
+pushing every cluster spot plus DXCA pushing alerts means each alert lands
+twice.
+
+Three things worth knowing about the implementation:
+
+- **It is not a broadcast destination.** Those are UDP datagrams; 4992 is a
+  TCP session with sequenced commands. A `Format::Flex` would have been a
+  configuration row that looks right and does nothing.
+- **The connection is drained.** From the moment a client connects the radio
+  streams status messages continuously; a writer that never reads fills its
+  receive buffer and blocks the radio's sends.
+- **No value may contain a space.** The command is space-delimited
+  `key=value`, so a comment with a space in it truncates the command and the
+  radio parses the rest as nonsense. Comments are underscored and clipped to
+  20 characters.
 
 ### Telnet login (optional, off by default)
 

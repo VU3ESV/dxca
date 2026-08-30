@@ -271,6 +271,28 @@ pub struct NotifyUserConfig {
     /// wolf on a healthy feed. A dropped connection is unambiguous.
     #[serde(default)]
     pub notify_node_down_minutes: u64,
+
+    /// Put this account's alerts on a **FlexRadio panadapter**, via the
+    /// SmartSDR API on TCP 4992.
+    ///
+    /// Independent of `telegram_enabled`: the two are separate sinks for the
+    /// same alerts, and wanting spots on the radio without a phone buzzing
+    /// is an entirely reasonable way to run. Everything that narrows
+    /// Telegram — levels, bands, modes, spotter kind, band mask, cooldown —
+    /// narrows this too, so one set of choices governs both.
+    #[serde(default)]
+    pub flex_enabled: bool,
+    /// The radio's address. Empty switches the sink off however
+    /// `flex_enabled` is set.
+    #[serde(default)]
+    pub flex_host: String,
+    /// SmartSDR's API port. 0 means the 4992 default.
+    #[serde(default)]
+    pub flex_port: u16,
+    /// How long a spot stays on the panadapter. 0 means the 20-minute
+    /// default, which is what the Node-RED flow this was ported from used.
+    #[serde(default)]
+    pub flex_lifetime_minutes: u64,
 }
 
 impl Default for NotifyUserConfig {
@@ -298,6 +320,10 @@ impl Default for NotifyUserConfig {
             // has no threshold in mind either.
             notify_feed_quiet_minutes: 0,
             notify_node_down_minutes: 0,
+            flex_enabled: false,
+            flex_host: String::new(),
+            flex_port: 0,
+            flex_lifetime_minutes: 0,
         }
     }
 }

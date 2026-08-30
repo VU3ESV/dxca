@@ -5,6 +5,7 @@
 
 use crate::db::{Db, NotifyUserConfig};
 use dxca_connect::clublog::{self, Endpoints};
+use dxca_connect::flex;
 use dxca_connect::lotw;
 use dxca_connect::telegram::{Telegram, escape_html};
 use dxca_core::classify::{AlertClassifier, AlertConfig, AlertLevel, Classification};
@@ -27,6 +28,11 @@ pub struct UserService {
     /// Known LoTW uploaders (global, M5 display marker).
     lotw_users: RwLock<Arc<HashSet<String>>>,
     lotw_path: PathBuf,
+    /// Live SmartSDR sessions, keyed by address so several accounts aimed at
+    /// one radio share a connection. Made on demand and kept for the life of
+    /// the process — a radio that goes away is handled inside the client by
+    /// reconnecting, not by tearing this down.
+    flex: Mutex<HashMap<(String, u16), Arc<flex::FlexClient>>>,
 }
 
 fn now_unix() -> i64 {
@@ -71,6 +77,7 @@ impl UserService {
             cty_path,
             lotw_users: RwLock::new(Arc::new(lotw_users)),
             lotw_path,
+            flex: Mutex::new(HashMap::new()),
         }
     }
 
@@ -321,7 +328,13 @@ impl UserService {
             let Ok(notify) = self.db.notify_config(user_id) else {
                 continue;
             };
-            if !notify.telegram_enabled {
+            // Telegram and the panadapter are two sinks for the same
+            // alerts, and either alone is a reasonable way to run — so the
+            // gate asks whether ANY of them wants this account's alerts,
+            // not whether Telegram does.
+            let wants_telegram = notify.telegram_enabled;
+            let wants_flex = notify.flex_enabled && !notify.flex_host.is_empty();
+            if !wants_telegram && !wants_flex {
                 continue;
             }
             let Some(c) = self.classify(user_id, spot) else {
@@ -371,6 +384,15 @@ impl UserService {
             if !self.cooldown_ok(user_id, &call, &notify) {
                 continue;
             }
+            // The panadapter first: it is a queue push, never a network
+            // round trip, so it costs nothing to do inline and lands while
+            // the Telegram is still in flight.
+            if wants_flex {
+                self.push_flex(&notify, &c, &call, spot);
+            }
+            if !wants_telegram {
+                continue;
+            }
             let text = alert_html(&c, &call, spot, self.is_lotw_user(&call));
             let telegram = self.telegram.clone();
             let (token, chat) = (notify.telegram_bot_token, notify.telegram_chat_id);
@@ -408,6 +430,76 @@ impl UserService {
                 }
             });
         }
+    }
+
+    /// Panadapter colour for each alert level, taken from the **dashboard's
+    /// own dark palette** so a red dot on the radio means what a red row
+    /// means on screen. `0xAARRGGBB`, opaque.
+    ///
+    /// The four `?` levels are the same hues at 58% mixed toward the muted
+    /// grey — the `color-mix` the stylesheet performs, precomputed here
+    /// because the radio wants a literal.
+    fn flex_color(level: AlertLevel) -> &'static str {
+        match level {
+            AlertLevel::NewDxcc => "0xFFF5636B",    // --err
+            AlertLevel::NewBand => "0xFF2F81F7",    // --accent
+            AlertLevel::NewMode => "0xFFFAB219",    // --warn
+            AlertLevel::NewSlot => "0xFFF0883E",    // --alert-slot
+            AlertLevel::UnconfDxcc => "0xFFC97479", // the four above, dimmed
+            AlertLevel::UnconfBand => "0xFF5686CA",
+            AlertLevel::UnconfMode => "0xFFCCA249",
+            AlertLevel::UnconfSlot => "0xFFC68A5F",
+            _ => "0xFF8C8C8C",
+        }
+    }
+
+    /// Queue one alert onto the operator's panadapter.
+    ///
+    /// Never blocks: [`FlexClient::spot`] is a channel push, and the TCP
+    /// session lives on its own thread. Clients are made on demand and kept,
+    /// keyed by address, so several accounts pointing at one radio share a
+    /// single connection rather than opening one each.
+    fn push_flex(&self, notify: &NotifyUserConfig, c: &Classification, call: &str, spot: &Spot) {
+        let port = if notify.flex_port == 0 {
+            4992
+        } else {
+            notify.flex_port
+        };
+        let key = (notify.flex_host.clone(), port);
+        let client = {
+            let mut map = self.flex.lock().unwrap();
+            map.entry(key)
+                .or_insert_with(|| Arc::new(flex::FlexClient::connect(&notify.flex_host, port)))
+                .clone()
+        };
+        // "NEW DXCC · Bouvet" would lose everything after the first space on
+        // the wire; `FlexSpot` sanitises, and the label is built to survive
+        // the 20-character clip with the entity still legible.
+        let comment = match &c.dxcc_name {
+            Some(name) if !name.is_empty() => format!("{} {}", c.level.label(), name),
+            _ => c.level.label().to_string(),
+        };
+        let minutes = if notify.flex_lifetime_minutes == 0 {
+            20
+        } else {
+            notify.flex_lifetime_minutes
+        };
+        client.spot(&flex::FlexSpot {
+            callsign: call.to_string(),
+            freq_mhz: spot.frequency_mhz(),
+            mode: spot.mode.clone(),
+            comment,
+            // The station that heard it, falling back to the feed that
+            // carried it — the panadapter has one field for this and an
+            // empty one reads as a defect.
+            spotter: match &spot.spotter {
+                Some(s) if !s.is_empty() => s.clone(),
+                _ => spot.source_name.clone(),
+            },
+            timestamp_unix: spot.time_unix,
+            color: Self::flex_color(c.level).to_string(),
+            lifetime_secs: minutes.saturating_mul(60),
+        });
     }
 
     /// 1.x cooldown: per callsign, clamped 5–60 minutes, with the same

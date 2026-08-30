@@ -2,6 +2,10 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-08-30 · **Status:**
+**v2.15.0 — alerts on the FlexRadio panadapter**, over the SmartSDR API on
+TCP 4992, colour-coded by level. Per-account, off by default, and alerts
+only — never the whole feed.
+
 **v2.14.0 — health alerts.** Telegram when DXCA is up and nothing is reaching
 it: feed quiet, or a node disconnected. Both opt-in per account, off by
 default, and honest about what they cannot do (a dead host cannot report
@@ -990,6 +994,69 @@ pin, run `just gate`, fix what the new rustfmt and clippy think, same commit.
 The published v2.12.2 release notes originally carried the wrong
 toolchain-drift explanation; corrected 2026-08-30, with a note that the fixes
 land after the tag and touch no shipped code.
+
+### DONE: alerts on the FlexRadio panadapter — v2.15.0 (2026-08-30)
+
+`crates/dxca-connect/src/flex.rs`, pushed from the alert fan-out in
+`users.rs`. Asked for as *"a new format in broadcast destination for
+flexradio to port 4992"* — and the useful part was that it cannot be one.
+
+**Why not a `Format`.** Every broadcast format is a UDP datagram to an
+address; 4992 is a TCP session with sequenced `C<n>|` commands and `R<n>|`
+replies. A `Format::Flex` would have been a configuration row that looks
+right and silently does nothing. Same conclusion MQTT reached, for the same
+reason — a sibling module, its own list.
+
+**The command was ported from Manoj's working Node-RED flow, not from the
+API docs**, so the field set is one already proven against his radio:
+`rx_freq`, `callsign`, `mode`, `comment`, `spotter_callsign`, `timestamp`,
+`color`, `priority=2`, `lifetime_seconds`, `source`. Keep that provenance in
+mind before "improving" the field list.
+
+**It is alerts, not the feed — and that is the whole point.** His flow keyed
+on `msg.alert` and coloured by level, which is exactly the per-user filtered
+output that was previously called impossible without new work. The alert
+level comes from the account's ClubLog matrix, which Aether cannot see, so
+this is the *only* route by which a panadapter shows "New DXCC" rather than
+"a spot". Hooked into the fan-out beside Telegram so every existing
+narrowing — levels, bands, modes, spotter kind, band mask, cooldown —
+applies unchanged.
+
+**`fan_out`'s gate had to change.** It bailed on `!telegram_enabled`, which
+would have made a Flex-only account silent. It now asks whether *any* sink
+wants the alert.
+
+**Three implementation points that are not obvious and will bite whoever
+edits this:**
+
+1. **No value may contain a space.** The command is space-delimited
+   `key=value`; one space inside a comment truncates it and the radio parses
+   the remainder as garbage. `sanitize()` is load-bearing, and a test walks
+   every field asserting it still contains `=`.
+2. **The socket must be drained.** 4992 is bidirectional and the radio
+   streams status messages from the moment you connect. A writer that never
+   reads fills its receive buffer, the window closes, and the radio blocks on
+   us. Every connection carries a reader thread that discards.
+3. **Colours come from the dashboard's dark palette**, with the four `?`
+   levels precomputed as the stylesheet's 58% `color-mix` toward muted — so
+   the radio and the screen agree. Manoj's flow had three colours; the other
+   five are new.
+
+**Decision (Manoj): Aether's cluster feed comes off.** With DXCA pushing
+alerts directly and Aether pushing every cluster spot, each alert would land
+twice. The panadapter now shows alerts only — sparse and high-signal. Aether
+stays the SmartSDR client, just not the spot source.
+
+**Tested against a real socket, not just as a string.** `TcpListener` on an
+ephemeral port, a stand-in radio that talks first and never stops, asserting
+connect, write, session reuse across two spots, and the sequence advancing —
+plus a dead-radio test proving it counts the failure instead of wedging.
+
+**The UI defect this time: the port and lifetime fields rendered `0`.** The
+server stores 0 to mean "use the default", which is right on the wire and
+useless on screen — a port field reading 0 says nothing about what will be
+dialled. The load path now fills 4992/20 in for display. Found by looking,
+again; the third such defect in one day that no test could have caught.
 
 ### DONE: health alerts — v2.14.0 (2026-08-30)
 
