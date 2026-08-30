@@ -302,6 +302,20 @@ async fn serve_client(
     // then nothing changes: the client echoes locally, exactly as before.
     let mut server_echo = false;
 
+    // Log the FIRST bytes a client sends, once per session.
+    //
+    // This module has always refused to prompt for a callsign on connect
+    // because what the loggers transmit on connect was unknown — a capture
+    // of an established RUMlog session showed nothing at all, and observing
+    // a reconnect meant disconnecting a live logger. So the answer was never
+    // obtained and the design stayed conservative.
+    //
+    // This is that capture, taken from inside instead: the bytes are already
+    // read here (the read is how a disconnect is noticed), so noting the
+    // first chunk costs one line per connection and answers the question on
+    // the next natural reconnect, disturbing nobody.
+    let mut first_seen = false;
+
     // Closing over `sink` in the loop below would move it; keep a handle
     // for the disconnect path.
     let closer = sink.clone();
@@ -365,6 +379,20 @@ async fn serve_client(
                     Ok(0) | Err(_) => break 'session Ok(()), // client went away
                     Ok(n) => n,
                 };
+                if !first_seen {
+                    first_seen = true;
+                    // Escaped and capped: this is untrusted input from
+                    // whatever dialled the port, and a logger's opening
+                    // salvo may be IAC negotiation rather than text.
+                    let head = &buf[..n.min(120)];
+                    println!(
+                        "dxca: telnet: first {} byte(s) from a client: {:?}{}",
+                        n,
+                        String::from_utf8_lossy(head),
+                        if n > 120 { " (truncated)" } else { "" }
+                    );
+                }
+
                 // With no login configured the bytes are still read — the
                 // read is how a disconnect is noticed — but nothing is
                 // parsed. Byte-for-byte the old behaviour.
