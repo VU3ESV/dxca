@@ -8,6 +8,14 @@ and the FlexRadio panadapter settings moved into Destinations from their own
 entry. The multi-station per-account feeds work was **withdrawn** — see the
 entries under Open items.
 
+**Four of the five hosts run it. `adersh@192.168.1.151` is still on
+v2.15.1** — its box was unreachable during the deploy pass (`ssh: connect to
+host 192.168.1.151 port 22: Operation timed out`), which is the third-party
+power-state case, not a fault. It needs
+`deploy/pi-deploy.sh --no-seed adersh@192.168.1.151` when it next answers.
+v2.16.0 is a UI-only change, so nothing on that host is wrong meanwhile — it
+simply still shows five rail entries instead of two.
+
 **v2.15.1 — alerts on the FlexRadio panadapter**, over the SmartSDR API on
 TCP 4992, colour-coded by level and expiring on a per-level ladder (DXCC an
 hour, Band/Mode 15 min, the rest 1). Per-account, off by default, alerts only.
@@ -21,8 +29,20 @@ Earlier the same day, **v2.13.1 → v2.13.3**, all released and deployed to all
 five hosts. The headline: award totals now agree with ClubLog's own, after
 two separate cty.xml rules turned out to be unread — and every uncredited
 contact is named in the log at refresh time. **Each account still needs one
-ClubLog refresh** before its totals move; VU24DX and vu2wj have had theirs,
-vu2oy has not.
+ClubLog refresh** before its totals move. **All four have now had theirs
+(2026-08-30)**, so every log in the fleet is scored under the corrected
+rules:
+
+| Account | Worked | Uncredited found |
+|---|---|---|
+| VU2CPL | 320 | 3 (V55DX) |
+| VU24DX | 313 — matches the ClubLog dashboard | 18 |
+| VU2WJ | 314 | 24 |
+| VU2OY | 275 | 1 (`SV2RSG 20211201 014315Z 40M FT8`) |
+
+VU2OY's single hit is the bare `SV2RSG`, invalid from 2016-04-21 onward — a
+different entry from the three dated `SV2RSG/A` windows, and a true positive
+on a December 2021 QSO.
 
 Previous status block:
 **v2.13.1 TAGGED, RELEASED AND ON ALL FIVE HOSTS (2026-08-30).** Two changes:
