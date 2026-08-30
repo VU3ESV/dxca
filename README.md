@@ -25,12 +25,14 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
-**v2.13.1** (2026-08-30): award totals now honour ClubLog's
-**[invalid-operations list](#invalid-operations)**, so they agree with
-ClubLog's own — an entity worked only through an operation ClubLog rejected
-no longer counts. **Existing installs need one ClubLog refresh** before their
-totals move; stored matrices are not rebuilt on upgrade. Telegram alerts also
-mark **LoTW stations with an asterisk** after the callsign. dxca is the
+**v2.13.2** (2026-08-30): award totals now agree with ClubLog's own. DXCA
+honours both lists cty.xml carries for
+**[operations ClubLog does not credit](#operations-clublog-does-not-credit)** —
+the ~2,800 invalid operations, and the 59 **whitelisted** entities where only
+explicitly listed callsigns count. **Existing installs need one ClubLog
+refresh** before their totals move; stored matrices are not rebuilt on
+upgrade. Telegram alerts also mark **LoTW stations with a green ❇️** after the
+callsign. dxca is the
 live shack aggregator with a real web GUI, and **runs on
 Windows**, with a prebuilt `.exe` and installer as a release asset (read
 [Windows](#windows) first; it is the least proven of the four platforms). Decoder UDP sources and
@@ -548,20 +550,23 @@ Spotter: VU2XYZ   Node: N2WQ-2
 1428Z
 ```
 
-**A LoTW station is marked with an asterisk after its callsign**, the same
-fact the Spots table shows as a green dot:
+**A LoTW station is marked with a green ❇️ after its callsign**, the same fact
+the Spots table shows as a green dot:
 
 ```
-🔴 NEW DXCC: 3Y0J*
+🔴 NEW DXCC: 3Y0J❇️
 Bouvet  14.074 MHz  20M  FT8  -10 dB
 ```
 
-An asterisk rather than a dot because Telegram's HTML has no colour: an
-uncoloured dot reads as punctuation, and the emoji circle that *would* stay
-green shouts louder than the alert level beside it. The mark belongs to the
-callsign, so it appears at every alert level, and it means what it does on
-screen — the station uploads to Logbook of the World, so the QSO stands a
-good chance of confirming without a card chase.
+Telegram's HTML supports `<b>`, `<i>` and `<a>` but **no colour attribute**,
+so the only green it will render is an emoji that is green in the font itself.
+`❇️` is the one of those shaped like an asterisk rather than a dot, a tick or a
+heart — a footnote mark, which is what this is. It is emoji-sized rather than
+punctuation-sized; that is the trade for the colour.
+
+The mark belongs to the callsign, so it appears at every alert level, and it
+means what it does on screen — the station uploads to Logbook of the World, so
+the QSO stands a good chance of confirming without a card chase.
 
 Labelled rather than joined into a sentence, because on a phone those two
 labels are what you scan for. Locally decoded spots show only `Node:` —
@@ -671,35 +676,53 @@ The tickbox only appears once cty.xml is loaded — without it there is no way
 to know which entities are deleted, so DXCA offers no choice it cannot
 honour.
 
-### Invalid operations
+### Operations ClubLog does not credit
 
-ClubLog keeps a second list in cty.xml: **invalid operations** — around 2,800
-callsigns, some bounded by a date window, whose QSOs do not count for DXCC.
-Pirates, unlicensed activity, and DXpeditions whose paperwork was rejected
-after the fact. ClubLog will still tell you *which* entity such a contact was
-with, but it will not credit it.
+A prefix match is not a DXCC credit. cty.xml carries two further lists that
+say so, and DXCA honours both — which is what makes its award totals agree
+with ClubLog's own.
 
-**DXCA now honours that list**, and so its award totals match ClubLog's own.
-Before v2.13.1 it did not, and the difference showed up exactly where you
-would expect: an entity worked *only* through an invalidated operation counted
-here and not on ClubLog. VU24DX's log had one — Mount Athos, worked solely as
-`SV2RSG/A` — which is why DXCA read 314 DXCC worked against ClubLog's 313.
+**Invalid operations** — around 2,800 callsigns, most bounded by a date
+window, whose QSOs do not count: pirates, unlicensed activity, DXpeditions
+whose paperwork was rejected after the fact. The windows are minute-accurate,
+not day-wide. Some are only an hour or two long — the T6AA entry covers 19:00
+to 20:15 on one evening in 2019 — so a contact earlier the same day is
+perfectly valid and is counted.
 
-Two details worth knowing:
+**Whitelisted entities** — 59 of the rarest, from Bouvet and Navassa to
+Kermadec, Mount Athos and North Korea. For these, ClubLog credits *only* the
+callsigns it has explicitly listed; anything else that merely matches the
+prefix earns nothing. Ten of them are whitelisted from a date rather than
+always: Turkmenistan from 2007, Iran from 2019, the Pacific islands from the
+1978 rule change, and ordinary calls before that still count.
 
-- **The QSO count does not change.** An invalidated contact is still a QSO and
+The whitelist is what produced VU24DX's **314 DXCC worked against ClubLog's
+313**. One `ZL8AC` QSO on 40m: `ZL8` resolves to Kermadec, but ZL8AC appears
+nowhere in cty.xml, so ClubLog gave no credit and DXCA — which read the prefix
+and stopped there — did.
+
+Three details worth knowing:
+
+- **The QSO count does not change.** An uncredited contact is still a QSO and
   still appears in your log; it simply scores nothing. Only the award
   matrix — entities, slots, Challenge points — leaves it out.
 - **It is not a worked call, either.** If your only contact with a station was
-  an invalidated one, DXCA treats it as unworked and will alert on it again.
-  That is the behaviour you want: you still need a valid contact.
+  an uncredited one, DXCA treats it as unworked and will alert on it again.
+  That is the behaviour you want: you still need a contact that counts.
+- **`K9HEI/KH9` and `KH9/K9HEI` are the same operation.** cty.xml writes the
+  location prefix on whichever side the operator used, so the whitelist is
+  matched both ways round. Without that, a confirmed Wake Island QSO was
+  rejected — and a rejected contact that carries a QSL is the reliable sign of
+  a false rejection, since a QSL match means the operation was real.
 
-The windows are minute-accurate, not day-wide. Some are only an hour or two
-long — the T6AA entry covers 19:00 to 20:15 on one evening in 2019 — so a
-contact earlier the same day is perfectly valid and is counted.
+**The whitelist lags reality, by design.** A DXpedition ClubLog has not listed
+yet is not credited — correctly, in that ClubLog will not credit it either,
+but it means a brand-new entity can read as un-worked until the next cty.xml
+refresh catches up. If you have just worked something rare and DXCA still
+shows it as needed, that is usually why.
 
-Like the deleted list, this depends on cty.xml. A server that has never
-downloaded it flags nothing, and totals fall back to the older behaviour.
+Like the deleted list, both depend on cty.xml. A server that has never
+downloaded it applies neither, and totals fall back to the older behaviour.
 
 ### Telnet login (optional, off by default)
 

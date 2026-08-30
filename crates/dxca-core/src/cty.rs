@@ -21,13 +21,28 @@
 
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct DxccEntity {
     pub adif: i32,
     pub name: String,
     pub prefix: String,
     pub cq_zone: i32,
     pub continent: String,
+    /// A **whitelisted** entity: ClubLog credits a QSO here *only* when the
+    /// callsign is one it has explicitly listed as an exception. 59 entities
+    /// carry this — the rare ones a pirate would pick, from Bouvet and
+    /// Navassa to Mount Athos, Kermadec and North Korea.
+    ///
+    /// Matching the bare prefix is not enough for these. VU24DX's log holds
+    /// one `ZL8AC` QSO; `ZL8` resolves to Kermadec, but ZL8AC appears nowhere
+    /// in cty.xml, so ClubLog gives no credit and DXCA — which read the
+    /// prefix and stopped there — did. That was the whole of its 314 against
+    /// ClubLog's 313.
+    pub whitelist: bool,
+    /// When the whitelist began to apply. `None` means always. Ten entities
+    /// carry a date: Turkmenistan from 2007, Iran from 2019, the Pacific
+    /// islands from the 1978 rule change — before it, ordinary calls counted.
+    pub whitelist_start_unix: Option<i64>,
     /// An ARRL **deleted** entity — Abu Ail, Blenheim Reef, British North
     /// Borneo and 59 others. A QSO with one still counts as worked and is
     /// still a real contact, but it scores nothing toward *current* DXCC or
@@ -124,6 +139,8 @@ struct RecordTmp {
     deleted: bool,
     start: Option<i64>,
     end: Option<i64>,
+    whitelist: bool,
+    whitelist_start: Option<i64>,
 }
 
 /// Parse cty.xml content. Returns None only when the XML is unscannable;
@@ -176,6 +193,8 @@ pub fn parse(content: &str) -> Option<CtyData> {
                     "cqz" => tmp.cqz = value.parse().ok(),
                     "cont" => tmp.continent = Some(value),
                     "deleted" => tmp.deleted = value.eq_ignore_ascii_case("true"),
+                    "whitelist" => tmp.whitelist = value.eq_ignore_ascii_case("true"),
+                    "whitelist_start" => tmp.whitelist_start = parse_iso8601(&value),
                     "start" => tmp.start = parse_iso8601(&value),
                     "end" => tmp.end = parse_iso8601(&value),
                     "entity" => {
@@ -191,6 +210,8 @@ pub fn parse(content: &str) -> Option<CtyData> {
                                     prefix: prefix.clone(),
                                     cq_zone: tmp.cqz.unwrap_or(0),
                                     continent: tmp.continent.clone().unwrap_or_default(),
+                                    whitelist: tmp.whitelist,
+                                    whitelist_start_unix: tmp.whitelist_start,
                                     deleted: tmp.deleted,
                                 },
                             );

@@ -3,7 +3,7 @@
 //! load time (historical entities, expired exceptions) are dropped so they
 //! can't contaminate today's lookups.
 
-use crate::cty::{CtyData, DxccEntity, InvalidOperation};
+use crate::cty::{CtyData, DxccEntity, InvalidOperation, PrefixRule};
 use std::collections::HashMap;
 
 #[derive(Default)]
@@ -18,6 +18,13 @@ pub struct DxccResolver {
     /// are tested against each QSO's own date, so a window that closed in
     /// 2013 still has to invalidate a 2013 contact.
     invalid: HashMap<String, Vec<InvalidOperation>>,
+    /// For each **whitelisted** entity, every exact-call rule ClubLog lists
+    /// for it — the accepted operations, with their date windows.
+    ///
+    /// Kept separately from `exact` because that map is filtered to rules
+    /// active *now*, and a whitelist is a historical record: ZL8X counted in
+    /// November 2010 and counts still, even though the rule expired in 2010.
+    whitelist: HashMap<i32, Vec<PrefixRule>>,
 }
 
 impl DxccResolver {
@@ -41,8 +48,20 @@ impl DxccResolver {
         self.exact.clear();
         self.prefix.clear();
         self.invalid.clear();
+        self.whitelist.clear();
         for op in data.invalid_operations {
             self.invalid.entry(op.call.clone()).or_default().push(op);
+        }
+        // Built from the UNFILTERED rules, and only for entities that are
+        // actually whitelisted — every other entity accepts a prefix match,
+        // so carrying its exceptions here would be dead weight.
+        for rule in data.prefix_rules.iter().filter(|r| r.is_exact) {
+            if self.entities.get(&rule.adif).is_some_and(|e| e.whitelist) {
+                self.whitelist
+                    .entry(rule.adif)
+                    .or_default()
+                    .push(rule.clone());
+            }
         }
         for rule in data.prefix_rules.iter().filter(|r| r.is_active(now_unix)) {
             if rule.is_exact {
@@ -101,6 +120,52 @@ impl DxccResolver {
         self.invalid.values().map(Vec::len).sum()
     }
 
+    /// How many entities are whitelisted — 59 in the live cty.xml.
+    pub fn whitelisted_entity_count(&self) -> usize {
+        self.whitelist.len()
+    }
+
+    /// True when `adif` is a [whitelisted](DxccEntity::whitelist) entity and
+    /// `call` is **not** one of the operations ClubLog accepts for it at
+    /// `at_unix` — so the contact earns no credit for that entity.
+    ///
+    /// The date matters twice over: the whitelist itself may only start at a
+    /// given date (Iran from 2019, the Pacific islands from the 1978 rule
+    /// change), and each accepted operation has its own window, because the
+    /// same callsign is often reissued to a later DXpedition.
+    ///
+    /// **An unknown QSO time is never rejected.** Neither is a call in an
+    /// entity that is not whitelisted. Both follow the rule the
+    /// invalid-operation check uses: do not discard a contact that cannot be
+    /// placed.
+    ///
+    /// **Caveat worth knowing:** cty.xml lags real operations. A DXpedition
+    /// ClubLog has not yet listed will be rejected here — correctly, in that
+    /// ClubLog will not credit it either, but it means a brand-new entity can
+    /// read as un-worked until the next cty.xml refresh catches up.
+    pub fn is_whitelist_rejected(&self, adif: i32, call: &str, at_unix: Option<i64>) -> bool {
+        let Some(accepted) = self.whitelist.get(&adif) else {
+            return false; // not a whitelisted entity
+        };
+        let entity = self.entities.get(&adif);
+        let starts = entity.and_then(|e| e.whitelist_start_unix);
+        let Some(at) = at_unix else { return false };
+        if starts.is_some_and(|s| at < s) {
+            return false; // before the whitelist applied, ordinary calls count
+        }
+        let call = call.to_uppercase();
+        // `K9HEI/KH9` in the log is `KH9/K9HEI` in cty.xml — the same
+        // operation with the location prefix on the other side of the slash,
+        // and ClubLog treats them as one. Matching only the literal string
+        // rejected a *confirmed* Wake Island QSO from VU2CPL's log, which is
+        // the tell for a false rejection: a QSL match means the operation was
+        // real. Both orders are therefore tried.
+        let alt = swap_slash(&call);
+        !accepted
+            .iter()
+            .any(|r| (r.call == call || Some(&r.call) == alt.as_ref()) && r.is_active(at))
+    }
+
     /// ADIF ids of every **deleted** entity this resolver knows.
     ///
     /// Handed to [`crate::matrix::LogMatrix::stats_excluding`] so award
@@ -122,6 +187,18 @@ impl DxccResolver {
     pub fn entity_name(&self, callsign: &str) -> Option<&str> {
         self.entity(self.resolve(callsign)?)
             .map(|e| e.name.as_str())
+    }
+}
+
+/// `A/B` → `B/A`, for a call with exactly two parts; `None` otherwise.
+///
+/// Only used by the whitelist lookup. It is not normalisation — nothing is
+/// dropped — just the other way round of writing the same operation.
+fn swap_slash(call: &str) -> Option<String> {
+    let parts: Vec<&str> = call.split('/').filter(|p| !p.is_empty()).collect();
+    match parts.as_slice() {
+        [a, b] => Some(format!("{b}/{a}")),
+        _ => None,
     }
 }
 
@@ -200,6 +277,7 @@ mod tests {
                     cq_zone: 0,
                     continent: String::new(),
                     deleted: false,
+                    ..Default::default()
                 },
             );
         }
@@ -323,6 +401,127 @@ mod tests {
             !r.is_invalid_operation("SV2RSG", None),
             "the un-suffixed call is a different station"
         );
+    }
+
+    fn entity(adif: i32, whitelist: bool, start: Option<i64>) -> DxccEntity {
+        DxccEntity {
+            adif,
+            name: "TEST".into(),
+            whitelist,
+            whitelist_start_unix: start,
+            ..Default::default()
+        }
+    }
+
+    /// `adif` 133 is whitelisted, 324 is not; `accepted` are its listed
+    /// operations as (call, start, end).
+    fn whitelisted(
+        start: Option<i64>,
+        accepted: &[(&str, Option<i64>, Option<i64>)],
+    ) -> DxccResolver {
+        let mut r = DxccResolver::default();
+        r.load(
+            CtyData {
+                entities: HashMap::from([
+                    (133, entity(133, true, start)),
+                    (324, entity(324, false, None)),
+                ]),
+                prefix_rules: accepted
+                    .iter()
+                    .map(|(c, s, e)| PrefixRule {
+                        call: (*c).into(),
+                        adif: 133,
+                        is_exact: true,
+                        start_unix: *s,
+                        end_unix: *e,
+                    })
+                    .collect(),
+                ..Default::default()
+            },
+            0,
+        );
+        r
+    }
+
+    /// The VU24DX case: `ZL8` resolves to Kermadec, but Kermadec accepts only
+    /// the calls ClubLog lists, and `ZL8AC` is not one of them.
+    #[test]
+    fn a_whitelisted_entity_rejects_an_unlisted_call() {
+        let r = whitelisted(None, &[("ZL8X", Some(100), Some(200))]);
+        assert_eq!(r.whitelisted_entity_count(), 1);
+        assert!(r.is_whitelist_rejected(133, "ZL8AC", Some(150)));
+        assert!(!r.is_whitelist_rejected(133, "ZL8X", Some(150)), "listed");
+        // Not a whitelisted entity — any call is fine.
+        assert!(!r.is_whitelist_rejected(324, "VU2CPL", Some(150)));
+        // Unknown entity: nothing to reject against.
+        assert!(!r.is_whitelist_rejected(999, "ZL8AC", Some(150)));
+    }
+
+    /// A listed call still has to be worked inside *its own* window — the
+    /// same callsign is reissued to later DXpeditions.
+    #[test]
+    fn a_listed_call_is_still_bound_by_its_window() {
+        let r = whitelisted(None, &[("ZL8X", Some(100), Some(200))]);
+        assert!(!r.is_whitelist_rejected(133, "ZL8X", Some(150)));
+        assert!(r.is_whitelist_rejected(133, "ZL8X", Some(99)));
+        assert!(r.is_whitelist_rejected(133, "ZL8X", Some(201)));
+    }
+
+    /// Expired rules are dropped from `exact` at load, but a whitelist is a
+    /// historical record: a 2010 DXpedition still counts for a 2010 QSO.
+    #[test]
+    fn the_whitelist_keeps_rules_that_have_since_expired() {
+        // now = 10_000, well past the window.
+        let mut r = DxccResolver::default();
+        r.load(
+            CtyData {
+                entities: HashMap::from([(133, entity(133, true, None))]),
+                prefix_rules: vec![PrefixRule {
+                    call: "ZL8X".into(),
+                    adif: 133,
+                    is_exact: true,
+                    start_unix: Some(100),
+                    end_unix: Some(200),
+                }],
+                ..Default::default()
+            },
+            10_000,
+        );
+        assert_eq!(r.resolve("ZL8X"), None, "dropped from live resolution");
+        assert!(
+            !r.is_whitelist_rejected(133, "ZL8X", Some(150)),
+            "but still accepted for a QSO inside its window"
+        );
+    }
+
+    /// `K9HEI/KH9` in a log is `KH9/K9HEI` in cty.xml. Matching the literal
+    /// string only would reject a confirmed Wake Island QSO.
+    #[test]
+    fn either_side_of_the_slash_matches() {
+        let r = whitelisted(None, &[("KH9/K9HEI", None, None)]);
+        assert!(!r.is_whitelist_rejected(133, "KH9/K9HEI", Some(150)));
+        assert!(!r.is_whitelist_rejected(133, "K9HEI/KH9", Some(150)));
+        // Not a licence to match anything with a slash in it.
+        assert!(r.is_whitelist_rejected(133, "KH9/W1ABC", Some(150)));
+        assert!(r.is_whitelist_rejected(133, "K9HEI", Some(150)));
+    }
+
+    /// Ten entities were only whitelisted from a date — the 1978 Pacific
+    /// rule change, Turkmenistan in 2007, Iran in 2019. Before it, ordinary
+    /// calls counted and must keep counting.
+    #[test]
+    fn a_dated_whitelist_does_not_reach_back_before_its_start() {
+        let r = whitelisted(Some(1_000), &[("ZL8X", None, None)]);
+        assert!(!r.is_whitelist_rejected(133, "ZL8AC", Some(999)), "before");
+        assert!(r.is_whitelist_rejected(133, "ZL8AC", Some(1_000)), "on");
+        assert!(r.is_whitelist_rejected(133, "ZL8AC", Some(5_000)), "after");
+    }
+
+    /// Same rule as the invalid list: never discard a contact we cannot place.
+    #[test]
+    fn an_undated_qso_is_never_whitelist_rejected() {
+        let r = whitelisted(None, &[("ZL8X", Some(100), Some(200))]);
+        assert!(!r.is_whitelist_rejected(133, "ZL8AC", None));
     }
 
     /// A resolver loaded from cty.xml without the section — or from an old

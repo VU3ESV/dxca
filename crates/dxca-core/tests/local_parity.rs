@@ -45,20 +45,28 @@ fn matrix_matches_swift_apps_own_build() {
         .unwrap()
         .as_secs() as i64;
 
-    // The invalid-operation list is a **deliberate divergence** from 1.x,
-    // which never read it. Parity is therefore asserted against a resolver
-    // loaded without it; `invalid_operations_change_the_matrix` below covers
-    // what the list actually does to this same log.
+    // The invalid-operation list and the entity whitelist are **deliberate
+    // divergences** from 1.x, which read neither. Parity is therefore
+    // asserted against a resolver loaded without them; the two tests below
+    // cover what each actually does to this same log.
     let invalid_ops = std::mem::take(&mut data.invalid_operations);
+    let whitelisted = data.entities.values().filter(|e| e.whitelist).count();
+    for e in data.entities.values_mut() {
+        e.whitelist = false;
+    }
     let mut resolver = DxccResolver::default();
     resolver.load(data, now_unix);
     assert_eq!(resolver.invalid_operation_count(), 0);
+    assert_eq!(resolver.whitelisted_entity_count(), 0);
 
     // Rebuild the matrix through the production builder (the exact
     // ClubLogClient loop, empty band filter).
     let (ours, qso_count) = LogMatrix::build_from_adif(&content, &resolver);
     println!("log.adi: {qso_count} records");
-    println!("(cty.xml carried {} invalid operations)", invalid_ops.len());
+    println!(
+        "(cty.xml carried {} invalid operations, {whitelisted} whitelisted entities)",
+        invalid_ops.len()
+    );
 
     // Compare entity sets first for a readable failure.
     let mut ours_ids: Vec<_> = ours.by_dxcc.keys().copied().collect();
@@ -168,4 +176,81 @@ fn invalid_operations_change_the_matrix_in_one_direction_only() {
         after.stats().slots_worked <= before.stats().slots_worked,
         "dropping contacts cannot add slots"
     );
+}
+
+/// Does the **real** cty.xml actually flag a known invalid operation, end to
+/// end, through the production loader? Isolates a code fault from a data one
+/// when a log's totals fail to move.
+#[test]
+#[ignore = "needs the 1.x app's local cache (cty.xml)"]
+fn the_real_cty_flags_a_known_invalid_operation() {
+    let cty_xml = std::fs::read_to_string(cache_dir().join("cty.xml")).expect("cty.xml");
+    let data = cty::parse(&cty_xml).expect("cty.xml parses");
+    let now_unix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+
+    for op in data
+        .invalid_operations
+        .iter()
+        .filter(|o| o.call.starts_with("SV2RSG"))
+    {
+        println!(
+            "listed: {} {:?} -> {:?}",
+            op.call, op.start_unix, op.end_unix
+        );
+    }
+
+    let mut r = DxccResolver::default();
+    r.load(data, now_unix);
+    println!("{} invalid operations loaded", r.invalid_operation_count());
+
+    let at = |s: &str| cty::parse_iso8601(s);
+    // Inside the September 2024 window.
+    assert!(r.is_invalid_operation("SV2RSG/A", at("2024-09-06T10:15:00+00:00")));
+    // Outside every window — the same call, a year later.
+    assert!(!r.is_invalid_operation("SV2RSG/A", at("2025-09-06T10:15:00+00:00")));
+}
+
+/// The whitelist, against the real cty.xml and the real callsigns that
+/// exposed it. VU24DX's `ZL8AC` is the one contact that made DXCA read 314
+/// where ClubLog read 313.
+#[test]
+#[ignore = "needs the 1.x app's local cache (cty.xml)"]
+fn the_real_cty_rejects_an_unlisted_call_in_a_whitelisted_entity() {
+    let cty_xml = std::fs::read_to_string(cache_dir().join("cty.xml")).expect("cty.xml");
+    let data = cty::parse(&cty_xml).expect("cty.xml parses");
+    let now_unix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    let mut r = DxccResolver::default();
+    r.load(data, now_unix);
+    println!("{} whitelisted entities", r.whitelisted_entity_count());
+
+    let at = |s: &str| cty::parse_iso8601(s);
+    let recent = at("2024-06-01T12:00:00+00:00");
+
+    // 133 Kermadec: ZL8AC is nowhere in cty.xml.
+    assert!(r.is_whitelist_rejected(133, "ZL8AC", recent), "ZL8AC");
+    // ...but ZL8X inside its 2010 window is accepted, expired rule or not.
+    assert!(!r.is_whitelist_rejected(133, "ZL8X", at("2010-11-25T00:00:00+00:00")));
+    // and outside it, rejected — the call is reissued.
+    assert!(r.is_whitelist_rejected(133, "ZL8X", recent));
+
+    // The three that check out, and must keep checking out.
+    assert!(
+        !r.is_whitelist_rejected(180, "SV2RSG/A", recent),
+        "Mount Athos"
+    );
+    // T33T inside the 2022 DXpedition window (05–25 Nov), not the 1990 one.
+    assert!(!r.is_whitelist_rejected(490, "T33T", at("2022-11-10T00:00:00+00:00")));
+    assert!(r.is_whitelist_rejected(490, "T33T", at("2022-11-01T00:00:00+00:00")));
+    assert!(!r.is_whitelist_rejected(489, "3D2CCC", at("2024-05-01T00:00:00+00:00")));
+
+    // Not a whitelisted entity: any call goes.
+    assert!(!r.is_whitelist_rejected(324, "VU2CPL", recent), "India");
+    // Unknown QSO time is never rejected.
+    assert!(!r.is_whitelist_rejected(133, "ZL8AC", None));
 }

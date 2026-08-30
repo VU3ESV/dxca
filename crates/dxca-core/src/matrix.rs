@@ -59,13 +59,21 @@ impl LogMatrix {
             // Before resolution, and before `worked_calls`: an invalidated
             // contact is not a worked call either, so the same station
             // spotted again should still alert as new.
-            if resolver.is_invalid_operation(&call, r.qso_datetime_unix()) {
+            let at = r.qso_datetime_unix();
+            if resolver.is_invalid_operation(&call, at) {
                 continue;
             }
             let Some(d) = r.dxcc().or_else(|| resolver.resolve(&call)) else {
                 continue;
             };
             if d <= 0 || resolver.entity(d).is_none() {
+                continue;
+            }
+            // Whitelisted entity, unlisted call — a `ZL8` prefix is not a
+            // Kermadec credit. Checked on the *resolved* entity so it applies
+            // whether the id came from ClubLog's DXCC field or from our own
+            // prefix match.
+            if resolver.is_whitelist_rejected(d, &call, at) {
                 continue;
             }
             matrix.record(
@@ -329,6 +337,7 @@ mod tests {
             cq_zone: 0,
             continent: String::new(),
             deleted: false,
+            ..Default::default()
         };
         let mut r = crate::dxcc::DxccResolver::default();
         r.load(
@@ -415,6 +424,98 @@ mod tests {
             "only the September contact was dropped"
         );
         assert!(m.status(236).is_some(), "Greece is untouched");
+    }
+
+    /// The real VU24DX case, end to end: one `ZL8AC` QSO, resolved to
+    /// Kermadec by the `ZL8` prefix, on an entity whose credits ClubLog
+    /// restricts to a listed set that ZL8AC is not in. This is the QSO that
+    /// made the app read 314 DXCC worked against ClubLog's 313.
+    #[test]
+    fn an_unlisted_call_earns_no_credit_in_a_whitelisted_entity() {
+        let entity =
+            |adif: i32, name: &str, prefix: &str, whitelist: bool| crate::cty::DxccEntity {
+                adif,
+                name: name.into(),
+                prefix: prefix.into(),
+                whitelist,
+                ..Default::default()
+            };
+        let rule = |call: &str, adif: i32, is_exact: bool| crate::cty::PrefixRule {
+            call: call.into(),
+            adif,
+            is_exact,
+            start_unix: None,
+            end_unix: None,
+        };
+        let mut r = crate::dxcc::DxccResolver::default();
+        r.load(
+            crate::cty::CtyData {
+                entities: HashMap::from([
+                    (133, entity(133, "KERMADEC ISLAND", "ZL8", true)),
+                    (170, entity(170, "NEW ZEALAND", "ZL", false)),
+                ]),
+                prefix_rules: vec![
+                    rule("ZL8", 133, false),
+                    rule("ZL", 170, false),
+                    // The one Kermadec operation ClubLog accepts here.
+                    rule("ZL8X", 133, true),
+                ],
+                ..Default::default()
+            },
+            0,
+        );
+
+        let adif = "<CALL:5>ZL8AC<QSO_DATE:8>20250712<TIME_ON:6>101500\
+                    <BAND:3>40M<MODE:3>FT8<DXCC:3>133<eor>";
+        let (m, count) = LogMatrix::build_from_adif(adif, &r);
+        assert_eq!(count, 1, "still a QSO");
+        assert_eq!(m.stats().dxcc_worked, 0, "ClubLog credits nothing here");
+        assert!(m.status(133).is_none());
+        assert!(m.worked_calls.is_empty());
+
+        // The listed operation, same entity, is credited normally.
+        let listed = "<CALL:4>ZL8X<QSO_DATE:8>20250712<TIME_ON:6>101500\
+                      <BAND:3>40M<MODE:3>FT8<DXCC:3>133<eor>";
+        let (m, _) = LogMatrix::build_from_adif(listed, &r);
+        assert_eq!(m.stats().dxcc_worked, 1);
+        assert!(m.status(133).is_some());
+    }
+
+    /// The rejection must be aimed at the entity, not the prefix: an ordinary
+    /// New Zealand call sharing the `ZL` root is untouched.
+    #[test]
+    fn a_whitelisted_entity_does_not_taint_its_neighbours() {
+        let entity = |adif: i32, prefix: &str, whitelist: bool| crate::cty::DxccEntity {
+            adif,
+            name: "E".into(),
+            prefix: prefix.into(),
+            whitelist,
+            ..Default::default()
+        };
+        let rule = |call: &str, adif: i32| crate::cty::PrefixRule {
+            call: call.into(),
+            adif,
+            is_exact: false,
+            start_unix: None,
+            end_unix: None,
+        };
+        let mut r = crate::dxcc::DxccResolver::default();
+        r.load(
+            crate::cty::CtyData {
+                entities: HashMap::from([
+                    (133, entity(133, "ZL8", true)),
+                    (170, entity(170, "ZL", false)),
+                ]),
+                prefix_rules: vec![rule("ZL8", 133), rule("ZL", 170)],
+                ..Default::default()
+            },
+            0,
+        );
+        let adif = "<CALL:5>ZL1ABC<QSO_DATE:8>20250712<TIME_ON:6>101500\
+                    <BAND:3>40M<MODE:3>FT8<DXCC:3>170<eor>";
+        let (m, _) = LogMatrix::build_from_adif(adif, &r);
+        assert_eq!(m.stats().dxcc_worked, 1, "New Zealand still counts");
+        assert!(m.status(170).is_some());
     }
 
     /// The windows are not day-aligned, so the *time* has to be read too —

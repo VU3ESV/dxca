@@ -977,6 +977,71 @@ The published v2.12.2 release notes originally carried the wrong
 toolchain-drift explanation; corrected 2026-08-30, with a note that the fixes
 land after the tag and touch no shipped code.
 
+### DONE: the entity whitelist — the *actual* 314 vs 313 (2026-08-30)
+
+**The invalid-operations fix below was correct, and was not the cause.** It
+shipped as v2.13.1, deployed to all five hosts, VU24DX refreshed — and still
+read 314. Mount Athos was a wrong diagnosis: `SV2RSG/A` *is* on ClubLog's
+whitelist, and VU24DX's QSOs with it fall outside all three rejected windows.
+Manoj said so before the evidence did ("i dont think its mount athos").
+
+**The real mechanism is a third list: `<whitelist>` on the entity.** 59 rare
+entities carry it. For those, ClubLog credits *only* callsigns it lists as
+exceptions; a bare prefix match earns nothing. VU24DX has one `ZL8AC` QSO on
+40m — `ZL8` resolves to Kermadec, and **ZL8AC appears nowhere in cty.xml**,
+not as an exception and not as an invalid operation. That single QSO was the
+whole difference.
+
+**How it was isolated, and the method is the reusable part.** Confirmed
+matched at 307, so the extra entity had to be one of the seven
+worked-but-unconfirmed ones. Resolving VU24DX's `workedCalls` locally gave the
+single callsign behind each — T32TT, RI1FJL, ZL8AC, SV2RSG/A, S01A/S01WS,
+T33T. Cross-referencing those against `<whitelist>` left exactly one that
+ClubLog would not credit. No ClubLog credentials, no ADIF: the stored matrix
+plus cty.xml was enough.
+
+**A test on the real cty.xml is what separated code from data.** When the
+deploy changed nothing, `the_real_cty_flags_a_known_invalid_operation` proved
+the invalid-ops path worked end to end against the live 10 MB file — so the
+fault was the hypothesis, not the implementation. Write that test *before*
+theorising about a second bug.
+
+Implementation notes:
+
+- `DxccEntity` gained `whitelist` and `whitelist_start_unix`. Ten entities are
+  whitelisted only from a date (Turkmenistan 2007, Iran 2019, the Pacific
+  islands from the 1978 rule change); before it, ordinary calls counted.
+- The resolver keeps whitelisted entities' exact rules in a **separate** map
+  from `exact`, because that one is filtered to rules active *now* and a
+  whitelist is a historical record — ZL8X counted in November 2010 and counts
+  still.
+- **Both sides of the slash are matched.** `K9HEI/KH9` in a log is
+  `KH9/K9HEI` in cty.xml. Literal matching rejected a *confirmed* Wake Island
+  QSO from VU2CPL's log — and a rejected contact carrying a QSL is the tell
+  for a false rejection, because a QSL match means the operation was real.
+  With the swap, VU2CPL's log loses nothing: 320 entities, 26,179 worked
+  calls, 4,336 slots, unchanged.
+- The Swift parity test now clears `whitelist` as well as
+  `invalid_operations` to reproduce 1.x.
+
+**The live classifier deliberately does NOT apply the whitelist.** It runs on
+spots, where cty.xml's lag cuts the other way: a genuine new DXpedition is not
+listed yet, and suppressing its New DXCC alert would hide the rarest catch of
+the year. So a ZL8 spot still alerts; only the *log* side refuses the credit.
+The two now agree by construction — the matrix says Kermadec is unworked, so
+a Kermadec spot alerts as New DXCC, which is exactly right.
+
+**Known consequence, documented in the README:** cty.xml lags real
+operations, so a DXpedition ClubLog has not listed yet reads as un-worked
+until the next refresh. Correct — ClubLog will not credit it either — but it
+is the likely explanation next time something rare "won't clear".
+
+**Predicted before deploying, on Manoj's instruction, and worth repeating as
+a method:** the whitelist was simulated against VU24DX's stored matrix
+(entities + `workedCalls`) and cty.xml alone — 35 whitelisted entities in that
+log, 34 with an accepted call, one without. Predicted 314 → 313 with no
+collateral loss, before a binary went anywhere near the Pi.
+
 ### DONE: LoTW marker in Telegram alerts (2026-08-30)
 
 The Spots table has marked LoTW uploaders with a green `●` since M5; Telegram

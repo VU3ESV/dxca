@@ -424,13 +424,16 @@ impl UserService {
 /// The LoTW marker in a Telegram alert: the station uploads to Logbook of
 /// the World, so a QSO with it is likely to confirm without a card chase.
 ///
-/// The Spots table marks this with a green `●`, which does not survive the
-/// trip: Telegram's HTML has no colour, so a dot would arrive as an
-/// uncoloured blob indistinguishable from punctuation, and the emoji circle
-/// that *would* stay green is far too loud beside a callsign. An asterisk is
-/// the footnote mark it actually is — small, monochrome by nature, and legible
-/// in every client font.
-const LOTW_MARK: &str = "*";
+/// The Spots table marks this with a green `●`, and matching that colour is
+/// the constraint. Telegram's HTML supports `<b>`, `<i>` and `<a>` but **no
+/// colour attribute**, so a plain `*` or `●` arrives in the body text colour
+/// whatever we do. The only green Telegram will render is an emoji that is
+/// green in the font itself — and of those, `❇️` is the one shaped like an
+/// asterisk rather than a dot, a tick or a heart.
+///
+/// It is therefore emoji-sized rather than punctuation-sized. That is the
+/// trade for the colour; there is no third option.
+const LOTW_MARK: &str = "❇️";
 
 /// The 1.x Telegram message: emoji level label, HTML-escaped, source line.
 ///
@@ -574,11 +577,11 @@ mod alert_message_tests {
         let plain = alert_html(&classification(), "3Y0J", &s, false);
         let lotw = alert_html(&classification(), "3Y0J", &s, true);
 
-        assert!(lotw.contains("3Y0J*"), "marked after the call: {lotw}");
-        assert!(!plain.contains("3Y0J*"), "unmarked otherwise: {plain}");
+        assert!(lotw.contains("3Y0J❇️"), "marked after the call: {lotw}");
+        assert!(!plain.contains("3Y0J❇️"), "unmarked otherwise: {plain}");
         // The mark is the ONLY difference — it must not disturb the level
         // label, the body line, the origin lines or the time.
-        assert_eq!(lotw.replace("3Y0J*", "3Y0J"), plain);
+        assert_eq!(lotw.replace("3Y0J❇️", "3Y0J"), plain);
     }
 
     /// The mark belongs to the callsign, not to the alert level, so it is
@@ -596,7 +599,7 @@ mod alert_message_tests {
                 ..classification()
             };
             let html = alert_html(&c, "3Y0J", &spot("MSHV", None), true);
-            assert!(html.contains("3Y0J*"), "{level:?}: {html}");
+            assert!(html.contains("3Y0J❇️"), "{level:?}: {html}");
         }
     }
 

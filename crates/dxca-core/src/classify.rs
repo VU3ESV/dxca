@@ -301,6 +301,7 @@ mod tests {
                 cq_zone: 22,
                 continent: "AS".into(),
                 deleted: false,
+                ..Default::default()
             },
         );
         entities.insert(
@@ -312,6 +313,7 @@ mod tests {
                 cq_zone: 5,
                 continent: "NA".into(),
                 deleted: false,
+                ..Default::default()
             },
         );
         let rules = vec![
