@@ -2,11 +2,15 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-08-30 · **Status:**
+**v2.16.0 — Settings is two pages: Sources and Destinations**, each with
+tabs. Five rail entries became two, mirroring the two ends of the pipeline,
+and the FlexRadio panadapter settings moved into Destinations from their own
+entry. The multi-station per-account feeds work was **withdrawn** — see the
+entries under Open items.
+
 **v2.15.1 — alerts on the FlexRadio panadapter**, over the SmartSDR API on
 TCP 4992, colour-coded by level and expiring on a per-level ladder (DXCC an
 hour, Band/Mode 15 min, the rest 1). Per-account, off by default, alerts only.
-Its settings are their own page under **My station**; the old "Broadcast
-destinations" page is now **Spot outputs**.
 
 **v2.14.0 — health alerts.** Telegram when DXCA is up and nothing is reaching
 it: feed quiet, or a node disconnected. Both opt-in per account, off by
@@ -870,6 +874,73 @@ the cross-build exists to avoid. Notes should cover everything since the
 last *published* release, because tags can outrun releases.
 
 ## Open items → next session
+
+### DONE: Settings is Sources and Destinations — v2.16.0 (2026-08-30)
+
+Two pages instead of five, each with tabs, mirroring the two ends of the
+pipeline:
+
+* **Sources** — UDP | Cluster nodes
+* **Destinations** — UDP | MQTT | FlexRadio
+
+FlexRadio moved off its own *My station* entry on Manoj's call: a radio is
+somewhere spots go, like a UDP feed or an MQTT topic. It is admin-only now
+because that page is, which matches the model — admin is the main user;
+guests log in, set ClubLog credentials and choose what their Telegram alerts
+on. The settings are still per-account in `notify_json`, so nothing moved
+server-side and two operators would each point at their own radio.
+
+**Reused the existing pattern rather than inventing one.** `.segmented` is
+already in `app.css`, used by Dashboard, Alerts and Stats with
+`role="tablist"` markup and the choice kept in `localStorage`. Stats
+remembers its tab for a reason that applies here: a segmented control that
+must be found again on every visit gets missed, and someone who came for
+their node list would think it had gone.
+
+`Sources.svelte` is a thin wrapper — each tab keeps its own `ConfigGate`,
+card and save button, and `UdpSources.svelte` / `ClusterNodes.svelte` are
+untouched. Destinations does the same for `Mqtt` and `FlexRadio`.
+
+**Separate save buttons per tab are deliberate, not an oversight**: the UDP
+rows live in `config/dxca.toml`, the MQTT rows carry a broker password and
+live in the 0600 database, and Flex is in the account's notify row. One
+button would have to write three stores and could half-succeed.
+
+### WITHDRAWN: multi-station per-account feeds (2026-08-30)
+
+Built, tested, deployed on noderedpi4 — then removed. `docs/MULTI-STATION.md`
+is kept and marked withdrawn, with the findings worth having if it is ever
+revisited.
+
+The model it served does not exist here:
+
+> Admin is the main user. Others are all guest users. All sources and local
+> network settings to be only with admin. Guests can only login, set their
+> ClubLog credentials, and select the spots they want their Telegram to alert
+> on.
+
+**No guest owns a source, a node or an output**, so there is nothing to own
+per account — one station's feeds, which is what `config/dxca.toml` was
+already doing, and what v2.15.1 already implemented.
+
+**The lesson, recorded because it cost a day:** a request to move some menu
+items turned into a schema column, a namespacing scheme, an `owner` field on
+`Spot`, a second config endpoint and a rewired pipeline, without anyone
+deciding a change that size was wanted. Ask what shape the answer should be
+before building it — and when the user restates the requirement, check
+whether it invalidates the work rather than layering onto it.
+
+Three pieces were kept because they stand alone:
+
+* the `apply_sources` fix freeing a retiring listener that holds a port an
+  addition wants — renaming a source while keeping its port was impossible
+  without it, failing `EADDRINUSE` against ourselves;
+* the telnet first-bytes log, which settled that module's long-standing open
+  question: **RUMlog sends nothing at all on connect**, so a callsign prompt
+  would need the client to answer one — a separate experiment;
+* a `format.rs` test recording that `source_name` reaches the wire as the
+  spotter callsign, and that punctuation in it is silently welded rather than
+  rejected.
 
 ### DONE: the UI cleanup pass (2026-08-29) — see the session entry above
 
