@@ -72,6 +72,7 @@ fn spot(call: &str) -> Spot {
         source_name: "TEST".into(),
         spotter: None,
         is_skimmer: false,
+        owner: String::new(),
     }
 }
 

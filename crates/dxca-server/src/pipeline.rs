@@ -276,6 +276,7 @@ async fn run_pipeline(
                     &reported,
                     (dial + u64::from(decode.delta_frequency_hz)) as f64 / 1_000_000.0,
                 );
+                let (source_owner, source_display) = crate::feeds::split(&datagram.source_name);
                 let spot = Spot {
                     time_unix: time_from_decode_ms(now, decode.time_ms),
                     snr_db: decode.snr_db,
@@ -292,11 +293,16 @@ async fn run_pipeline(
                     low_confidence: decode.low_confidence,
                     off_air: decode.off_air,
                     dial_frequency_hz: dial,
-                    source_name: datagram.source_name.clone(),
+                    // The configured name may be namespaced once feeds are
+                    // owned per account. It is split here rather than
+                    // carried whole, because `source_name` is the spotter
+                    // callsign on the cluster line — see `Spot::owner`.
+                    source_name: source_display.to_string(),
                     // Decoded here: the local receiver is the spotter, and
                     // `source_name` already says which decoder heard it.
                     spotter: None,
                     is_skimmer: false,
+                    owner: source_owner.to_string(),
                 };
                 process_spot(&state, &mut dedupe, spot, dedupe_window_secs, ring_capacity);
             }

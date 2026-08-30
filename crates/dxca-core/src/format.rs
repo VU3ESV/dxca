@@ -76,7 +76,8 @@ mod tests {
             dial_frequency_hz: 14_074_000,
             source_name: "MSHV 2333".into(),
             spotter: None,
-            is_skimmer: false, // space must be stripped
+            is_skimmer: false,
+            owner: String::new(), // space must be stripped
         };
         let line = format(&s);
         assert_eq!(
@@ -106,6 +107,7 @@ mod tests {
             source_name: "JTDX".into(),
             spotter: None,
             is_skimmer: false,
+            owner: String::new(),
         };
         assert!(format(&s).contains("UNKNOWN"));
     }
@@ -144,6 +146,7 @@ mod source_name_reaches_the_wire {
             source_name: "MSHV".into(),
             spotter: None,
             is_skimmer: false,
+            owner: String::new(),
         };
         let bare = format(&s);
         s.source_name = "VU2CPL:MSHV".into();

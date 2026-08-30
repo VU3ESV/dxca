@@ -171,6 +171,7 @@ fn test_spot() -> Spot {
         source_name: "JTDX".into(),
         spotter: None,
         is_skimmer: false,
+        owner: String::new(),
     }
 }
 

@@ -158,6 +158,7 @@ fn spot(call: &str) -> Spot {
         source_name: "VU2OY".into(),
         spotter: None,
         is_skimmer: false,
+        owner: String::new(),
     }
 }
 

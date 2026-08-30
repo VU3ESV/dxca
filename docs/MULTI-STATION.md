@@ -1,7 +1,13 @@
 # Multi-station DXCA — moving sources, nodes and outputs to the user
 
-**Status: step one built, nothing rewired.** Written 2026-08-30 against
-v2.15.1.
+**Status: steps one and two built; the pipeline is not yet rewired.**
+Written 2026-08-30 against v2.15.1.
+
+Step two: `Spot` carries an `owner` field, and both producers —
+`pipeline.rs` for decoders, `nodes.rs::synthetic_spot` for cluster nodes —
+split a configured name into bare `source_name` plus `owner`. Still
+behaviour-neutral: nothing produces a namespaced name yet, so `owner` is
+empty on every spot and every consumer sees exactly what it saw before.
 
 `crates/dxca-server/src/feeds.rs` now holds the per-account storage, the
 namespacing rule and the TOML migration, and `user_configs.feeds_json` is the

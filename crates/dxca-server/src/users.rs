@@ -666,6 +666,7 @@ mod alert_message_tests {
             source_name: source.into(),
             spotter: spotter.map(str::to_string),
             is_skimmer: false,
+            owner: String::new(),
         }
     }
 

@@ -67,6 +67,21 @@ pub struct Spot {
     /// spot two hops away.
     #[serde(default)]
     pub spotter: Option<String>,
+    /// Which account's source or node produced this spot.
+    ///
+    /// Empty when the producing name carried no owner — every spot today,
+    /// and every spot on a single-station server for as long as it stays
+    /// one. Populated once feeds are owned per account
+    /// (`docs/MULTI-STATION.md`), and it is what a per-user filter tests.
+    ///
+    /// **Separate from `source_name` on purpose.** The obvious design was to
+    /// prefix the name — `VU2CPL:MSHV` — but `source_name` is the spotter
+    /// callsign on the cluster line, and `format::format` filters it to
+    /// `[A-Z0-9/-]`. A colon there does not error; it is dropped, and
+    /// `DX de VU2CPLMSHV:` reaches every logger looking like a real call.
+    /// A field cannot leak onto the wire that way.
+    #[serde(default)]
+    pub owner: String,
     /// The spotter was a **skimmer** — its callsign carried the `-#` marker
     /// the parser strips off [`Spot::spotter`].
     ///
@@ -225,6 +240,7 @@ mod tests {
             source_name: "JTDX".into(),
             spotter: None,
             is_skimmer: false,
+            owner: String::new(),
         }
     }
 

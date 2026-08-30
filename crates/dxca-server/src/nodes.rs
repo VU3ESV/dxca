@@ -289,7 +289,12 @@ fn now_unix() -> i64 {
 /// 1.x `handleClusterSpot` parity: a cluster spot becomes a synthetic
 /// decode — message `CQ <call>`, receive-time stamp, SNR and mode scraped
 /// from the comment, dial = spot frequency with zero offset.
+/// `node_name` is the CONFIGURED name, which may carry an owner prefix once
+/// feeds are per-account. It is split here: `source_name` keeps the bare
+/// name because it becomes the spotter callsign on the cluster line, and the
+/// owner travels in its own field. See `Spot::owner`.
 fn synthetic_spot(node_name: &str, p: &ParsedSpot) -> Spot {
+    let (node_owner, node_display) = crate::feeds::split(node_name);
     // Three sources, best first. `p.mode` is the parser's own token-based
     // read, which also infers CW from a `WPM` token and RTTY from `BPS` —
     // strictly better than re-scanning the comment, and it used to be thrown
@@ -323,7 +328,7 @@ fn synthetic_spot(node_name: &str, p: &ParsedSpot) -> Spot {
         low_confidence: false,
         off_air: false,
         dial_frequency_hz: (p.freq_khz * 1000.0) as u64,
-        source_name: node_name.to_string(),
+        source_name: node_display.to_string(),
         // The parser had this all along; it used to be discarded here, which
         // is why a relayed spot showed only the node that carried it.
         spotter: (!p.spotter.is_empty()).then(|| p.spotter.clone()),
@@ -331,6 +336,7 @@ fn synthetic_spot(node_name: &str, p: &ParsedSpot) -> Spot {
         // left the UI unable to tell a skimmer catch from a hand-typed spot
         // — especially once the `-#` marker had been stripped off the call.
         is_skimmer: p.spotter_is_skimmer,
+        owner: node_owner.to_string(),
     }
 }
 
@@ -372,6 +378,32 @@ fn scrape_mode(comment: &str) -> String {
 mod tests {
     use super::*;
     use dxca_connect::dxcluster::wire::parse_spot_line;
+
+    /// A configured name carrying an owner splits: the bare name is what
+    /// reaches the cluster line, the owner rides in its own field.
+    ///
+    /// Getting this wrong is silent — `format::format` strips the colon and
+    /// sends `DX de VU2CPLDB0SUE:` to every logger, which reads as a real
+    /// callsign. Hence a test on each producer.
+    #[test]
+    fn a_namespaced_node_name_splits_into_source_and_owner() {
+        let line = "DX de W3LPL-#:    14074.0  K1JT         FT8            1428Z";
+        let parsed = parse_spot_line(line).expect("parses");
+
+        let plain = synthetic_spot("DB0SUE", &parsed);
+        assert_eq!(plain.source_name, "DB0SUE");
+        assert_eq!(plain.owner, "", "an unqualified name has no owner");
+
+        let owned = synthetic_spot("VU2CPL:DB0SUE", &parsed);
+        assert_eq!(
+            owned.source_name, "DB0SUE",
+            "the wire must see the bare name"
+        );
+        assert_eq!(owned.owner, "VU2CPL");
+        // Everything else is untouched by the split.
+        assert_eq!(owned.spotter, plain.spotter);
+        assert_eq!(owned.is_skimmer, plain.is_skimmer);
+    }
 
     /// The whole point of the `spotter` field: a relaying node is not the
     /// station that heard the DX. HamAlert, DB0SUE and N2WQ all carry other
