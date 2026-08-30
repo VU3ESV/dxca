@@ -107,11 +107,10 @@ impl PipelineState {
         // genuine clash is rejected rather than dying inside a task.
         //
         // WITH ONE EXCEPTION: a listener being RETIRED that holds a port an
-        // addition wants is dropped first. Otherwise moving a port between
-        // names fails with EADDRINUSE against ourselves — and that is not an
-        // edge case, it is the upgrade path. The first save after feeds move
-        // to an account renames `MSHV` to `VU2CPL:MSHV` on the same port,
-        // which is exactly this shape.
+        // addition wants is dropped first. Otherwise moving a port from one
+        // source name to another fails with EADDRINUSE against ourselves —
+        // renaming a source while keeping its port is an ordinary edit, and
+        // it could not be done at all.
         let mut added = Vec::new();
         {
             let mut current = self.sources.lock().unwrap();
@@ -301,7 +300,6 @@ async fn run_pipeline(
                     &reported,
                     (dial + u64::from(decode.delta_frequency_hz)) as f64 / 1_000_000.0,
                 );
-                let (source_owner, source_display) = crate::feeds::split(&datagram.source_name);
                 let spot = Spot {
                     time_unix: time_from_decode_ms(now, decode.time_ms),
                     snr_db: decode.snr_db,
@@ -318,16 +316,11 @@ async fn run_pipeline(
                     low_confidence: decode.low_confidence,
                     off_air: decode.off_air,
                     dial_frequency_hz: dial,
-                    // The configured name may be namespaced once feeds are
-                    // owned per account. It is split here rather than
-                    // carried whole, because `source_name` is the spotter
-                    // callsign on the cluster line — see `Spot::owner`.
-                    source_name: source_display.to_string(),
+                    source_name: datagram.source_name.clone(),
                     // Decoded here: the local receiver is the spotter, and
                     // `source_name` already says which decoder heard it.
                     spotter: None,
                     is_skimmer: false,
-                    owner: source_owner.to_string(),
                 };
                 process_spot(&state, &mut dedupe, spot, dedupe_window_secs, ring_capacity);
             }

@@ -76,8 +76,7 @@ mod tests {
             dial_frequency_hz: 14_074_000,
             source_name: "MSHV 2333".into(),
             spotter: None,
-            is_skimmer: false,
-            owner: String::new(), // space must be stripped
+            is_skimmer: false, // space must be stripped
         };
         let line = format(&s);
         assert_eq!(
@@ -107,7 +106,6 @@ mod tests {
             source_name: "JTDX".into(),
             spotter: None,
             is_skimmer: false,
-            owner: String::new(),
         };
         assert!(format(&s).contains("UNKNOWN"));
     }
@@ -118,18 +116,16 @@ mod source_name_reaches_the_wire {
     use super::*;
     use crate::Spot;
 
-    /// `source_name` IS the spotter callsign on the cluster line, so it must
-    /// reach here **bare** — never namespaced with an owner.
+    /// `source_name` IS the spotter callsign on the cluster line, so whatever
+    /// is put in it goes out to every connected logger.
     ///
-    /// This is why multi-station namespacing stays inside the config and
-    /// apply layer, and why `Spot` carries the owner in its own field rather
-    /// than prefixed onto the name (`docs/MULTI-STATION.md`). The failure
-    /// mode is what makes it worth a test: the colon is not in this
-    /// function's allowed character set, so `VU2CPL:MSHV` does not error or
-    /// truncate — it silently becomes `VU2CPLMSHV`, which looks like a
-    /// perfectly plausible callsign in a logger.
+    /// Worth a test because the failure is silent. This function filters the
+    /// name to `[A-Z0-9/-]`, so a value carrying punctuation is not rejected
+    /// and not truncated — the punctuation is simply dropped, and the result
+    /// still looks like a plausible callsign. A namespaced `VU2CPL:MSHV`
+    /// becomes `DX de VU2CPLMSHV:`, which nobody would read as a bug.
     #[test]
-    fn a_qualified_source_name_would_be_silently_welded() {
+    fn punctuation_in_a_source_name_is_silently_welded_not_rejected() {
         let mut s = Spot {
             time_unix: 0,
             snr_db: -10,
@@ -146,20 +142,14 @@ mod source_name_reaches_the_wire {
             source_name: "MSHV".into(),
             spotter: None,
             is_skimmer: false,
-            owner: String::new(),
         };
-        let bare = format(&s);
+        assert!(format(&s).contains("MSHV:"), "the ordinary case");
+
         s.source_name = "VU2CPL:MSHV".into();
-        let qualified = format(&s);
-        println!("bare:      {bare}");
-        println!("qualified: {qualified}");
-        assert!(bare.contains("MSHV:"), "{bare}");
+        let welded = format(&s);
+        assert!(welded.contains("VU2CPLMSHV:"), "{welded}");
         assert!(
-            qualified.contains("VU2CPLMSHV:"),
-            "the colon is filtered out, silently welding owner to name: {qualified}"
-        );
-        assert!(
-            !qualified.contains("VU2CPL:MSHV"),
+            !welded.contains("VU2CPL:MSHV"),
             "and nothing here would tell you it happened"
         );
     }

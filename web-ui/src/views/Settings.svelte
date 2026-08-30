@@ -40,13 +40,11 @@
           find: 'locator maidenhead grid square qth sun sunrise sunset greyline grey line band mask dawn dusk' },
         { key: 'telegram', label: 'Telegram',
           find: 'telegram bot token chat id botfather cooldown notify ping push message health feed quiet node down' },
+        // Under My station, not with the spot outputs: the Server group is
+        // admin-only and this is per-account config, so filing it there
+        // would hide it from the operator whose radio it is.
         { key: 'flex', label: 'FlexRadio',
           find: 'flex flexradio smartsdr panadapter radio spot 4992 colour color lifetime slice' },
-        // The one feed a guest owns. Every account decides which nodes it
-        // ingests from and is alerted on; the decoders and the outputs below
-        // are the admin's local machine and stay in the Server group.
-        { key: 'nodes', label: 'Cluster nodes',
-          find: 'cluster node telnet dx spider upstream login host port skimmer feed ingest' },
       ],
     },
     {
@@ -55,12 +53,15 @@
       items: [
         { key: 'reference', label: 'Reference data',
           find: 'cty cty.xml dxcc prefix entity lotw api key blacklist blocked block ban version milestone' },
-        // Admin-only: the decoders are on the admin's LAN, and the outputs
-        // feed the admin's loggers. A guest has neither.
         { key: 'sources', label: 'UDP sources',
           find: 'udp source decoder wsjt wsjtx jtdx mshv rumlog port listener' },
+        { key: 'nodes', label: 'Cluster nodes',
+          find: 'cluster node telnet dx spider upstream login host port skimmer feed' },
+        // Renamed from "Broadcast destinations": nothing here broadcasts —
+        // they are unicast UDP and MQTT publishes — and "outputs" pairs with
+        // the sources and nodes above, which are where spots come IN.
         { key: 'dests', label: 'Spot outputs',
-          find: 'spot output outputs broadcast destination udp out wsjtx passthrough logger rumlog mqtt broker topic publish unfiltered' },
+          find: 'spot output outputs broadcast destination udp out wsjtx passthrough logger mqtt broker topic publish unfiltered' },
       ],
     },
     {
@@ -68,7 +69,7 @@
       admin: true,
       items: [
         { key: 'users', label: 'Users',
-          find: 'user account admin role password reset add remove callsign' },
+          find: 'user account admin password role login delete add operator' },
       ],
     },
   ];

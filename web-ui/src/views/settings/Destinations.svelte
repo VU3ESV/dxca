@@ -23,7 +23,7 @@
     (server.cfg.broadcast_destinations = [
       ...server.cfg.broadcast_destinations,
       {
-        name: '', ip: '127.0.0.1', port: 2237, format: 'cluster',
+        name: '', ip: '127.0.0.1', port: 2237, format: 'passthrough',
         sources: [], unfiltered: false, enabled: true,
       },
     ]);
@@ -66,6 +66,7 @@
                 <select bind:value={d.format}>
                   <option value="cluster">cluster</option>
                   <option value="wsjtx">wsjtx</option>
+                  <option value="passthrough">passthrough</option>
                 </select>
               </td>
               <td>
@@ -92,46 +93,5 @@
     <ApplySave />
   </div>
 
-  {#if server.cfg?.is_admin && (server.cfg.passthrough ?? []).length}
-    <div class="card">
-      <h2>
-        Passthrough <span class="mine">server-wide</span>
-        <HelpTip label="Passthrough">
-          These forward a decoder's own datagram <b>untouched</b>, before any
-          parsing — which is what keeps a logger's click-to-fill working, and
-          why a blacklisted call can still reach one this way.
-          <br /><br />
-          They belong to the <b>machine</b>, not to a station: they are keyed
-          to a decoder rather than an operator, so they stay server-wide and
-          admin-owned while the outputs above moved to accounts.
-        </HelpTip>
-      </h2>
-      <div class="tablewrap">
-        <table>
-          <thead>
-            <tr><th>Name</th><th>IP</th><th>Port</th><th>On</th><th></th></tr>
-          </thead>
-          <tbody>
-            {#each server.cfg.passthrough as d, i}
-              <tr>
-                <td><input bind:value={d.name} /></td>
-                <td><input bind:value={d.ip} class="host" /></td>
-                <td><input type="number" bind:value={d.port} class="port" /></td>
-                <td><input type="checkbox" bind:checked={d.enabled} /></td>
-                <td>
-                  <button class="drop" title="Remove"
-                    onclick={() => (server.cfg.passthrough = drop(server.cfg.passthrough, i))}>✕</button>
-                </td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </div>
-      <ApplySave />
-    </div>
-  {/if}
-
-  {#if server.cfg?.is_admin}
-    <Mqtt />
-  {/if}
+  <Mqtt />
 </ConfigGate>

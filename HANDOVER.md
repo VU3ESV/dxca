@@ -997,47 +997,6 @@ The published v2.12.2 release notes originally carried the wrong
 toolchain-drift explanation; corrected 2026-08-30, with a note that the fixes
 land after the tag and touch no shipped code.
 
-### IN PROGRESS: multi-station, step one — per-account feeds storage
-
-`docs/MULTI-STATION.md` is the plan; `crates/dxca-server/src/feeds.rs` is the
-first slice. **Behaviour-neutral and unreleased** — the column exists and the
-migration fills it, but nothing reads it to build a pipeline and
-`config/dxca.toml` still runs the server.
-
-**The finding the whole design turns on: the name is the key.** Not a label —
-`apply_sources` keys its listener map on `(name, port)`, `NodeManager::apply`
-keys `clients` and `statuses` on `name`, every spot carries `source_name` as
-one namespace covering decoders *and* nodes, `/api/status` reports by name,
-and destinations filter by name. Two accounts naming a node `N2WQ-2` collide
-in all of them. So names are qualified `VU2CPL:N2WQ-2` and displayed bare.
-
-The payoff is bigger than avoiding collisions: **ownership becomes derivable
-from the spot itself**, because `source_name` already travels the whole
-pipeline. A per-user filter is a prefix test — no second lookup, no new field
-on `Spot`. That is what makes "one stream, filtered per user" cheap.
-
-Built: `feeds_json` column (additive migration), `FeedsUserConfig`,
-`qualify`/`split`/`owned_by`, `port_clash` (which names the *other* operator,
-because otherwise whoever cannot save has nobody to ask), and
-`migrate_from_toml` — pure, so the decision is testable without a database.
-
-**Migration rules worth not re-deriving:** passthrough destinations stay in
-the TOML (they relay a decoder's datagram verbatim and belong to the machine,
-not a station); a destination's `sources` allowlist is rewritten alongside, or
-an entry naming `MSHV` silently stops matching once the source is
-`VU2CPL:MSHV`; an *empty* allowlist means ALL and must stay empty; and more
-than one account **refuses** rather than guessing, because guessing hands one
-operator another's cluster logins.
-
-**Verified against a copy of production**, not just unit tests: the real
-`data/dxca.db` and the real `config/dxca.toml` (with every node and source
-`enabled = false` so nothing dialled out) produced `VU2CPL:MSHV`,
-`VU2CPL:JTDX`, `VU2CPL:WSJTX` and the five nodes, left the RUMlog passthrough
-behind, and said nothing at all on the second start.
-
-**Not deployed.** The next slice is the one with risk: rewiring the pipeline
-to aggregate across accounts instead of reading the TOML.
-
 ### DONE: Flex settings moved, page renamed, lifetimes per level — v2.15.1
 
 Three asks in one pass.

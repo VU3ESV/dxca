@@ -18,7 +18,7 @@ fn default_true() -> bool {
     true
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct UdpSource {
     pub name: String,
@@ -27,7 +27,7 @@ pub struct UdpSource {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ClusterNode {
     pub name: String,
@@ -41,7 +41,7 @@ pub struct ClusterNode {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BroadcastDestination {
     pub name: String,
@@ -186,15 +186,7 @@ impl Config {
 
     /// Enabled destinations in the broadcaster's terms.
     pub fn broadcast_destinations(&self) -> Vec<DestinationConfig> {
-        destinations_of(&self.broadcast_destinations)
-    }
-}
-
-/// The same conversion over any list, so an aggregate assembled from several
-/// accounts can be applied without first pretending to be a `Config`.
-pub fn destinations_of(dests: &[BroadcastDestination]) -> Vec<DestinationConfig> {
-    {
-        dests
+        self.broadcast_destinations
             .iter()
             .filter(|d| d.enabled)
             .map(|d| DestinationConfig {

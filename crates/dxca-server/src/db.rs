@@ -491,8 +491,7 @@ CREATE TABLE IF NOT EXISTS user_configs (
     user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     clublog_json TEXT NOT NULL DEFAULT '{}',
     notify_json TEXT NOT NULL DEFAULT '{}',
-    station_json TEXT NOT NULL DEFAULT '{}',
-    feeds_json TEXT NOT NULL DEFAULT '{}'
+    station_json TEXT NOT NULL DEFAULT '{}'
 );
 CREATE TABLE IF NOT EXISTS matrices (
     user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -565,14 +564,6 @@ const ADDED_COLUMNS: &[(&str, &str, &str)] = &[
     // `DEFAULT 0` would silently claim every historical alert was a 0 dB
     // report.
     ("alerts_sent", "snr_db", "snr_db INTEGER"),
-    // The sources, nodes and outputs an account owns — step one of
-    // docs/MULTI-STATION.md. Empty on every existing row; the TOML is still
-    // what runs the server until the pipeline is rewired.
-    (
-        "user_configs",
-        "feeds_json",
-        "feeds_json TEXT NOT NULL DEFAULT '{}'",
-    ),
 ];
 
 /// Bring an existing database up to the current shape. Runs on every open;
@@ -1034,23 +1025,6 @@ impl Db {
         cfg.notify_manual_only = cfg.notify_spotter_kind == SPOTTER_HUMAN;
         let cfg = &cfg;
         self.set_config_json(user_id, "notify_json", cfg)
-    }
-
-    /// The sources, nodes and outputs this account owns.
-    ///
-    /// Empty for every account today: nothing writes it but the migration,
-    /// and nothing reads it to build a pipeline yet. See
-    /// `docs/MULTI-STATION.md`.
-    pub fn feeds_config(&self, user_id: i64) -> DbResult<crate::feeds::FeedsUserConfig> {
-        self.config_json(user_id, "feeds_json")
-    }
-
-    pub fn set_feeds_config(
-        &self,
-        user_id: i64,
-        cfg: &crate::feeds::FeedsUserConfig,
-    ) -> DbResult<()> {
-        self.set_config_json(user_id, "feeds_json", cfg)
     }
 
     fn config_json<T: serde::de::DeserializeOwned + Default>(

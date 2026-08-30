@@ -1,26 +1,40 @@
 # Multi-station DXCA — moving sources, nodes and outputs to the user
 
-**Status: steps one to three built. The pipeline now runs from the
-accounts.**
-Written 2026-08-30 against v2.15.1.
+**Status: BUILT, TESTED, AND WITHDRAWN (2026-08-30). Do not rebuild it.**
 
-Step two: `Spot` carries an `owner` field, and both producers —
-`pipeline.rs` for decoders, `nodes.rs::synthetic_spot` for cluster nodes —
-split a configured name into bare `source_name` plus `owner`. Still
-behaviour-neutral: nothing produces a namespaced name yet, so `owner` is
-empty on every spot and every consumer sees exactly what it saw before.
+All of it worked — `feeds_json`, callsign namespacing, `Spot::owner`, the
+aggregate, the per-account endpoint, the accounts-driven pipeline — and it was
+deployed on noderedpi4 and verified against a copy of production. It was then
+removed, because the deployment model does not need it:
 
-`crates/dxca-server/src/feeds.rs` now holds the per-account storage, the
-namespacing rule and the TOML migration, and `user_configs.feeds_json` is the
-column. **It is behaviour-neutral**: nothing reads it to build a pipeline, and
-`config/dxca.toml` still runs the server. The TOML sections are deliberately
-left in place so the previous binary remains a working rollback.
+> Admin is the main user. Others are all guest users. All sources and local
+> network settings to be only with admin. Guests can only login, set their
+> ClubLog credentials, and select the spots they want their Telegram to alert
+> on. — Manoj, 2026-08-30
 
-Verified against a copy of the production database and the real config: three
-sources and five nodes moved to `VU2CPL:…`, the RUMlog passthrough correctly
-left behind, and a second start silent.
+**No guest owns a source, a node or an output**, so there is nothing to own
+per account. One station's feeds, which is what `config/dxca.toml` was already
+doing. The architecture solved a problem this deployment does not have, and
+keeping it would have meant carrying a schema column, a namespacing scheme and
+a second config endpoint to support a case that does not exist.
 
-Everything below still stands as the plan for the rest.
+Three pieces were kept because they stand alone:
+
+* the `apply_sources` fix freeing a retiring listener that holds a port an
+  addition wants — without it, renaming a source while keeping its port fails
+  with `EADDRINUSE` against ourselves;
+* the telnet first-bytes log, which answered this module's long-standing open
+  question — **RUMlog sends nothing at all on connect**, so a callsign prompt
+  would need the client to answer one, which is a separate experiment;
+* the `format.rs` test recording that `source_name` reaches the wire as the
+  spotter callsign, and that punctuation in it is welded rather than rejected.
+
+**If this is ever revisited**, the findings below are the valuable part — in
+particular the reason namespacing must not touch `source_name`, and the fact
+that the config file stops controlling what runs the moment accounts own
+feeds. Read it before writing anything.
+
+The design below is left as it was written.
 
 ## The model
 
