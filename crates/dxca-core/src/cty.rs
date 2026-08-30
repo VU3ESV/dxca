@@ -2,7 +2,9 @@
 //!
 //! The file has three sections the 1.x app consumes: `<entities>` (DXCC
 //! entity list), `<exceptions>` (exact-call overrides), and `<prefixes>`
-//! (prefix → DXCC rules). The Swift implementation is an event-driven
+//! (prefix → DXCC rules), plus a fourth the 1.x app ignored and this port
+//! now reads: `<invalid_operations>` (see [`InvalidOperation`]). The Swift
+//! implementation is an event-driven
 //! `XMLParserDelegate`; this port drives the same record-assembly logic
 //! from a minimal built-in XML scanner (start/end/text events, entity
 //! decoding, attributes skipped) — cty.xml is machine-generated and needs
@@ -63,10 +65,52 @@ impl PrefixRule {
     }
 }
 
+/// A ClubLog **invalid operation**: an exact callsign, optionally bounded by
+/// a date window, whose QSOs do not count for DXCC — pirates, unlicensed
+/// operations, and DXpeditions whose paperwork was later rejected.
+///
+/// ClubLog resolves such a QSO to an entity (its dashboard still labels the
+/// contact) but refuses to credit it. 1.x never read this section, so a
+/// station whose only contact with an entity was an invalidated operation
+/// counted as worked here and not on ClubLog — VU24DX's Mount Athos, worked
+/// solely as `SV2RSG/A`, was exactly one such entity.
+///
+/// Matched on the **raw** callsign, never the portable-normalised one: the
+/// list is full calls (`SV2RSG/A`, `3D2/N1GXE`, `1A0KM/IBYO`) and
+/// [`crate::dxcc::normalize_call`] would strip `SV2RSG/A` down to `SV2RSG`,
+/// which is a different — valid — station.
+#[derive(Debug, Clone, PartialEq)]
+pub struct InvalidOperation {
+    pub call: String,
+    /// Open bounds mean "always invalid on that side". Both open — which is
+    /// the common case — means the call never counts, at any date.
+    pub start_unix: Option<i64>,
+    pub end_unix: Option<i64>,
+}
+
+impl InvalidOperation {
+    /// Whether this entry covers `at_unix`.
+    ///
+    /// `None` is an unknown QSO time. An entry with no window at all still
+    /// matches — the call never counts whenever it was worked — but a
+    /// *windowed* entry does not, because discarding a contact we cannot
+    /// place inside the window would be a guess against the operator.
+    pub fn covers(&self, at_unix: Option<i64>) -> bool {
+        if self.start_unix.is_none() && self.end_unix.is_none() {
+            return true;
+        }
+        let Some(at) = at_unix else { return false };
+        self.start_unix.is_none_or(|s| at >= s) && self.end_unix.is_none_or(|e| at <= e)
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct CtyData {
     pub entities: HashMap<i32, DxccEntity>,
     pub prefix_rules: Vec<PrefixRule>,
+    /// Several entries can share one callsign — a call flagged over more
+    /// than one period appears once per period.
+    pub invalid_operations: Vec<InvalidOperation>,
 }
 
 #[derive(Default)]
@@ -99,7 +143,8 @@ pub fn parse(content: &str) -> Option<CtyData> {
                 let parent = parent_of(&path);
                 let is_top_record = (lower == "entity" && parent == "entities")
                     || (lower == "exception" && parent == "exceptions")
-                    || (lower == "prefix" && parent == "prefixes");
+                    || (lower == "prefix" && parent == "prefixes")
+                    || (lower == "invalid" && parent == "invalid_operations");
                 if is_top_record {
                     tmp = RecordTmp::default();
                 }
@@ -161,6 +206,20 @@ pub fn parse(content: &str) -> Option<CtyData> {
                                     end_unix: tmp.end,
                                 });
                             }
+                        }
+                    }
+                    // `<invalid>` records carry no `<adif>` — the call is
+                    // enough, since the entry says "this contact scores
+                    // nothing", not "it belongs elsewhere".
+                    "invalid" => {
+                        if parent == "invalid_operations"
+                            && let Some(call) = tmp.call.as_ref()
+                        {
+                            out.invalid_operations.push(InvalidOperation {
+                                call: call.to_uppercase(),
+                                start_unix: tmp.start,
+                                end_unix: tmp.end,
+                            });
                         }
                     }
                     "exception" => {
@@ -352,7 +411,7 @@ pub fn parse_iso8601(s: &str) -> Option<i64> {
 }
 
 /// Days since 1970-01-01 (Howard Hinnant's civil-days algorithm).
-fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
+pub(crate) fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
     let y = y - i64::from(m <= 2);
     let era = y.div_euclid(400);
     let yoe = y - era * 400;
@@ -380,7 +439,84 @@ mod tests {
   <prefix record="1"><call>VU</call><entity>INDIA</entity><adif>324</adif><cqz>22</cqz><cont>AS</cont></prefix>
   <prefix record="2"><call>K</call><entity>UNITED STATES</entity><adif>291</adif></prefix>
  </prefixes>
+ <invalid_operations>
+  <invalid record="1"><call>SV2RSG/A</call><start>2024-09-05T00:00:00+00:00</start><end>2024-09-09T23:59:59+00:00</end></invalid>
+  <invalid record="2"><call>SV2RSG/A</call><start>2021-12-09T00:00:00+00:00</start><end>2021-12-09T23:59:59+00:00</end></invalid>
+  <invalid record="3"><call>HM0DX</call></invalid>
+  <invalid record="4"><call>ST2NH</call><start>2023-04-16T00:00:00+00:00</start></invalid>
+ </invalid_operations>
 </clublog>"#;
+
+    /// The section 1.x never read. Without it a QSO ClubLog refuses to
+    /// credit is scored anyway, and an entity worked only through such an
+    /// operation inflates the DXCC total by one.
+    #[test]
+    fn invalid_operations_are_parsed_with_their_windows() {
+        let cty = parse(SAMPLE).unwrap();
+        assert_eq!(cty.invalid_operations.len(), 4);
+
+        // One call, two rejected periods — both are kept.
+        let athos: Vec<_> = cty
+            .invalid_operations
+            .iter()
+            .filter(|o| o.call == "SV2RSG/A")
+            .collect();
+        assert_eq!(athos.len(), 2);
+        let sept = athos
+            .iter()
+            .find(|o| o.start_unix == parse_iso8601("2024-09-05T00:00:00+00:00"))
+            .expect("the September 2024 window");
+        assert_eq!(sept.end_unix, parse_iso8601("2024-09-09T23:59:59+00:00"));
+
+        let unbounded = cty
+            .invalid_operations
+            .iter()
+            .find(|o| o.call == "HM0DX")
+            .unwrap();
+        assert_eq!((unbounded.start_unix, unbounded.end_unix), (None, None));
+
+        // Open-ended: invalid from a date onwards.
+        let open = cty
+            .invalid_operations
+            .iter()
+            .find(|o| o.call == "ST2NH")
+            .unwrap();
+        assert!(open.start_unix.is_some() && open.end_unix.is_none());
+
+        // An `<invalid>` record carries no <adif>, so it must not leak a
+        // prefix rule or an entity.
+        assert!(!cty.prefix_rules.iter().any(|r| r.call == "HM0DX"));
+    }
+
+    #[test]
+    fn invalid_operation_windows() {
+        let day = |s: &str| parse_iso8601(s);
+        let windowed = InvalidOperation {
+            call: "SV2RSG/A".into(),
+            start_unix: day("2024-09-05T00:00:00+00:00"),
+            end_unix: day("2024-09-09T23:59:59+00:00"),
+        };
+        assert!(windowed.covers(day("2024-09-06T10:15:00+00:00")));
+        assert!(!windowed.covers(day("2024-09-04T23:59:59+00:00")));
+        assert!(!windowed.covers(day("2024-09-10T00:00:00+00:00")));
+        assert!(!windowed.covers(None), "a windowed entry needs a date");
+
+        let always = InvalidOperation {
+            call: "HM0DX".into(),
+            start_unix: None,
+            end_unix: None,
+        };
+        assert!(always.covers(None), "no window, no date — still invalid");
+        assert!(always.covers(day("1999-01-01T00:00:00+00:00")));
+
+        let from = InvalidOperation {
+            call: "ST2NH".into(),
+            start_unix: day("2023-04-16T00:00:00+00:00"),
+            end_unix: None,
+        };
+        assert!(from.covers(day("2026-01-01T00:00:00+00:00")));
+        assert!(!from.covers(day("2020-01-01T00:00:00+00:00")));
+    }
 
     /// cty.xml has always carried `<deleted>`; the parser read it only to
     /// decide whether to build a prefix rule, and then dropped it. Without

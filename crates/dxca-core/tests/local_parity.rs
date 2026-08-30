@@ -32,24 +32,33 @@ fn matrix_matches_swift_apps_own_build() {
         Err(_) => log_bytes.iter().map(|&b| b as char).collect(),
     };
 
-    let data = cty::parse(&cty_xml).expect("cty.xml parses");
+    let mut data = cty::parse(&cty_xml).expect("cty.xml parses");
     println!(
-        "cty.xml: {} entities, {} rules",
+        "cty.xml: {} entities, {} rules, {} invalid operations",
         data.entities.len(),
-        data.prefix_rules.len()
+        data.prefix_rules.len(),
+        data.invalid_operations.len()
     );
 
     let now_unix = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs() as i64;
+
+    // The invalid-operation list is a **deliberate divergence** from 1.x,
+    // which never read it. Parity is therefore asserted against a resolver
+    // loaded without it; `invalid_operations_change_the_matrix` below covers
+    // what the list actually does to this same log.
+    let invalid_ops = std::mem::take(&mut data.invalid_operations);
     let mut resolver = DxccResolver::default();
-    resolver.load(data.entities, &data.prefix_rules, now_unix);
+    resolver.load(data, now_unix);
+    assert_eq!(resolver.invalid_operation_count(), 0);
 
     // Rebuild the matrix through the production builder (the exact
     // ClubLogClient loop, empty band filter).
     let (ours, qso_count) = LogMatrix::build_from_adif(&content, &resolver);
     println!("log.adi: {qso_count} records");
+    println!("(cty.xml carried {} invalid operations)", invalid_ops.len());
 
     // Compare entity sets first for a readable failure.
     let mut ours_ids: Vec<_> = ours.by_dxcc.keys().copied().collect();
@@ -72,5 +81,91 @@ fn matrix_matches_swift_apps_own_build() {
         "parity OK: {} DXCC entities, {} worked calls",
         ours.total_dxcc_count(),
         ours.worked_calls.len()
+    );
+}
+
+/// The other half of the parity story: what ClubLog's invalid-operation list
+/// does to this same real log.
+///
+/// It cannot assert a fixed number — the answer depends on whose log is
+/// cached here and on the day's cty.xml — but it can assert the *shape* of
+/// the change, which is what would have caught the original bug: dropping
+/// invalid contacts may only ever remove worked slots, never add any, and it
+/// must leave the QSO count alone.
+#[test]
+#[ignore = "needs the 1.x app's local cache (cty.xml, log.adi)"]
+fn invalid_operations_change_the_matrix_in_one_direction_only() {
+    let dir = cache_dir();
+    let cty_xml = std::fs::read_to_string(dir.join("cty.xml")).expect("cty.xml");
+    let log_bytes = std::fs::read(dir.join("log.adi")).expect("log.adi");
+    let content = match String::from_utf8(log_bytes.clone()) {
+        Ok(s) => s,
+        Err(_) => log_bytes.iter().map(|&b| b as char).collect(),
+    };
+    let now_unix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+
+    let build = |keep_invalid: bool| {
+        let mut data = cty::parse(&cty_xml).expect("cty.xml parses");
+        if !keep_invalid {
+            data.invalid_operations.clear();
+        }
+        let mut r = DxccResolver::default();
+        r.load(data, now_unix);
+        let (m, n) = LogMatrix::build_from_adif(&content, &r);
+        (m, n, r.invalid_operation_count())
+    };
+
+    let (before, qsos_before, _) = build(false);
+    let (after, qsos_after, listed) = build(true);
+    assert!(listed > 0, "cty.xml should carry an invalid-operation list");
+
+    assert_eq!(
+        qsos_before, qsos_after,
+        "the QSO count is every record in the file — it must not move"
+    );
+
+    // Entities may only be lost.
+    let gained: Vec<_> = after
+        .by_dxcc
+        .keys()
+        .filter(|k| !before.by_dxcc.contains_key(k))
+        .collect();
+    assert!(gained.is_empty(), "invalid ops must never add entities");
+
+    for (adif, status) in &after.by_dxcc {
+        let was = &before.by_dxcc[adif];
+        assert!(
+            status.slots.is_subset(&was.slots),
+            "DXCC {adif} gained slots from the invalid list"
+        );
+    }
+    assert!(after.worked_calls.is_subset(&before.worked_calls));
+
+    let dropped: Vec<_> = before
+        .by_dxcc
+        .keys()
+        .filter(|k| !after.by_dxcc.contains_key(k))
+        .collect();
+    // Slots are the sensitive measure: a log can keep every entity and
+    // every callsign (both worked again on a valid date) while still losing
+    // the band-mode slots the rejected contacts were the only source of.
+    // If nothing at all moved here, the skip never fired and the whole fix
+    // is inert against real data.
+    println!(
+        "{listed} invalid operations listed; entities {} -> {} (dropped: {dropped:?}), \
+         worked calls {} -> {}, slots {} -> {}",
+        before.total_dxcc_count(),
+        after.total_dxcc_count(),
+        before.worked_calls.len(),
+        after.worked_calls.len(),
+        before.stats().slots_worked,
+        after.stats().slots_worked,
+    );
+    assert!(
+        after.stats().slots_worked <= before.stats().slots_worked,
+        "dropping contacts cannot add slots"
     );
 }

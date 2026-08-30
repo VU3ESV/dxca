@@ -331,7 +331,14 @@ mod tests {
             },
         ];
         let mut r = DxccResolver::default();
-        r.load(entities, &rules, 0);
+        r.load(
+            crate::cty::CtyData {
+                entities,
+                prefix_rules: rules,
+                ..Default::default()
+            },
+            0,
+        );
         r
     }
 

@@ -49,7 +49,7 @@ impl UserService {
         if let Ok(xml) = std::fs::read_to_string(&cty_path)
             && let Some(data) = cty::parse(&xml)
         {
-            resolver.load(data.entities, &data.prefix_rules, now_unix());
+            resolver.load(data, now_unix());
         }
         let matrices = db
             .matrices()
@@ -146,7 +146,7 @@ impl UserService {
         }
         std::fs::write(&self.cty_path, &xml).map_err(|e| format!("save cty.xml: {e}"))?;
         let mut resolver = DxccResolver::default();
-        resolver.load(data.entities, &data.prefix_rules, now_unix());
+        resolver.load(data, now_unix());
         *self.resolver.write().unwrap() = Arc::new(resolver);
         // Stamped here so the manual button and the scheduler share one
         // clock, exactly as refresh_lotw does.

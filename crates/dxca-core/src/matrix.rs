@@ -32,11 +32,19 @@ pub struct LogMatrix {
 }
 
 impl LogMatrix {
-    /// Build a matrix from ADIF text — the exact `ClubLogClient` loop from
-    /// 1.x (band filter empty): explicit DXCC field wins over resolution,
+    /// Build a matrix from ADIF text — the `ClubLogClient` loop from 1.x
+    /// (band filter empty): explicit DXCC field wins over resolution,
     /// unknown/deleted/invalid entities are skipped, modes collapse to
     /// award buckets. Returns the matrix and the total record count (the
     /// 1.x `qsoCount`).
+    ///
+    /// **One deliberate divergence from 1.x**: contacts ClubLog lists as
+    /// [invalid operations](crate::cty::InvalidOperation) are dropped
+    /// entirely. 1.x scored them, which is why its DXCC-worked total could
+    /// sit one above ClubLog's own — see the doc comment there. The
+    /// *returned count* is still every record in the file, so the "N QSOs"
+    /// figure keeps matching ClubLog's; it is only the award matrix that
+    /// leaves them out.
     pub fn build_from_adif(
         content: &str,
         resolver: &crate::dxcc::DxccResolver,
@@ -48,6 +56,12 @@ impl LogMatrix {
             let (Some(call), Some(band), Some(mode)) = (r.call(), r.band(), r.mode()) else {
                 continue;
             };
+            // Before resolution, and before `worked_calls`: an invalidated
+            // contact is not a worked call either, so the same station
+            // spotted again should still alert as new.
+            if resolver.is_invalid_operation(&call, r.qso_datetime_unix()) {
+                continue;
+            }
             let Some(d) = r.dxcc().or_else(|| resolver.resolve(&call)) else {
                 continue;
             };
@@ -303,6 +317,128 @@ mod tests {
             m.by_band_and_mode(),
             m.by_band_and_mode_excluding(&HashSet::new())
         );
+    }
+
+    /// Build a resolver knowing one entity, one prefix rule, and whatever
+    /// invalid operations the test needs.
+    fn resolver_with(ops: Vec<crate::cty::InvalidOperation>) -> crate::dxcc::DxccResolver {
+        let entity = |adif: i32, name: &str, prefix: &str| crate::cty::DxccEntity {
+            adif,
+            name: name.into(),
+            prefix: prefix.into(),
+            cq_zone: 0,
+            continent: String::new(),
+            deleted: false,
+        };
+        let mut r = crate::dxcc::DxccResolver::default();
+        r.load(
+            crate::cty::CtyData {
+                entities: HashMap::from([
+                    (180, entity(180, "MOUNT ATHOS", "SV/A")),
+                    (236, entity(236, "GREECE", "SV")),
+                    (48, entity(48, "EASTERN KIRIBATI", "T32")),
+                ]),
+                prefix_rules: vec![crate::cty::PrefixRule {
+                    call: "SV".into(),
+                    adif: 236,
+                    is_exact: false,
+                    start_unix: None,
+                    end_unix: None,
+                }],
+                invalid_operations: ops,
+            },
+            0,
+        );
+        r
+    }
+
+    fn invalid_op(call: &str, start: &str, end: &str) -> crate::cty::InvalidOperation {
+        crate::cty::InvalidOperation {
+            call: call.into(),
+            start_unix: crate::cty::parse_iso8601(start),
+            end_unix: crate::cty::parse_iso8601(end),
+        }
+    }
+
+    /// The VU24DX case, in miniature. Mount Athos is worked only as
+    /// `SV2RSG/A`, an operation ClubLog rejects — so the entity must not be
+    /// credited at all, which is what brought the app's DXCC-worked total
+    /// down from 314 to ClubLog's own 313.
+    #[test]
+    fn an_entity_worked_only_through_an_invalid_operation_is_not_worked() {
+        let adif = "<CALL:8>SV2RSG/A<QSO_DATE:8>20240906<TIME_ON:6>101500\
+                    <BAND:3>20M<MODE:3>FT8<DXCC:3>180<eor>";
+
+        // 1.x behaviour — no invalid list — credits the entity.
+        let (m, count) = LogMatrix::build_from_adif(adif, &resolver_with(vec![]));
+        assert_eq!(count, 1);
+        assert_eq!(m.stats().dxcc_worked, 1, "1.x scored it");
+
+        // With the list, the contact scores nothing...
+        let ops = vec![invalid_op(
+            "SV2RSG/A",
+            "2024-09-05T00:00:00+00:00",
+            "2024-09-09T23:59:59+00:00",
+        )];
+        let (m, count) = LogMatrix::build_from_adif(adif, &resolver_with(ops));
+        assert_eq!(m.stats().dxcc_worked, 0, "ClubLog does not credit it");
+        assert!(m.status(180).is_none());
+        // ...and is not a worked call either, so the station spotted again
+        // still alerts.
+        assert!(m.worked_calls.is_empty());
+        // The QSO count is the file's record count regardless — it has to
+        // keep matching the "N QSOs" ClubLog reports.
+        assert_eq!(count, 1, "still a QSO, just not an award-scoring one");
+    }
+
+    /// Only the rejected period is dropped. The same call outside the
+    /// window, and the licensed operator's own call, both still count.
+    #[test]
+    fn invalid_operations_drop_only_the_rejected_contacts() {
+        let ops = vec![invalid_op(
+            "SV2RSG/A",
+            "2024-09-05T00:00:00+00:00",
+            "2024-09-09T23:59:59+00:00",
+        )];
+        let adif = "<CALL:8>SV2RSG/A<QSO_DATE:8>20240906<TIME_ON:6>101500\
+                    <BAND:3>20M<MODE:3>FT8<DXCC:3>180<eor>\
+                    <CALL:8>SV2RSG/A<QSO_DATE:8>20250101<TIME_ON:6>101500\
+                    <BAND:3>40M<MODE:3>FT8<DXCC:3>180<eor>\
+                    <CALL:6>SV2CPL<QSO_DATE:8>20240906<TIME_ON:6>101500\
+                    <BAND:3>20M<MODE:2>CW<DXCC:3>236<eor>";
+        let (m, count) = LogMatrix::build_from_adif(adif, &resolver_with(ops));
+        assert_eq!(count, 3);
+        assert_eq!(m.stats().dxcc_worked, 2, "Mount Athos survives on 40M");
+        assert_eq!(
+            m.status(180).unwrap().slots,
+            HashSet::from(["40M-DATA".into()]),
+            "only the September contact was dropped"
+        );
+        assert!(m.status(236).is_some(), "Greece is untouched");
+    }
+
+    /// The windows are not day-aligned, so the *time* has to be read too —
+    /// a boundary-day QSO on either side of the cut-off must land right.
+    #[test]
+    fn the_window_is_tested_to_the_minute() {
+        let ops = vec![invalid_op(
+            "T32C",
+            "2011-10-01T20:36:00+00:00",
+            "2011-10-02T16:29:59+00:00",
+        )];
+        let build = |time: &str| {
+            let adif = format!(
+                "<CALL:4>T32C<QSO_DATE:8>20111001<TIME_ON:6>{time}\
+                 <BAND:3>20M<MODE:2>CW<DXCC:2>48<eor>"
+            );
+            LogMatrix::build_from_adif(&adif, &resolver_with(ops.clone()))
+                .0
+                .stats()
+                .dxcc_worked
+        };
+        assert_eq!(build("203500"), 1, "a minute before the cut-off, valid");
+        assert_eq!(build("203600"), 0, "on the cut-off, invalid");
+        assert_eq!(build("210000"), 0, "after it, invalid");
     }
 
     #[test]

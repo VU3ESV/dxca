@@ -948,6 +948,69 @@ The published v2.12.2 release notes originally carried the wrong
 toolchain-drift explanation; corrected 2026-08-30, with a note that the fixes
 land after the tag and touch no shipped code.
 
+### DONE: ClubLog's invalid-operations list is honoured (2026-08-30)
+
+**Found by a question, not by a test.** VU24DX's Stats tab read **314 DXCC
+worked** while the ClubLog DX Dashboard embedded three inches below it read
+**313**, on the same 65,908 QSOs, with confirmed agreeing exactly at 307.
+
+The cause: `cty.rs` parsed three sections of cty.xml — `<entities>`,
+`<exceptions>`, `<prefixes>` — and never `<invalid_operations>`, which
+carries **2,838 entries** naming callsigns (many with a date window) whose
+QSOs do not count for DXCC. ClubLog resolves such a contact to an entity but
+refuses to credit it; DXCA credited it. 1.x had the same gap, so this is the
+port's first deliberate divergence from the Swift app.
+
+**The entity was Mount Athos.** VU24DX's log reaches it only through
+`SV2RSG/A`, an operation ClubLog rejects in three windows (2020-05-01/06,
+2021-12-09 13:40 onwards, 2024-09-05/09). Confirmed matched at 307 because
+nothing there is confirmed — which is also how the entity was isolated: of
+the seven worked-but-unconfirmed entities in that log, it is the only one
+whose calls appear on the invalid list.
+
+**Diagnosing it needed no ClubLog credentials.** `LogMatrix.worked_calls` is
+in the stored matrix, so intersecting it with the invalid list on the host
+itself named the 37 flagged contacts in that log directly. Worth remembering:
+the matrix answers more questions than the stats endpoints expose.
+
+What changed:
+
+- `cty::InvalidOperation` + `CtyData::invalid_operations`, parsed from the
+  section. `covers()` holds the window logic: no window at all means always
+  invalid; a *windowed* entry needs a QSO time and does not match without one
+  — never discard a contact we cannot place.
+- `DxccResolver::load` now takes the whole `CtyData` instead of
+  `(entities, rules, now)`. Deliberate: passing the pieces let a caller drop
+  the invalid list silently, and the symptom of that is not a compile error
+  but a wrong DXCC total.
+- `is_invalid_operation(call, at_unix)` matches the **raw** call, never the
+  portable-normalised one — `SV2RSG/A` normalises to `SV2RSG`, a different
+  and valid station, which would both miss the flagged call and smear the
+  flag onto an innocent one.
+- `Record::qso_datetime_unix()` — QSO_DATE + TIME_ON.
+- `build_from_adif` skips flagged contacts before resolution *and* before
+  `worked_calls`, so a station worked only invalidly still alerts as new.
+  The returned QSO count is untouched: it is every record in the file, and
+  has to keep matching the "N QSOs" ClubLog reports.
+
+**The windows are minute-accurate and this matters.** A date-only
+implementation was written first and was wrong: T6AA's window is 19:00–20:15
+on 2019-09-21, and VU2CPL worked it at 05:44–07:01 that morning — four valid
+QSOs that a day-wide comparison throws away. Same for VP8STI, whose two
+entries leave a valid gap his four QSOs sit inside. On his log the correct
+answer is that **nothing changes**: 320 entities, 26,179 worked calls, 4,336
+slots before and after, and the only genuinely invalid contacts (three V55DX
+QSOs) were already uncounted because ClubLog exports them with no DXCC field.
+The `local_parity` test now covers both directions — strict Swift parity with
+the list cleared, and a shape assertion (entities and slots may only be lost,
+never gained; QSO count fixed) with it loaded.
+
+**Verification is a deploy away, not a test away.** The Mount Athos QSO dates
+are not in the matrix, so the proof is empirical: refresh VU24DX on
+`adersh@192.168.1.151` after deploying and the card should read **313**.
+Every host needs a ClubLog refresh before its totals move — the fix changes
+how a matrix is *built*, and stored matrices are not rebuilt on upgrade.
+
 ### DONE: My ClubLog band × mode grid — v2.13.0 on all four hosts (2026-08-30)
 
 **Built, released and deployed.** One table replaces the two: a row per mode

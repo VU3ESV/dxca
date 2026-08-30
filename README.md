@@ -651,6 +651,36 @@ The tickbox only appears once cty.xml is loaded — without it there is no way
 to know which entities are deleted, so DXCA offers no choice it cannot
 honour.
 
+### Invalid operations
+
+ClubLog keeps a second list in cty.xml: **invalid operations** — around 2,800
+callsigns, some bounded by a date window, whose QSOs do not count for DXCC.
+Pirates, unlicensed activity, and DXpeditions whose paperwork was rejected
+after the fact. ClubLog will still tell you *which* entity such a contact was
+with, but it will not credit it.
+
+**DXCA now honours that list**, and so its award totals match ClubLog's own.
+Before v2.13.1 it did not, and the difference showed up exactly where you
+would expect: an entity worked *only* through an invalidated operation counted
+here and not on ClubLog. VU24DX's log had one — Mount Athos, worked solely as
+`SV2RSG/A` — which is why DXCA read 314 DXCC worked against ClubLog's 313.
+
+Two details worth knowing:
+
+- **The QSO count does not change.** An invalidated contact is still a QSO and
+  still appears in your log; it simply scores nothing. Only the award
+  matrix — entities, slots, Challenge points — leaves it out.
+- **It is not a worked call, either.** If your only contact with a station was
+  an invalidated one, DXCA treats it as unworked and will alert on it again.
+  That is the behaviour you want: you still need a valid contact.
+
+The windows are minute-accurate, not day-wide. Some are only an hour or two
+long — the T6AA entry covers 19:00 to 20:15 on one evening in 2019 — so a
+contact earlier the same day is perfectly valid and is counted.
+
+Like the deleted list, this depends on cty.xml. A server that has never
+downloaded it flags nothing, and totals fall back to the older behaviour.
+
 ### Telnet login (optional, off by default)
 
 Set `telnet_interactive = true` and a telnet session can authenticate with

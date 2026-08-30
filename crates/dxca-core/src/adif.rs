@@ -45,6 +45,39 @@ impl Record {
         self.fields.get("QSO_DATE").map(String::as_str)
     }
 
+    /// `QSO_DATE` + `TIME_ON` as unix seconds (UTC — ADIF times always are).
+    ///
+    /// Needed to test a contact against a ClubLog
+    /// [`InvalidOperation`](crate::cty::InvalidOperation) window. Those
+    /// windows are **not** day-aligned — the live cty.xml has entries
+    /// starting at 20:36 and ending at 16:29:59 — so a date-only comparison
+    /// would mis-score every QSO made on a boundary day.
+    ///
+    /// `TIME_ON` is optional and ADIF allows both HHMM and HHMMSS; a record
+    /// without it falls back to 00:00:00, which still places the QSO on the
+    /// right day.
+    pub fn qso_datetime_unix(&self) -> Option<i64> {
+        let date = self.qso_date()?;
+        let num = |s: &str, r: std::ops::Range<usize>| -> Option<i64> { s.get(r)?.parse().ok() };
+        if date.len() != 8 {
+            return None;
+        }
+        let (y, mo, d) = (num(date, 0..4)?, num(date, 4..6)?, num(date, 6..8)?);
+        if !(1..=12).contains(&mo) || !(1..=31).contains(&d) {
+            return None;
+        }
+        let (h, mi, s) = match self.fields.get("TIME_ON").map(String::as_str) {
+            Some(t) if t.len() == 6 => (
+                num(t, 0..2).unwrap_or(0),
+                num(t, 2..4).unwrap_or(0),
+                num(t, 4..6).unwrap_or(0),
+            ),
+            Some(t) if t.len() == 4 => (num(t, 0..2).unwrap_or(0), num(t, 2..4).unwrap_or(0), 0),
+            _ => (0, 0, 0),
+        };
+        Some(crate::cty::days_from_civil(y, mo, d) * 86_400 + h * 3600 + mi * 60 + s)
+    }
+
     /// Confirmed if LoTW/QSL/eQSL received is Y (or V = verified), or
     /// ClubLog's own matched flag is set.
     pub fn is_confirmed(&self) -> bool {
@@ -160,6 +193,30 @@ mod tests {
             let adif = format!("<CALL:4>TEST<{field}:{}>{val}<eor>", val.len());
             assert_eq!(parse(&adif)[0].is_confirmed(), expect, "{field}={val}");
         }
+    }
+
+    /// The invalid-operation windows are minute-accurate, so this has to be
+    /// too — and it has to degrade sanely when TIME_ON is missing or short.
+    #[test]
+    fn qso_datetime_reads_date_and_time() {
+        let at = |fields: &str| parse(&format!("{fields}<eor>"))[0].qso_datetime_unix();
+        let midnight = crate::cty::parse_iso8601("2024-09-06T00:00:00+00:00");
+
+        assert_eq!(
+            at("<QSO_DATE:8>20240906<TIME_ON:6>101500"),
+            crate::cty::parse_iso8601("2024-09-06T10:15:00+00:00")
+        );
+        // ADIF allows HHMM as well as HHMMSS.
+        assert_eq!(
+            at("<QSO_DATE:8>20240906<TIME_ON:4>1015"),
+            crate::cty::parse_iso8601("2024-09-06T10:15:00+00:00")
+        );
+        // No TIME_ON: still the right day.
+        assert_eq!(at("<QSO_DATE:8>20240906"), midnight);
+        // Unusable input yields None rather than a wrong instant.
+        assert_eq!(at("<CALL:4>TEST"), None, "no date at all");
+        assert_eq!(at("<QSO_DATE:6>202409"), None, "short date");
+        assert_eq!(at("<QSO_DATE:8>20241306"), None, "month 13");
     }
 
     #[test]
