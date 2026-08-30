@@ -23,12 +23,13 @@ The check that proves the fix: VU24DX on `adersh@192.168.1.151` should read
 page. That host's cty.xml carries all 2,838 invalid operations including the
 three `SV2RSG/A` windows, confirmed on the box.
 
-**The Windows box has no cty.xml** — `/api/status` reports `cty_entities: 0`,
-and `C:\DXCA\data` holds only `dxca.db` and `lotw-users.txt`. Pre-existing,
-not caused by this release, but it means that install cannot classify DXCC at
-all: no entity names, no New-DXCC alerts, and the invalid-operations fix is
-inert there. Fix by setting the ClubLog API key in Settings › Server ›
-Reference data and pressing refresh.
+**The Windows box has no cty.xml, and that is fine — it is a TEST box.**
+`/api/status` reports `cty_entities: 0` and `C:\DXCA\data` holds only
+`dxca.db` and `lotw-users.txt`. Confirmed by Manoj 2026-08-30: no real log,
+no real account, it exists to prove the Windows build installs and runs. So
+it cannot classify DXCC and none of the award work applies there — **not a
+defect, do not "fix" it** by adding an API key. Deploy to it to check the
+binary, and read nothing into its zeroes.
 
 Previous status:
 **v2.12.1 on ALL FOUR HOSTS (2026-08-29 evening)** — noderedpi4, Windows
