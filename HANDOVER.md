@@ -1010,6 +1010,44 @@ the obvious next ask if the trial shows the full feed is too much. It would
 need a per-user filtered output, which is a real feature and not a
 destination setting — do not bend `unfiltered`/`allowed_sources` into it.
 
+**CORRECTION: Aether does read MQTT.** The 2026-08-28 entry concluded
+"neither is known to read MQTT natively" and wrote the route off on that
+basis. Wrong — Manoj had configured Aether's MQTT for spots himself, and
+`lsof` shows AetherSDR holding three connections at once:
+`192.168.1.148:4992` (the Flex API), `192.168.1.169:7575` (DXCA's telnet
+server) and `192.168.1.169:1883` (the broker).
+
+**Why it was silent, and it is neither app's fault.** The broker ACL has:
+
+```
+# AetherSDR panadapter display — read-only, humanized aether/* tree only
+user display
+topic read aether/#
+```
+
+DXCA publishes to `shack/dxca/spots/{json,cluster}`. So a subscription to
+`shack/…` is **denied by the ACL** — and mosquitto's refusal is invisible to
+most clients, giving a healthy connection and no messages — while a
+subscription to `aether/…` is allowed but reads an **empty tree**, because
+the "humanized" republisher the comment assumes was never written. Either
+way: connected, authenticated, silent.
+
+**Nothing consumes the MQTT spots at all.** The active flows file has 57 MQTT
+nodes and **zero** `shack/dxca` references; adersh and vu2oy have no MQTT
+destination configured; only noderedpi4 has one, enabled, feeding nobody.
+
+**Decision (Manoj, 2026-08-30): retire MQTT, keep the telnet cluster.** He is
+removing the destination by hand — nothing here was changed for it. If it
+goes, the broker's `display` user and its `aether/#` ACL entry become dead
+config and are worth tidying in the same pass.
+
+**Gotcha that nearly produced a false negative:** this Node-RED runs in
+**projects mode**, so the live flows are
+`~/.node-red/projects/vu2cpl-shack/flows.json` (712 KB), *not*
+`~/.node-red/flows.json`. A glob over the latter answers about the wrong
+file, and an unreadable path greps as cleanly as an absent string — check
+the byte count before believing a "nothing found".
+
 ### DONE: uncredited contacts are named at refresh time (2026-08-30)
 
 Asked for after the whitelist fix raised the obvious next question. VU24DX's

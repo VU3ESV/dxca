@@ -838,11 +838,16 @@ Each spot is published **twice**, to sibling topics under the base (default
 
 **For a FlexRadio panadapter, the telnet cluster server is the shorter
 route.** Aether takes a DX cluster directly, so pointing it at DXCA's telnet
-server on **7575** needs no bridge and no MQTT at all — the UDP broadcast
-formats are the wrong shape for this (`cluster` is a `DX de` line in a
-*datagram*, not a telnet session). MQTT remains the option for anything that
-wants structured spots, but it needs something on the other end: neither Flex
-nor Aether reads MQTT natively.
+server on **7575** needs no bridge at all — the UDP broadcast formats are the
+wrong shape for this (`cluster` is a `DX de` line in a *datagram*, not a
+telnet session), and the Flex's own spot API is a TCP session on 4992 that
+Aether already owns.
+
+Aether can read MQTT too, but mind the broker's ACL: a subscriber allowed
+only its own tree will connect, authenticate and then receive nothing,
+because mosquitto's refusal of a subscription is invisible to most clients.
+If spots never arrive over MQTT, check the ACL covers the base topic before
+suspecting either program.
 
 The JSON is for anything that wants structure — a Node-RED flow reshaping it
 for a panadapter — and the cluster line for anything that already parses the
