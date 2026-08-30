@@ -74,6 +74,15 @@ async fn main() {
     };
     let users = Arc::new(UserService::new(db, &cfg.data_dir, telegram, endpoints));
 
+    // Step one of docs/MULTI-STATION.md: move a single-operator install's
+    // TOML feeds into its account.
+    //
+    // BEHAVIOUR-NEUTRAL. Nothing reads `feeds_json` to build a pipeline yet —
+    // `config/dxca.toml` is still what runs the server, and the TOML sections
+    // are left in place so the previous binary remains a working rollback.
+    // This only fills in the column the next step will read.
+    migrate_feeds(&users, &cfg);
+
     // Alert fan-out: every processed spot classifies per user.
     let mut spot_rx = pipeline_state.spot_events.subscribe();
     let fan_out_users = users.clone();
@@ -182,4 +191,50 @@ async fn shutdown_signal() {
     }
     #[cfg(not(unix))]
     ctrl_c.await.expect("install ctrl-c handler");
+}
+
+/// Populate each account's `feeds_json` from the TOML, once.
+///
+/// Idempotent: it does nothing the moment any account owns feeds, so it is
+/// safe on every boot. Refuses on a multi-account install rather than
+/// guessing whose cluster logins are whose.
+fn migrate_feeds(users: &dxca_server::users::UserService, cfg: &config::Config) {
+    use dxca_server::feeds::{Migration, migrate_from_toml};
+
+    let Ok(all) = users.db.users() else { return };
+    let accounts: Vec<(i64, String, dxca_server::feeds::FeedsUserConfig)> = all
+        .into_iter()
+        .filter_map(|u| {
+            let feeds = users.db.feeds_config(u.id).ok()?;
+            Some((u.id, u.callsign, feeds))
+        })
+        .collect();
+
+    let (what, store) = migrate_from_toml(
+        &accounts,
+        &cfg.udp_sources,
+        &cfg.cluster_nodes,
+        &cfg.broadcast_destinations,
+    );
+    if let Some((user_id, feeds)) = store
+        && let Err(e) = users.db.set_feeds_config(user_id, &feeds)
+    {
+        eprintln!("dxca: feeds migration: could not store: {e}");
+        return;
+    }
+    match what {
+        Migration::Moved {
+            callsign,
+            sources,
+            nodes,
+            destinations,
+        } => println!(
+            "dxca: feeds migration: {sources} source(s), {nodes} node(s),              {destinations} destination(s) now owned by {callsign}              (config/dxca.toml still drives the pipeline)"
+        ),
+        Migration::Ambiguous { accounts } => eprintln!(
+            "dxca: feeds migration: {accounts} accounts and no way to tell whose              the config's sources and nodes are — refusing to guess. An admin              must assign them."
+        ),
+        // Silent: the overwhelmingly common case on every boot after the first.
+        Migration::AlreadyMoved | Migration::NothingToMove => {}
+    }
 }

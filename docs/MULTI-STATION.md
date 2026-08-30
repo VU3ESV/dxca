@@ -1,6 +1,19 @@
 # Multi-station DXCA — moving sources, nodes and outputs to the user
 
-**Status: design note, nothing built.** Written 2026-08-30 against v2.15.1.
+**Status: step one built, nothing rewired.** Written 2026-08-30 against
+v2.15.1.
+
+`crates/dxca-server/src/feeds.rs` now holds the per-account storage, the
+namespacing rule and the TOML migration, and `user_configs.feeds_json` is the
+column. **It is behaviour-neutral**: nothing reads it to build a pipeline, and
+`config/dxca.toml` still runs the server. The TOML sections are deliberately
+left in place so the previous binary remains a working rollback.
+
+Verified against a copy of the production database and the real config: three
+sources and five nodes moved to `VU2CPL:…`, the RUMlog passthrough correctly
+left behind, and a second start silent.
+
+Everything below still stands as the plan for the rest.
 
 ## The model
 
