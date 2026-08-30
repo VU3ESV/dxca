@@ -8,6 +8,7 @@ pub mod cmdrouter;
 pub mod commands;
 pub mod config;
 pub mod db;
+pub mod health;
 pub mod nodes;
 pub mod pipeline;
 pub mod refresh;

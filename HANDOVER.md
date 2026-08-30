@@ -2,6 +2,19 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-08-30 · **Status:**
+**v2.14.0 — health alerts.** Telegram when DXCA is up and nothing is reaching
+it: feed quiet, or a node disconnected. Both opt-in per account, off by
+default, and honest about what they cannot do (a dead host cannot report
+itself). See the entry under Open items.
+
+Earlier the same day, **v2.13.1 → v2.13.3**, all released and deployed to all
+five hosts. The headline: award totals now agree with ClubLog's own, after
+two separate cty.xml rules turned out to be unread — and every uncredited
+contact is named in the log at refresh time. **Each account still needs one
+ClubLog refresh** before its totals move; VU24DX and vu2wj have had theirs,
+vu2oy has not.
+
+Previous status block:
 **v2.13.1 TAGGED, RELEASED AND ON ALL FIVE HOSTS (2026-08-30).** Two changes:
 ClubLog's **invalid-operations list** is finally honoured (DXCC totals now
 agree with ClubLog's own — see the entry under Open items) and Telegram alerts
@@ -977,6 +990,70 @@ pin, run `just gate`, fix what the new rustfmt and clippy think, same commit.
 The published v2.12.2 release notes originally carried the wrong
 toolchain-drift explanation; corrected 2026-08-30, with a note that the fixes
 land after the tag and touch no shipped code.
+
+### DONE: health alerts — v2.14.0 (2026-08-30)
+
+Asked for after vu2wj sat dead long enough that it was noticed by accident.
+`crates/dxca-server/src/health.rs`, spawned from `main.rs` beside
+`refresh::spawn`, plus two fields on the Telegram settings page.
+
+**The scope argument came first, and it is the useful part.** Manoj's own
+framing — *"i dont think if internet itself is down at the site, u can do
+anything? i dont want a central monitoring for all hosts... too much"* — is
+right, and settles the design. A dead host cannot report itself; only an
+external observer could, and a five-host fleet does not warrant one. So each
+install watches *itself* and tells *its own* operator through the Telegram it
+already has. Decentralised, no new service, nothing polling anyone else.
+
+**Be honest about the hole:** Telegram needs the internet, so a connectivity
+failure silences the alert about the connectivity failure. **This would not
+have caught vu2wj**, and saying so was part of the offer.
+
+Two conditions, both `0 = off` and off by default:
+
+- **Feed quiet** — nothing from any source for N minutes.
+- **Node down** — one node *disconnected* for N minutes.
+
+**Node health keys on the connection, never on traffic.** "Connected, zero
+spots" is a normal state — Hamalert and KST2Mac sit `Live` with
+`spot_count: 0` for hours on noderedpi4 — so alerting on silence would cry
+wolf every quiet afternoon.
+
+**The feed clock is a counter diff, not a timestamp on the hot path.**
+`process_spot` runs for every decode on every band; summing `source_counts`
+and the nodes' `spot_count` once a minute answers "the total has not moved
+since T" without touching it.
+
+**Edge-triggered, with recoveries.** One message in, one out. A monitor that
+repeats every tick trains its reader to ignore it; one silent on recovery
+sends them to go and look, which is what it was meant to save. State lives in
+the task, so a restart re-announces a still-quiet feed a threshold later —
+the right way round after a restart.
+
+**Two traps found by looking rather than by tests, which is the recurring
+lesson here:**
+
+1. **The labels wrapped.** "No spots for (min)" and "Node down for (min)"
+   overflowed the settings grid's label column, dropping each `?` onto a
+   second line and misaligning the inputs, while the Cooldown row above
+   stayed clean. Shortened to "No spots (min)" / "Node down (min)". Nothing
+   in the gate could have caught that — it was a screenshot.
+2. **`var(--fg-muted)` does not exist**; the token is `var(--muted)`. A
+   missing custom property fails silently to inherited colour, so the build
+   passed and the heading was simply the wrong colour.
+
+**The cross-page write hazard was checked, both ways.** Alerts and Telegram
+both PUT the whole `notifications` object, and the new fields carry
+`#[serde(default)]` — so a page sending a partial would silently zero them.
+Both load the full object and spread it back, and it was verified in the
+browser: set 30/10 on Telegram, saved from **Alerts**, re-read the database,
+still 30/10.
+
+**Looked at in a browser before shipping** — on a throwaway instance in the
+scratchpad (own empty database, `web_bind` 127.0.0.1:7690, no cluster nodes
+so it could not fight the Pi's sessions under this station's `login_call`).
+That is the pattern to reuse; `config/dxca.toml` as it stands is not safe for
+a local look-only run.
 
 ### DONE: the panadapter feed — Aether on the telnet server (2026-08-30)
 

@@ -115,6 +115,13 @@ impl UserService {
         )
     }
 
+    /// The shared Telegram sender, for the operational alerts in
+    /// [`crate::health`]. Those are not spot alerts and do not belong in the
+    /// fan-out, but they go to the same per-account chat.
+    pub fn telegram(&self) -> Telegram {
+        self.telegram.clone()
+    }
+
     pub fn resolver_loaded(&self) -> bool {
         self.resolver.read().unwrap().is_loaded()
     }

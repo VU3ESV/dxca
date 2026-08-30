@@ -249,6 +249,28 @@ pub struct NotifyUserConfig {
     pub notify_spotter_kind: String,
     /// Apply the phase-rotation band mask to Telegram alerts too.
     pub notify_respect_band_mask: bool,
+
+    /// Telegram me when **no spots at all** have reached DXCA for this many
+    /// minutes. `0` is off, and is the default — a new account stays silent
+    /// until its operator asks for this.
+    ///
+    /// Catches the failure that is otherwise invisible: DXCA up, web GUI
+    /// answering, and nothing arriving because the decoders were closed or
+    /// every node dropped at once. It cannot report its own host dying —
+    /// nothing running there could — and it cannot get out at all if the
+    /// internet is what failed, since Telegram needs it.
+    #[serde(default)]
+    pub notify_feed_quiet_minutes: u64,
+
+    /// Telegram me when a cluster node has been **disconnected** this many
+    /// minutes. `0` is off, and is the default.
+    ///
+    /// Deliberately keyed on the connection, not on traffic. "Connected but
+    /// no spots" is a normal state for a node — Hamalert and KST2Mac sit
+    /// live with `spot_count: 0` for hours — so alerting on quiet would cry
+    /// wolf on a healthy feed. A dropped connection is unambiguous.
+    #[serde(default)]
+    pub notify_node_down_minutes: u64,
 }
 
 impl Default for NotifyUserConfig {
@@ -271,6 +293,11 @@ impl Default for NotifyUserConfig {
             notify_manual_only: false,
             notify_spotter_kind: SPOTTER_ALL.into(),
             notify_respect_band_mask: false,
+            // Off. Health alerts are the kind that become wallpaper if they
+            // arrive uninvited, and an operator who has not asked for one
+            // has no threshold in mind either.
+            notify_feed_quiet_minutes: 0,
+            notify_node_down_minutes: 0,
         }
     }
 }

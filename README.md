@@ -25,9 +25,10 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
-**v2.13.3** (2026-08-30): award totals now agree with ClubLog's own, and
-every uncredited contact is **named in the log at refresh time** rather than
-just vanishing from the totals. DXCA
+**v2.14.0** (2026-08-30): **health alerts** — Telegram when DXCA is running
+and nothing is reaching it ([Health alerts](#health-alerts)). Award totals
+agree with ClubLog's own, and every uncredited contact is **named in the log
+at refresh time** rather than just vanishing from the totals. DXCA
 honours both lists cty.xml carries for
 **[operations ClubLog does not credit](#operations-clublog-does-not-credit)** —
 the ~2,800 invalid operations, and the 59 **whitelisted** entities where only
@@ -749,6 +750,37 @@ deleting — a busted decode that got logged will show up in exactly this list.
 
 Like the deleted list, both depend on cty.xml. A server that has never
 downloaded it applies neither, and totals fall back to the older behaviour.
+
+### Health alerts
+
+Two optional Telegram alerts under **Settings › My station › Telegram**, both
+**0 = off** and off by default:
+
+| | fires when |
+|---|---|
+| **No spots (min)** | nothing has arrived from *any* source — decoders and cluster nodes alike — for this long |
+| **Node down (min)** | one cluster node has been *disconnected* for this long while the rest carry on |
+
+They catch the failure that otherwise goes unnoticed for weeks: DXCA up, web
+GUI answering perfectly, and the feed quietly dead because the decoders were
+closed, the radio was off, or a node dropped and never came back.
+
+**What they cannot do, stated plainly: tell you this host has died.** Nothing
+running on a dead Pi can send anything, and Telegram needs the internet, so a
+connectivity failure silences the alert about the connectivity failure.
+Covering that needs a watcher somewhere else — deliberately not built here,
+because a small fleet does not warrant central monitoring.
+
+Node health is keyed on the **connection**, never on traffic. A node sitting
+connected with no spots is normal for hours — Hamalert and KST2Mac routinely
+do — so alerting on silence would cry wolf every quiet afternoon. A dropped
+connection is unambiguous.
+
+You get **one message when a condition starts and one when it clears**, never
+a repeat in between: a monitor that repeats itself every tick teaches you to
+ignore it, and one that stays silent on recovery makes you go and look, which
+is the thing it was supposed to save you. A restart forgets what it had
+reported, so a still-quiet feed is announced once more a threshold later.
 
 ### Telnet login (optional, off by default)
 
