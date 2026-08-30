@@ -49,9 +49,45 @@ impl LogMatrix {
         content: &str,
         resolver: &crate::dxcc::DxccResolver,
     ) -> (LogMatrix, usize) {
+        let (m, n, _) = Self::build_from_adif_reporting(content, resolver);
+        (m, n)
+    }
+
+    /// [`build_from_adif`](Self::build_from_adif), also returning **which
+    /// contacts earned no credit and why**.
+    ///
+    /// Without this the two rules above are silent: a QSO is simply absent
+    /// from the totals, and the only symptom is a number disagreeing with
+    /// ClubLog's by one. Working back from that to a single QSO in a
+    /// 65,908-record log took a session; the answer is one line of output.
+    ///
+    /// Reports only contacts dropped by the *ClubLog credit rules*. Records
+    /// with no callsign, band or mode, and callsigns that resolve to no
+    /// entity at all, are skipped as they always were — those are missing
+    /// data, not a ruling.
+    pub fn build_from_adif_reporting(
+        content: &str,
+        resolver: &crate::dxcc::DxccResolver,
+    ) -> (LogMatrix, usize, Vec<UncreditedContact>) {
         let records = crate::adif::parse(content);
         let count = records.len();
         let mut matrix = LogMatrix::default();
+        let mut uncredited = Vec::new();
+        let note = |r: &crate::adif::Record,
+                    call: &str,
+                    band: &str,
+                    mode: &str,
+                    dxcc: Option<i32>,
+                    reason| UncreditedContact {
+            call: call.to_string(),
+            qso_date: r.qso_date().unwrap_or_default().to_string(),
+            time_on: r.time_on().unwrap_or_default().to_string(),
+            band: band.to_string(),
+            mode: mode.to_string(),
+            dxcc,
+            reason,
+        };
+
         for r in &records {
             let (Some(call), Some(band), Some(mode)) = (r.call(), r.band(), r.mode()) else {
                 continue;
@@ -61,6 +97,15 @@ impl LogMatrix {
             // spotted again should still alert as new.
             let at = r.qso_datetime_unix();
             if resolver.is_invalid_operation(&call, at) {
+                let d = r.dxcc().or_else(|| resolver.resolve(&call));
+                uncredited.push(note(
+                    r,
+                    &call,
+                    &band,
+                    &mode,
+                    d,
+                    UncreditedReason::InvalidOperation,
+                ));
                 continue;
             }
             let Some(d) = r.dxcc().or_else(|| resolver.resolve(&call)) else {
@@ -74,6 +119,14 @@ impl LogMatrix {
             // whether the id came from ClubLog's DXCC field or from our own
             // prefix match.
             if resolver.is_whitelist_rejected(d, &call, at) {
+                uncredited.push(note(
+                    r,
+                    &call,
+                    &band,
+                    &mode,
+                    Some(d),
+                    UncreditedReason::NotWhitelisted,
+                ));
                 continue;
             }
             matrix.record(
@@ -84,7 +137,7 @@ impl LogMatrix {
                 r.is_confirmed(),
             );
         }
-        (matrix, count)
+        (matrix, count, uncredited)
     }
 
     pub fn record(&mut self, dxcc: i32, band: &str, mode: &str, call: &str, confirmed: bool) {
@@ -201,6 +254,67 @@ impl LogMatrix {
             .collect();
 
         BandModeStats { bands, modes, grid }
+    }
+}
+
+/// Why ClubLog gives a contact no DXCC credit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UncreditedReason {
+    /// On ClubLog's [invalid-operations](crate::cty::InvalidOperation) list
+    /// for the QSO's date — a pirate, an unlicensed operation, or a
+    /// DXpedition whose paperwork was rejected.
+    InvalidOperation,
+    /// A [whitelisted](crate::cty::DxccEntity::whitelist) entity, and this
+    /// callsign is not one of the operations ClubLog accepts for it.
+    NotWhitelisted,
+}
+
+impl UncreditedReason {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            UncreditedReason::InvalidOperation => "invalid operation",
+            UncreditedReason::NotWhitelisted => "not on the entity's whitelist",
+        }
+    }
+}
+
+/// One contact that is in the log and scores nothing — the detail behind a
+/// total that disagrees with ClubLog's.
+///
+/// Fields are the raw ADIF values, so the line printed can be searched for
+/// verbatim in the operator's own log or in the ADIF they downloaded.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UncreditedContact {
+    pub call: String,
+    /// `YYYYMMDD` as ADIF wrote it; empty when the record carried no date.
+    pub qso_date: String,
+    /// `HHMMSS` or `HHMM` as ADIF wrote it; empty when absent.
+    pub time_on: String,
+    pub band: String,
+    pub mode: String,
+    /// The entity it *would* have counted for. `None` only when an invalid
+    /// operation could not be resolved to one at all.
+    pub dxcc: Option<i32>,
+    pub reason: UncreditedReason,
+}
+
+impl std::fmt::Display for UncreditedContact {
+    /// One greppable line: call, when, where, and the ruling.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.call)?;
+        if !self.qso_date.is_empty() {
+            write!(f, " {}", self.qso_date)?;
+            if !self.time_on.is_empty() {
+                write!(f, " {}Z", self.time_on)?;
+            }
+        } else {
+            write!(f, " (no date)")?;
+        }
+        write!(f, " {} {}", self.band, self.mode)?;
+        if let Some(d) = self.dxcc {
+            write!(f, " DXCC {d}")?;
+        }
+        write!(f, " — {}, no credit", self.reason.as_str())
     }
 }
 
@@ -467,11 +581,20 @@ mod tests {
 
         let adif = "<CALL:5>ZL8AC<QSO_DATE:8>20250712<TIME_ON:6>101500\
                     <BAND:3>40M<MODE:3>FT8<DXCC:3>133<eor>";
-        let (m, count) = LogMatrix::build_from_adif(adif, &r);
+        let (m, count, uncredited) = LogMatrix::build_from_adif_reporting(adif, &r);
         assert_eq!(count, 1, "still a QSO");
         assert_eq!(m.stats().dxcc_worked, 0, "ClubLog credits nothing here");
         assert!(m.status(133).is_none());
         assert!(m.worked_calls.is_empty());
+
+        // The line the operator actually gets, with the date that makes the
+        // QSO findable in a 65,908-record log.
+        assert_eq!(uncredited.len(), 1);
+        assert_eq!(
+            uncredited[0].to_string(),
+            "ZL8AC 20250712 101500Z 40M FT8 DXCC 133 \
+             — not on the entity's whitelist, no credit"
+        );
 
         // The listed operation, same entity, is credited normally.
         let listed = "<CALL:4>ZL8X<QSO_DATE:8>20250712<TIME_ON:6>101500\
@@ -479,6 +602,69 @@ mod tests {
         let (m, _) = LogMatrix::build_from_adif(listed, &r);
         assert_eq!(m.stats().dxcc_worked, 1);
         assert!(m.status(133).is_some());
+    }
+
+    /// The report is the whole point of the feature: a dropped QSO is
+    /// otherwise invisible, and the date is what makes it findable in a log.
+    #[test]
+    fn uncredited_contacts_are_reported_with_enough_to_find_them() {
+        let ops = vec![invalid_op(
+            "SV2RSG/A",
+            "2024-09-05T00:00:00+00:00",
+            "2024-09-09T23:59:59+00:00",
+        )];
+        let adif = "<CALL:8>SV2RSG/A<QSO_DATE:8>20240906<TIME_ON:6>101500\
+                    <BAND:3>20M<MODE:3>FT8<DXCC:3>180<eor>\
+                    <CALL:6>SV2CPL<QSO_DATE:8>20240906<TIME_ON:6>101500\
+                    <BAND:3>20M<MODE:2>CW<DXCC:3>236<eor>";
+        let (_, count, uncredited) =
+            LogMatrix::build_from_adif_reporting(adif, &resolver_with(ops));
+
+        assert_eq!(count, 2, "both records are still QSOs");
+        assert_eq!(uncredited.len(), 1, "only the rejected one is reported");
+        let c = &uncredited[0];
+        assert_eq!(c.call, "SV2RSG/A");
+        assert_eq!(c.qso_date, "20240906");
+        assert_eq!(c.time_on, "101500");
+        assert_eq!(c.band, "20M");
+        assert_eq!(c.mode, "FT8", "the log's own mode, not the DATA bucket");
+        assert_eq!(c.dxcc, Some(180));
+        assert_eq!(c.reason, UncreditedReason::InvalidOperation);
+
+        // The printed line has to carry the date, or it cannot be looked up.
+        let line = c.to_string();
+        assert!(line.contains("SV2RSG/A"), "{line}");
+        assert!(line.contains("20240906"), "{line}");
+        assert!(line.contains("invalid operation"), "{line}");
+    }
+
+    /// A clean log must produce an empty report — otherwise the line becomes
+    /// noise every refresh and stops being read.
+    #[test]
+    fn a_log_with_nothing_uncredited_reports_nothing() {
+        let adif = "<CALL:6>SV2CPL<QSO_DATE:8>20240906<TIME_ON:6>101500\
+                    <BAND:3>20M<MODE:2>CW<DXCC:3>236<eor>";
+        let (_, _, uncredited) = LogMatrix::build_from_adif_reporting(adif, &resolver_with(vec![]));
+        assert!(uncredited.is_empty());
+    }
+
+    /// `build_from_adif` must stay exactly the reporting build minus the
+    /// report — the two would drift apart silently otherwise.
+    #[test]
+    fn the_reporting_build_matches_the_plain_one() {
+        let ops = vec![invalid_op(
+            "SV2RSG/A",
+            "2024-09-05T00:00:00+00:00",
+            "2024-09-09T23:59:59+00:00",
+        )];
+        let adif = "<CALL:8>SV2RSG/A<QSO_DATE:8>20240906<TIME_ON:6>101500\
+                    <BAND:3>20M<MODE:3>FT8<DXCC:3>180<eor>\
+                    <CALL:6>SV2CPL<QSO_DATE:8>20240906<TIME_ON:6>101500\
+                    <BAND:3>20M<MODE:2>CW<DXCC:3>236<eor>";
+        let plain = LogMatrix::build_from_adif(adif, &resolver_with(ops.clone()));
+        let (m, n, _) = LogMatrix::build_from_adif_reporting(adif, &resolver_with(ops));
+        assert_eq!(plain.0, m);
+        assert_eq!(plain.1, n);
     }
 
     /// The rejection must be aimed at the entity, not the prefix: an ordinary

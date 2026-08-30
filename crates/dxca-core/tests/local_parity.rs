@@ -176,6 +176,17 @@ fn invalid_operations_change_the_matrix_in_one_direction_only() {
         after.stats().slots_worked <= before.stats().slots_worked,
         "dropping contacts cannot add slots"
     );
+
+    // And the operator-facing report for this same real log — the exact
+    // lines `refresh_user` prints. Empty is the expected and healthy answer.
+    let data = cty::parse(&cty_xml).expect("cty.xml parses");
+    let mut r = DxccResolver::default();
+    r.load(data, now_unix);
+    let (_, _, uncredited) = LogMatrix::build_from_adif_reporting(&content, &r);
+    println!("uncredited contacts in this log: {}", uncredited.len());
+    for c in &uncredited {
+        println!("   {c}");
+    }
 }
 
 /// Does the **real** cty.xml actually flag a known invalid operation, end to

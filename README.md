@@ -25,7 +25,9 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
-**v2.13.2** (2026-08-30): award totals now agree with ClubLog's own. DXCA
+**v2.13.3** (2026-08-30): award totals now agree with ClubLog's own, and
+every uncredited contact is **named in the log at refresh time** rather than
+just vanishing from the totals. DXCA
 honours both lists cty.xml carries for
 **[operations ClubLog does not credit](#operations-clublog-does-not-credit)** —
 the ~2,800 invalid operations, and the 59 **whitelisted** entities where only
@@ -727,6 +729,23 @@ yet is not credited — correctly, in that ClubLog will not credit it either,
 but it means a brand-new entity can read as un-worked until the next cty.xml
 refresh catches up. If you have just worked something rare and DXCA still
 shows it as needed, that is usually why.
+
+**Every uncredited contact is named at refresh time.** Both rules are
+otherwise silent — the QSO is simply absent from the totals, and the only
+symptom is a number that disagrees with ClubLog's by one. So each ClubLog
+refresh logs what it dropped, with the date you need to find the QSO:
+
+```
+dxca: user 1: 1 contact(s) in this log earn no DXCC credit:
+dxca: user 1:   ZL8AC 20250712 101500Z 40M FT8 DXCC 133 — not on the entity's whitelist, no credit
+```
+
+Nothing is printed when there is nothing to report, which is the usual case.
+Read it with `journalctl -u dxca` on a Pi, or `run.log` on Windows.
+
+This cuts both ways as a check on your log, not just on DXCA. A contact
+appearing here that you do not recognise is worth looking up in ClubLog and
+deleting — a busted decode that got logged will show up in exactly this list.
 
 Like the deleted list, both depend on cty.xml. A server that has never
 downloaded it applies neither, and totals fall back to the older behaviour.

@@ -183,7 +183,9 @@ impl UserService {
                     .into(),
             );
         }
-        let (matrix, qso_count) = LogMatrix::build_from_adif(&content, &resolver);
+        let (matrix, qso_count, uncredited) =
+            LogMatrix::build_from_adif_reporting(&content, &resolver);
+        log_uncredited(user_id, &uncredited);
         let dxcc_count = matrix.total_dxcc_count();
         self.db.set_matrix(user_id, &matrix, qso_count)?;
         self.matrices
@@ -418,6 +420,38 @@ impl UserService {
         }
         map.insert(key, now);
         true
+    }
+}
+
+/// Most logs have none of these; a big one might have a handful. A cap keeps
+/// a pathological log from filling the journal, and the summary line says
+/// what was held back so the cap can never read as "that was all of them".
+const UNCREDITED_LOG_CAP: usize = 50;
+
+/// Print the contacts ClubLog gives no credit for, after a refresh.
+///
+/// These are otherwise invisible: the QSO is simply absent from the totals,
+/// and the only symptom is a number that disagrees with ClubLog's by one.
+/// Tracing VU24DX's 314-against-313 back to a single `ZL8AC` QSO in 65,908
+/// records took a whole session — this turns that into one line at refresh
+/// time, carrying the date needed to find the QSO in the log and delete it.
+fn log_uncredited(user_id: i64, items: &[dxca_core::matrix::UncreditedContact]) {
+    if items.is_empty() {
+        return;
+    }
+    println!(
+        "dxca: user {user_id}: {} contact(s) in this log earn no DXCC credit:",
+        items.len()
+    );
+    for c in items.iter().take(UNCREDITED_LOG_CAP) {
+        println!("dxca: user {user_id}:   {c}");
+    }
+    if let Some(held) = items
+        .len()
+        .checked_sub(UNCREDITED_LOG_CAP)
+        .filter(|n| *n > 0)
+    {
+        println!("dxca: user {user_id}:   ... and {held} more not listed");
     }
 }
 

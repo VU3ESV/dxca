@@ -45,6 +45,10 @@ impl Record {
         self.fields.get("QSO_DATE").map(String::as_str)
     }
 
+    pub fn time_on(&self) -> Option<&str> {
+        self.fields.get("TIME_ON").map(String::as_str)
+    }
+
     /// `QSO_DATE` + `TIME_ON` as unix seconds (UTC — ADIF times always are).
     ///
     /// Needed to test a contact against a ClubLog

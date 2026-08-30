@@ -978,6 +978,49 @@ The published v2.12.2 release notes originally carried the wrong
 toolchain-drift explanation; corrected 2026-08-30, with a note that the fixes
 land after the tag and touch no shipped code.
 
+### DONE: uncredited contacts are named at refresh time (2026-08-30)
+
+Asked for after the whitelist fix raised the obvious next question. VU24DX's
+`ZL8AC` was found by hand — resolve 22,184 worked calls, cross-reference 59
+whitelisted entities, cross-reference cty.xml — and Manoj's reply to the
+answer was that **no such QSO exists in his log**. Which is a second question
+the matrix cannot answer, because it stores no dates.
+
+Both credit rules were silent by construction: the QSO simply vanishes from
+the totals, and the only symptom is a number one off ClubLog's. So the build
+now reports what it dropped.
+
+- `LogMatrix::build_from_adif_reporting` returns
+  `(matrix, count, Vec<UncreditedContact>)`; `build_from_adif` delegates to it
+  and discards the third, so no caller had to change. A test asserts the two
+  stay identical, because they would drift silently otherwise.
+- `UncreditedContact` carries the **raw ADIF strings** — call, QSO_DATE,
+  TIME_ON, band, the log's own mode (not the DATA bucket) — so a printed line
+  can be searched for verbatim in the operator's ADIF.
+- `refresh_user` prints them, capped at 50 with a "... and N more not listed"
+  line. A cap that hides its own truncation would read as "that was all of
+  them".
+- Nothing is printed when there is nothing to report, or the line becomes
+  noise every refresh and stops being read.
+
+Against VU2CPL's real log it reports three, all `V55DX` in 2016 — invalid
+from 2016-01-01 onwards — and all three were already uncounted, because
+ClubLog exports them with no DXCC field. Totals unchanged, but now visible.
+
+**The next refresh on `adersh@192.168.1.151` prints the ZL8AC line with its
+date.** That is the outstanding question: `journalctl -u dxca | grep "no DXCC
+credit"`.
+
+**What was ruled out first, and the method is worth keeping.** Before adding
+anything: `zl8ac` is at line 22,079 of the stored `workedCalls` (an exact
+match, not an inference); of 22,184 calls exactly two look unusual and both
+are real special-event calls, so a misaligned ADIF parse is not the source;
+DXCA reaches ClubLog at two endpoints only, `cty.php` GET and `getadif.php`
+POST-to-download, so it has no way to have written the QSO; and the
+configured logbook is `VU24DX`, the same one being searched. The callsign was
+in the file ClubLog served. Where it came from *before* that is a question
+only the ADIF can answer — hence this feature.
+
 ### DONE: win-deploy.sh follows %SystemDrive%, not a hardcoded C: (2026-08-30)
 
 Found by Manoj asking "what if the Windows install is in D:\?" — a question,
