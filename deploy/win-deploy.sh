@@ -6,11 +6,15 @@
 #
 #     user@host   default manoj@192.168.1.170 (the shack Windows box).
 #
-# This is an UPDATE, not an install. It replaces dxca.exe in C:\DXCA and
-# restarts the scheduled task; it never touches config\ or data\, and it
-# never registers anything. A first install is still install-dxca.cmd from
-# the release zip, which is what creates the task, the firewall rules and the
-# admin account.
+# This is an UPDATE, not an install. It replaces dxca.exe in %SystemDrive%\DXCA
+# (C:\DXCA on every normal machine) and restarts the scheduled task; it never
+# touches config\ or data\, and it never registers anything. A first install
+# is still install-dxca.cmd from the release zip, which is what creates the
+# task, the firewall rules and the admin account.
+#
+# The install directory is READ FROM THE BOX, not assumed — install-dxca.cmd
+# uses %SystemDrive%, so a machine whose Windows lives on D: keeps DXCA in
+# D:\DXCA and this script follows it there.
 #
 # WHY THERE IS NO SEEDING HERE, unlike pi-deploy.sh: there is nothing this
 # script could usefully seed. The Windows box has its own account, its own
@@ -22,9 +26,10 @@
 # REQUIREMENTS on the Windows side:
 #   * OpenSSH Server running, with this Mac's key trusted.
 #   * The SSH user in BUILTIN\Administrators, group ENABLED — the session
-#     needs a full admin token to control the task and write to C:\DXCA.
+#     needs a full admin token to control the task and write to the
+#     install directory.
 #     Check with: whoami /groups | findstr S-1-5-32-544
-#   * DXCA already installed at C:\DXCA by install-dxca.cmd.
+#   * DXCA already installed at %SystemDrive%\DXCA by install-dxca.cmd.
 #   * The SSH DefaultShell left as cmd.exe (the Windows default). Every
 #     remote command below is cmd syntax — `if not exist`, `move /y`, `>nul`,
 #     `&` — none of which PowerShell understands. Setting the registry's
@@ -33,11 +38,6 @@
 set -euo pipefail
 
 HOST="${1:-manoj@192.168.1.170}"
-INSTALLDIR='C:\DXCA'
-# The same path with forward slashes, for scp. Modern scp speaks SFTP, whose
-# path syntax is POSIX-ish — a backslash there is an escape character, not a
-# separator, so the Windows form silently addresses the wrong file.
-INSTALLDIR_SFTP='C:/DXCA'
 WEBPORT=7580
 # Strip user@ for the HTTP check — that runs from here, over the LAN.
 HOSTNAME_ONLY="${HOST#*@}"
@@ -51,6 +51,43 @@ echo "Checking $HOST..."
 # Fail early and by name. Every one of these is a precondition the operator
 # can fix, and discovering them after the service is stopped would leave the
 # box down for no reason.
+#
+# The shell check goes FIRST because every other command here — including the
+# %SystemDrive% probe immediately below — is cmd syntax and would return
+# nonsense rather than fail under PowerShell.
+#
+# %COMSPEC% expands only in cmd; PowerShell echoes it back literally. A
+# cheap, exact test for the one thing every command below depends on.
+if [ "$($SSH 'echo %COMSPEC%' 2>/dev/null | tr -d '\r')" = "%COMSPEC%" ]; then
+  echo "win-deploy: $HOST's SSH shell is PowerShell, not cmd.exe." >&2
+  echo "            Every remote command here is cmd syntax. Either reset" >&2
+  echo "            HKLM:\\SOFTWARE\\OpenSSH\\DefaultShell to cmd.exe (or" >&2
+  echo "            delete the value), or update this script." >&2
+  exit 1
+fi
+
+# WHERE THE INSTALL IS. `install-dxca.cmd` sets
+# `INSTALLDIR=%SystemDrive%\DXCA` — the drive Windows booted from, not the
+# literal C:. This script hardcoded `C:\DXCA`, which is right on every box in
+# this shack and wrong on any machine whose Windows lives elsewhere: it would
+# report "no dxca.exe in C:\DXCA" — telling the operator there is no install
+# when there is one, on D:. Ask the box instead of assuming, so the two
+# scripts cannot disagree about where DXCA lives.
+SYSTEM_DRIVE="$($SSH 'echo %SystemDrive%' 2>/dev/null | tr -d '\r')"
+case "$SYSTEM_DRIVE" in
+  [A-Za-z]:) ;;
+  # Empty, or echoed back unexpanded. Fall back rather than build a path out
+  # of a garbage string — C: is right on every machine seen so far, and the
+  # dxca.exe check below turns a wrong guess into a clear error, not damage.
+  *) SYSTEM_DRIVE='C:' ;;
+esac
+INSTALLDIR="${SYSTEM_DRIVE}\\DXCA"
+# The same path with forward slashes, for scp. Modern scp speaks SFTP, whose
+# path syntax is POSIX-ish — a backslash there is an escape character, not a
+# separator, so the Windows form silently addresses the wrong file.
+INSTALLDIR_SFTP="${SYSTEM_DRIVE}/DXCA"
+echo "Install directory: $INSTALLDIR"
+
 $SSH "if not exist \"$INSTALLDIR\\dxca.exe\" exit 1" || {
   echo "win-deploy: no dxca.exe in $INSTALLDIR on $HOST." >&2
   echo "            This updates an existing install; run install-dxca.cmd" >&2
@@ -62,15 +99,6 @@ $SSH 'whoami /groups | findstr /c:"S-1-5-32-544" >nul' || {
   echo "            It cannot stop the task or write to $INSTALLDIR." >&2
   exit 1
 }
-# %COMSPEC% expands only in cmd; PowerShell echoes it back literally. A
-# cheap, exact test for the one thing every command below depends on.
-if [ "$($SSH 'echo %COMSPEC%' 2>/dev/null | tr -d '\r')" = "%COMSPEC%" ]; then
-  echo "win-deploy: $HOST's SSH shell is PowerShell, not cmd.exe." >&2
-  echo "            Every remote command here is cmd syntax. Either reset" >&2
-  echo "            HKLM:\\SOFTWARE\\OpenSSH\\DefaultShell to cmd.exe (or" >&2
-  echo "            delete the value), or update this script." >&2
-  exit 1
-fi
 
 echo "Building web UI + Windows binary..."
 pnpm -C web-ui install && pnpm -C web-ui build

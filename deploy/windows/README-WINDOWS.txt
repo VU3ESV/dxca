@@ -116,6 +116,15 @@ on any PC that other people log in to.
      One fixed location is what makes upgrades painless, and it means
      there is a single answer to "where is my database" and "where is
      the log" — see below.
+
+     ON A PC WHOSE WINDOWS IS NOT ON C:  The installer follows the
+     drive Windows itself booted from, so if that is D: everything
+     below reads D:\DXCA instead. Nothing to configure — it finds the
+     right drive on its own. What you CANNOT do is pick a different
+     drive: there is no prompt and no setting for it, because the
+     whole point of one fixed location is that upgrades never have to
+     ask. Moving the folder by hand would leave the scheduled task
+     pointing at the old path.
   2. RIGHT-CLICK install-dxca.cmd -> "Run as administrator".
   3. Your browser opens on http://127.0.0.1:7580/ — create the admin
      account there. The installer waits for you.

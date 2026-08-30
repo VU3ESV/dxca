@@ -235,6 +235,13 @@ unzipped folder is only the delivery package and can be deleted afterwards.
 `uninstall-dxca.cmd` reverses the task and firewall rules and leaves
 `C:\DXCA\config\` and `C:\DXCA\data\` alone.
 
+Strictly the location is `%SystemDrive%\DXCA` — the drive Windows itself
+booted from, which is `C:` on any ordinary machine and `D:\DXCA` on one whose
+Windows lives there. It is found automatically, by the installer and by
+`deploy/win-deploy.sh` alike. What you cannot do is *choose* a drive: there is
+no prompt for it, because one fixed location is precisely what stops an
+upgrade having to ask.
+
 The fixed location is what makes upgrades uneventful — see
 [Updating](#updating). It is also locked to administrators when the
 installer creates it: a folder at the root of `C:` otherwise inherits the

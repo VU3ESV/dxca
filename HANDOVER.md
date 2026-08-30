@@ -978,6 +978,35 @@ The published v2.12.2 release notes originally carried the wrong
 toolchain-drift explanation; corrected 2026-08-30, with a note that the fixes
 land after the tag and touch no shipped code.
 
+### DONE: win-deploy.sh follows %SystemDrive%, not a hardcoded C: (2026-08-30)
+
+Found by Manoj asking "what if the Windows install is in D:\?" — a question,
+not a bug report, and the answer was that the two Windows scripts disagreed.
+
+`install-dxca.cmd` has always used `INSTALLDIR=%SystemDrive%\DXCA`, so on a
+machine whose Windows boots from D: it installs to `D:\DXCA` and registers the
+scheduled task with that path. `win-deploy.sh` hardcoded `C:\DXCA`. On such a
+box it would have failed at its first precondition with *"no dxca.exe in
+C:\DXCA — run install-dxca.cmd for a first install"*: telling the operator
+there is no install when there is one, on the other drive.
+
+Safe, at least — it fails before stopping anything, so nothing goes down. But
+the message points at the wrong remedy, and running install-dxca.cmd on that
+advice would have been harmless only by luck.
+
+Fixed by asking the box (`echo %SystemDrive%`) instead of assuming, and
+building both the Windows and the SFTP form of the path from the answer. The
+**shell check moved to the top** as part of this: `%SystemDrive%` expands only
+under cmd, so probing it before proving the shell is cmd would silently yield
+the literal string. A non-drive answer falls back to `C:` rather than building
+a path out of garbage — and the dxca.exe check downstream turns a wrong guess
+into a clear error rather than damage.
+
+Verified against the real box: prints `Install directory: C:\DXCA` and
+deploys as before. Paths corrected in `README.md` and `README-WINDOWS.txt`,
+the latter with a note that a different drive is **found**, never **chosen** —
+there is no prompt, because one fixed location is what stops upgrades asking.
+
 ### DONE: the entity whitelist — the *actual* 314 vs 313 (2026-08-30)
 
 **The invalid-operations fix below was correct, and was not the cause.** It
