@@ -39,6 +39,15 @@ async fn main() {
         }
     };
 
+    // Feeds move to their owning account (docs/MULTI-STATION.md), then the
+    // effective lists are gathered from every account.
+    //
+    // Both happen HERE, before anything binds a port or dials a node: the
+    // aggregate is what `pipeline::start` and `NodeManager::apply` are given,
+    // so migrating later would mean a boot still running from the TOML.
+    migrate_feeds(&db, &cfg);
+    let effective = effective_config(&db, &cfg);
+
     // DX-cluster node clients: honest-status supervised connections. Built
     // before the pipeline because the telnet server's command passthrough
     // writes to these nodes, and the listener binds inside pipeline::start.
@@ -55,7 +64,7 @@ async fn main() {
             commands: Some(commands),
         }
     });
-    let (pipeline_state, input_tx) = match pipeline::start(&cfg, interactive).await {
+    let (pipeline_state, input_tx) = match pipeline::start(&effective, interactive).await {
         Ok(started) => started,
         Err(e) => {
             eprintln!("dxca: pipeline start failed (port clash?): {e}");
@@ -63,7 +72,7 @@ async fn main() {
         }
     };
 
-    manager.apply(&cfg.cluster_nodes, &input_tx);
+    manager.apply(&effective.cluster_nodes, &input_tx);
     let telegram = match &cfg.telegram_base_override {
         Some(base) => Telegram::with_base(base),
         None => Telegram::default(),
@@ -73,15 +82,6 @@ async fn main() {
         None => Endpoints::default(),
     };
     let users = Arc::new(UserService::new(db, &cfg.data_dir, telegram, endpoints));
-
-    // Step one of docs/MULTI-STATION.md: move a single-operator install's
-    // TOML feeds into its account.
-    //
-    // BEHAVIOUR-NEUTRAL. Nothing reads `feeds_json` to build a pipeline yet —
-    // `config/dxca.toml` is still what runs the server, and the TOML sections
-    // are left in place so the previous binary remains a working rollback.
-    // This only fills in the column the next step will read.
-    migrate_feeds(&users, &cfg);
 
     // Alert fan-out: every processed spot classifies per user.
     let mut spot_rx = pipeline_state.spot_events.subscribe();
@@ -144,13 +144,17 @@ async fn main() {
             std::process::exit(1);
         }
     };
-    let sources: Vec<String> = cfg
+    // From the EFFECTIVE config, not the file. Once accounts own their
+    // feeds the file no longer says what is running, and a banner reading
+    // `nodes []` while nine are dialling is worse than no banner — it was
+    // read as proof that a local run was inert, and it was not.
+    let sources: Vec<String> = effective
         .udp_sources
         .iter()
         .filter(|s| s.enabled)
         .map(|s| format!("{} {}", s.name, s.port))
         .collect();
-    let node_names: Vec<String> = cfg
+    let node_names: Vec<String> = effective
         .cluster_nodes
         .iter()
         .filter(|n| n.enabled)
@@ -198,14 +202,14 @@ async fn shutdown_signal() {
 /// Idempotent: it does nothing the moment any account owns feeds, so it is
 /// safe on every boot. Refuses on a multi-account install rather than
 /// guessing whose cluster logins are whose.
-fn migrate_feeds(users: &dxca_server::users::UserService, cfg: &config::Config) {
+fn migrate_feeds(db: &dxca_server::db::Db, cfg: &config::Config) {
     use dxca_server::feeds::{Migration, migrate_from_toml};
 
-    let Ok(all) = users.db.users() else { return };
+    let Ok(all) = db.users() else { return };
     let accounts: Vec<(i64, String, dxca_server::feeds::FeedsUserConfig)> = all
         .into_iter()
         .filter_map(|u| {
-            let feeds = users.db.feeds_config(u.id).ok()?;
+            let feeds = db.feeds_config(u.id).ok()?;
             Some((u.id, u.callsign, feeds))
         })
         .collect();
@@ -217,7 +221,7 @@ fn migrate_feeds(users: &dxca_server::users::UserService, cfg: &config::Config) 
         &cfg.broadcast_destinations,
     );
     if let Some((user_id, feeds)) = store
-        && let Err(e) = users.db.set_feeds_config(user_id, &feeds)
+        && let Err(e) = db.set_feeds_config(user_id, &feeds)
     {
         eprintln!("dxca: feeds migration: could not store: {e}");
         return;
@@ -237,4 +241,41 @@ fn migrate_feeds(users: &dxca_server::users::UserService, cfg: &config::Config) 
         // Silent: the overwhelmingly common case on every boot after the first.
         Migration::AlreadyMoved | Migration::NothingToMove => {}
     }
+}
+
+/// The config the pipeline actually runs: the TOML, with its sources, nodes
+/// and destinations replaced by whatever the accounts own.
+///
+/// Falls back to the TOML untouched when no account owns anything, so a
+/// fresh install with a seeded config still comes up, and so does one whose
+/// migration refused. `web_bind`, ports and paths always come from the file.
+fn effective_config(db: &dxca_server::db::Db, cfg: &config::Config) -> config::Config {
+    let accounts: Vec<(String, dxca_server::feeds::FeedsUserConfig)> = db
+        .users()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|u| Some((u.callsign, db.feeds_config(u.id).ok()?)))
+        .collect();
+
+    let agg = dxca_server::feeds::aggregate(
+        &accounts,
+        &cfg.udp_sources,
+        &cfg.cluster_nodes,
+        &cfg.broadcast_destinations,
+    );
+    if !agg.from_accounts {
+        return cfg.clone();
+    }
+    println!(
+        "dxca: feeds: running {} source(s), {} node(s), {} destination(s) owned by {} account(s)",
+        agg.udp_sources.len(),
+        agg.cluster_nodes.len(),
+        agg.destinations.len(),
+        accounts.len()
+    );
+    let mut out = cfg.clone();
+    out.udp_sources = agg.udp_sources;
+    out.cluster_nodes = agg.cluster_nodes;
+    out.broadcast_destinations = agg.destinations;
+    out
 }

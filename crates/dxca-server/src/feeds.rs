@@ -124,6 +124,99 @@ pub fn port_clash(
     None
 }
 
+/// [`qualify`], but safe to apply twice.
+///
+/// The UI hands back bare names, storage keeps qualified ones, and a save is
+/// a round trip through both — so qualifying blindly turns `VU2CPL:MSHV`
+/// into `VU2CPL:VU2CPL:MSHV` on the second save. Names owned by somebody
+/// *else* are left alone rather than re-owned, because silently taking
+/// another station's node is worse than refusing.
+pub fn qualify_idempotent(callsign: &str, name: &str) -> String {
+    let (owner, _) = split(name);
+    if owner.is_empty() {
+        qualify(callsign, name)
+    } else {
+        name.to_string()
+    }
+}
+
+/// Everything the pipeline should be running, gathered from every account.
+pub struct Aggregated {
+    pub udp_sources: Vec<UdpSource>,
+    pub cluster_nodes: Vec<ClusterNode>,
+    pub destinations: Vec<BroadcastDestination>,
+    /// False when this came from `config/dxca.toml` because no account owns
+    /// anything — a fresh install, or one where the migration refused.
+    pub from_accounts: bool,
+}
+
+/// Combine every account's feeds into the lists `apply_sources`,
+/// `NodeManager::apply` and `apply_destinations` already consume.
+///
+/// Neither hot-apply needed rewriting for this: both already diff a desired
+/// list by name, so they start and retire exactly the right sessions when an
+/// account's entry appears or goes.
+///
+/// **Falls back to the TOML wholesale** when no account owns a source or a
+/// node. Without that a fresh install with a seeded config would come up
+/// deaf, and an install whose migration refused (more than one account)
+/// would lose its feed rather than keep running.
+///
+/// **Passthrough destinations always come from the TOML**, whichever side
+/// wins: they relay a decoder's datagram verbatim and belong to the machine.
+pub fn aggregate(
+    accounts: &[(String, FeedsUserConfig)],
+    toml_sources: &[UdpSource],
+    toml_nodes: &[ClusterNode],
+    toml_destinations: &[BroadcastDestination],
+) -> Aggregated {
+    let passthrough: Vec<BroadcastDestination> = toml_destinations
+        .iter()
+        .filter(|d| d.format == "passthrough")
+        .cloned()
+        .collect();
+
+    let owned_anything = accounts
+        .iter()
+        .any(|(_, f)| !f.udp_sources.is_empty() || !f.cluster_nodes.is_empty());
+    if !owned_anything {
+        return Aggregated {
+            udp_sources: toml_sources.to_vec(),
+            cluster_nodes: toml_nodes.to_vec(),
+            destinations: toml_destinations.to_vec(),
+            from_accounts: false,
+        };
+    }
+
+    let mut agg = Aggregated {
+        udp_sources: Vec::new(),
+        cluster_nodes: Vec::new(),
+        destinations: passthrough,
+        from_accounts: true,
+    };
+    for (callsign, f) in accounts {
+        // Qualified on the way out too: storage should already hold
+        // qualified names, but a hand-edited row must not be able to put a
+        // bare name into a map keyed across every account.
+        agg.udp_sources
+            .extend(f.udp_sources.iter().map(|s| UdpSource {
+                name: qualify_idempotent(callsign, &s.name),
+                ..s.clone()
+            }));
+        agg.cluster_nodes
+            .extend(f.cluster_nodes.iter().map(|n| ClusterNode {
+                name: qualify_idempotent(callsign, &n.name),
+                ..n.clone()
+            }));
+        agg.destinations
+            .extend(f.destinations.iter().map(|d| BroadcastDestination {
+                name: qualify_idempotent(callsign, &d.name),
+                ..d.clone()
+            }));
+    }
+    agg
+}
+
 /// What [`migrate_from_toml`] did, for the caller to log.
 #[derive(Debug, PartialEq)]
 pub enum Migration {
@@ -456,6 +549,91 @@ mod tests {
             migrate_from_toml(&accounts, &[], &[], &[dest("RUMlog", "passthrough", &[])]);
         assert_eq!(what, Migration::NothingToMove);
         assert!(stored.is_none());
+    }
+
+    /// A save is a round trip: the UI sends bare names, storage keeps
+    /// qualified ones. Qualifying blindly would produce
+    /// `VU2CPL:VU2CPL:MSHV` on the second save.
+    #[test]
+    fn qualifying_is_safe_to_repeat() {
+        let once = qualify_idempotent("VU2CPL", "MSHV");
+        assert_eq!(once, "VU2CPL:MSHV");
+        assert_eq!(qualify_idempotent("VU2CPL", &once), "VU2CPL:MSHV");
+    }
+
+    /// Silently re-owning another station's node would be worse than
+    /// refusing — it would hand one operator another's cluster login.
+    #[test]
+    fn a_name_owned_by_someone_else_is_left_alone() {
+        assert_eq!(
+            qualify_idempotent("VU2WJ", "VU2CPL:N2WQ-2"),
+            "VU2CPL:N2WQ-2"
+        );
+    }
+
+    /// Two accounts, one combined list, and the same bare name on both
+    /// sides staying distinct — the case the namespace exists for.
+    #[test]
+    fn aggregate_combines_accounts_and_keeps_their_names_apart() {
+        let a = FeedsUserConfig {
+            udp_sources: vec![source("MSHV", 2333, true)],
+            cluster_nodes: vec![node("N2WQ-2")],
+            ..Default::default()
+        };
+        let b = FeedsUserConfig {
+            udp_sources: vec![source("MSHV", 2336, true)],
+            cluster_nodes: vec![node("N2WQ-2")],
+            ..Default::default()
+        };
+        let agg = aggregate(&[("VU2CPL".into(), a), ("VU2WJ".into(), b)], &[], &[], &[]);
+        assert!(agg.from_accounts);
+        let names: Vec<&str> = agg.udp_sources.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, vec!["VU2CPL:MSHV", "VU2WJ:MSHV"]);
+        let nodes: Vec<&str> = agg.cluster_nodes.iter().map(|n| n.name.as_str()).collect();
+        assert_eq!(nodes, vec!["VU2CPL:N2WQ-2", "VU2WJ:N2WQ-2"]);
+    }
+
+    /// A fresh install with a seeded config and nobody owning anything must
+    /// come up on the TOML, not deaf.
+    #[test]
+    fn no_account_owns_anything_so_the_toml_still_runs_the_server() {
+        let agg = aggregate(
+            &[("VU2CPL".into(), FeedsUserConfig::default())],
+            &[source("MSHV", 2333, true)],
+            &[node("N2WQ-2")],
+            &[dest("RUMlog", "passthrough", &[])],
+        );
+        assert!(!agg.from_accounts, "fell back");
+        assert_eq!(agg.udp_sources[0].name, "MSHV", "bare, exactly as before");
+        assert_eq!(agg.cluster_nodes.len(), 1);
+        assert_eq!(agg.destinations.len(), 1);
+    }
+
+    /// Passthrough belongs to the machine, so it comes from the TOML even
+    /// once accounts own everything else.
+    #[test]
+    fn passthrough_survives_the_switch_to_accounts() {
+        let owned = FeedsUserConfig {
+            udp_sources: vec![source("MSHV", 2333, true)],
+            destinations: vec![dest("MyLogger", "cluster", &[])],
+            ..Default::default()
+        };
+        let agg = aggregate(
+            &[("VU2CPL".into(), owned)],
+            &[],
+            &[],
+            &[
+                dest("RUMlog", "passthrough", &[]),
+                dest("Old", "cluster", &[]),
+            ],
+        );
+        assert!(agg.from_accounts);
+        let names: Vec<&str> = agg.destinations.iter().map(|d| d.name.as_str()).collect();
+        assert_eq!(
+            names,
+            vec!["RUMlog", "VU2CPL:MyLogger"],
+            "the TOML's passthrough stays; its non-passthrough row does not"
+        );
     }
 
     #[test]

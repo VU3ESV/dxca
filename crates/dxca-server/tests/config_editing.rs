@@ -262,12 +262,38 @@ async fn admin_edits_hot_apply_and_persist() {
         "{status_body}"
     );
 
-    // And the config file persisted — a restart would agree.
+    // Persisted — a restart would agree. But WHERE changed with
+    // docs/MULTI-STATION.md: sources and nodes belong to the account that
+    // saved them, and only passthrough is still the machine's, so only
+    // passthrough is still in the file.
     let reloaded = Config::load(&config_path).unwrap();
-    assert_eq!(reloaded.udp_sources.len(), 1);
-    assert_eq!(reloaded.udp_sources[0].name, "B");
-    assert_eq!(reloaded.cluster_nodes[0].name, "FAKE");
+    assert!(
+        reloaded.udp_sources.is_empty(),
+        "sources moved to the account, and stale copies here would let the \
+         aggregate's fallback resurrect them: {:?}",
+        reloaded.udp_sources
+    );
+    assert!(reloaded.cluster_nodes.is_empty(), "nodes moved too");
+    assert_eq!(
+        reloaded.broadcast_destinations.len(),
+        1,
+        "the passthrough row stays in the file"
+    );
     assert_eq!(reloaded.broadcast_destinations[0].port, p2);
+    assert_eq!(reloaded.broadcast_destinations[0].format, "passthrough");
+
+    // And the operator gets back what they saved, with bare names — a
+    // qualified one coming back would be re-qualified on the next save.
+    let (status, _, body) = http(
+        "GET",
+        format!("{base}/api/config/global"),
+        Some(cookie.clone()),
+        None,
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert_eq!(body["udp_sources"][0]["name"], "B", "{body}");
+    assert_eq!(body["cluster_nodes"][0]["name"], "FAKE", "{body}");
 
     let _ = std::fs::remove_dir_all(&data_dir);
 }

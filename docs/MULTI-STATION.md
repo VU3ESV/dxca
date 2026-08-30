@@ -1,6 +1,7 @@
 # Multi-station DXCA — moving sources, nodes and outputs to the user
 
-**Status: steps one and two built; the pipeline is not yet rewired.**
+**Status: steps one to three built. The pipeline now runs from the
+accounts.**
 Written 2026-08-30 against v2.15.1.
 
 Step two: `Spot` carries an `owner` field, and both producers —
@@ -171,6 +172,27 @@ user, and under one shared stream it has no obvious owner.
 
 Manoj's call, 2026-08-30: **leave it admin-owned.** It is the one output that
 is genuinely about the server's own machine rather than about a station.
+
+## Operational consequence: the TOML stops disabling things
+
+Once an account owns feeds, **editing `config/dxca.toml` no longer changes
+what runs.** Sources and nodes come from the database; the file keeps only
+`web_bind`, ports, paths, refresh intervals and the passthrough rows.
+
+This is not theoretical. It was found the hard way: a dry run against a copy
+of production was made "safe" by setting `enabled = false` on every node in
+the TOML — and it dialled all nine production nodes anyway, because the
+aggregate had already stopped reading the file. The habit of disabling a node
+by editing the config is now a no-op that looks like it worked.
+
+Two practical rules follow:
+
+* **Disable in the UI, not the file** — or, for a local run against a copy of
+  production, disable in the account's `feeds_json` and prove it with
+  `lsof -a -p PID -iTCP -sTCP:ESTABLISHED`, which should show zero.
+* **The startup banner prints from the file**, so it says `nodes []` while
+  nine are running. That line needs to print the effective set; until it
+  does, do not read it as evidence.
 
 ## Open questions
 

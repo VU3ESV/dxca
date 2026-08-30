@@ -186,7 +186,15 @@ impl Config {
 
     /// Enabled destinations in the broadcaster's terms.
     pub fn broadcast_destinations(&self) -> Vec<DestinationConfig> {
-        self.broadcast_destinations
+        destinations_of(&self.broadcast_destinations)
+    }
+}
+
+/// The same conversion over any list, so an aggregate assembled from several
+/// accounts can be applied without first pretending to be a `Config`.
+pub fn destinations_of(dests: &[BroadcastDestination]) -> Vec<DestinationConfig> {
+    {
+        dests
             .iter()
             .filter(|d| d.enabled)
             .map(|d| DestinationConfig {

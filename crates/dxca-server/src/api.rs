@@ -5,6 +5,7 @@
 use crate::auth;
 use crate::config::{BroadcastDestination, ClusterNode, Config, UdpSource};
 use crate::db::{ClubLogUserConfig, NotifyUserConfig, StationConfig, User};
+use crate::feeds;
 use crate::nodes::NodeManager;
 use crate::pipeline::{PipelineInput, PipelineState};
 use crate::users::UserService;
@@ -111,7 +112,21 @@ fn status_json(app: &AppState) -> serde_json::Value {
         "lotw_users": app.users.lotw_count(),
         "telnet_clients": app.pipeline.telnet.client_count(),
         "spots_per_source": *app.pipeline.source_counts.lock().unwrap(),
-        "cluster_nodes": app.nodes.statuses(),
+        // Keyed by the BARE name. The status map keys on the configured
+        // name, which is namespaced once feeds are per-account, and
+        // `VU2CPL:VU2OY` in the header pill and the nodes page would be
+        // noise — the operator named it `VU2OY`.
+        //
+        // LIMITATION, deliberate and recorded: with two accounts owning a
+        // node of the same name these collapse into one key. Every install
+        // has one account today, so it cannot happen yet; this must become
+        // owner-aware before multi-account ships (docs/MULTI-STATION.md).
+        "cluster_nodes": app
+            .nodes
+            .statuses()
+            .into_iter()
+            .map(|(k, v)| (crate::feeds::split(&k).1.to_string(), v))
+            .collect::<std::collections::HashMap<_, _>>(),
         "udp_sent": counters.total_sent(),
         "udp_failed": counters.total_failed(),
     })
@@ -1016,10 +1031,64 @@ async fn get_global(State(app): State<AppState>, headers: HeaderMap) -> Response
         return resp;
     }
     let cfg = app.config.lock().unwrap().clone();
+
+    // Feeds come from the CALLER'S account, with the owner prefix stripped:
+    // the operator typed `MSHV` and must get `MSHV` back, or the next save
+    // would qualify an already-qualified name. Passthrough rows still come
+    // from the file — they belong to the machine, not to a station.
+    let caller = match require_user(&app, &headers) {
+        Ok(u) => u,
+        Err(resp) => return resp,
+    };
+    let mut mine = app.users.db.feeds_config(caller.id).unwrap_or_default();
+    // Same fallback the aggregate uses: while nobody owns anything the
+    // server is still running from the file, and showing an empty list
+    // beside a feed that is plainly working would be a lie. The first save
+    // moves it into the account.
+    if mine.udp_sources.is_empty() && mine.cluster_nodes.is_empty() {
+        mine.udp_sources = cfg.udp_sources.clone();
+        mine.cluster_nodes = cfg.cluster_nodes.clone();
+        if mine.destinations.is_empty() {
+            mine.destinations = cfg
+                .broadcast_destinations
+                .iter()
+                .filter(|d| d.format != "passthrough")
+                .cloned()
+                .collect();
+        }
+    }
+    let bare = |n: &str| feeds::split(n).1.to_string();
+    let udp_sources: Vec<UdpSource> = mine
+        .udp_sources
+        .iter()
+        .map(|x| UdpSource {
+            name: bare(&x.name),
+            ..x.clone()
+        })
+        .collect();
+    let cluster_nodes: Vec<ClusterNode> = mine
+        .cluster_nodes
+        .iter()
+        .map(|x| ClusterNode {
+            name: bare(&x.name),
+            ..x.clone()
+        })
+        .collect();
+    let broadcast_destinations: Vec<BroadcastDestination> = cfg
+        .broadcast_destinations
+        .iter()
+        .filter(|d| d.format == "passthrough")
+        .cloned()
+        .chain(mine.destinations.iter().map(|x| BroadcastDestination {
+            name: bare(&x.name),
+            ..x.clone()
+        }))
+        .collect();
+
     Json(serde_json::json!({
-        "udp_sources": cfg.udp_sources,
-        "cluster_nodes": cfg.cluster_nodes,
-        "broadcast_destinations": cfg.broadcast_destinations,
+        "udp_sources": udp_sources,
+        "cluster_nodes": cluster_nodes,
+        "broadcast_destinations": broadcast_destinations,
         "read_only": {
             "web_bind": cfg.web_bind,
             "telnet_port": cfg.telnet_port,
@@ -1113,32 +1182,125 @@ async fn put_global(
         return err(StatusCode::INTERNAL_SERVER_ERROR, e);
     }
 
+    // Feeds belong to the caller's account, not to the file
+    // (docs/MULTI-STATION.md). Store them, then run from every account's
+    // aggregate — otherwise an edit applies now and vanishes at the next
+    // restart, when startup reads the accounts.
+    //
+    // Passthrough destinations are the exception and stay in the TOML: they
+    // relay a decoder's datagram verbatim and belong to the machine.
+    let caller = match require_user(&app, &headers) {
+        Ok(u) => u,
+        Err(resp) => return resp,
+    };
+    let mine = feeds::FeedsUserConfig {
+        udp_sources: req
+            .udp_sources
+            .iter()
+            .map(|x| UdpSource {
+                name: feeds::qualify_idempotent(&caller.callsign, &x.name),
+                ..x.clone()
+            })
+            .collect(),
+        cluster_nodes: req
+            .cluster_nodes
+            .iter()
+            .map(|x| ClusterNode {
+                name: feeds::qualify_idempotent(&caller.callsign, &x.name),
+                ..x.clone()
+            })
+            .collect(),
+        destinations: req
+            .broadcast_destinations
+            .iter()
+            .filter(|d| d.format != "passthrough")
+            .map(|x| BroadcastDestination {
+                name: feeds::qualify_idempotent(&caller.callsign, &x.name),
+                ..x.clone()
+            })
+            .collect(),
+    };
+
+    // One socket per port across the WHOLE server, so the clash has to be
+    // caught here — reported on the other operator's save it would name no
+    // culprit, and reported at bind time it would take this one's feed down.
+    let others: Vec<(String, feeds::FeedsUserConfig)> = app
+        .users
+        .db
+        .users()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|u| u.id != caller.id)
+        .filter_map(|u| Some((u.callsign, app.users.db.feeds_config(u.id).ok()?)))
+        .collect();
+    if let Some((port, who)) = feeds::port_clash(&mine, &others) {
+        return err(
+            StatusCode::BAD_REQUEST,
+            format!("UDP port {port} is already used by {who}"),
+        );
+    }
+    if let Err(e) = app.users.db.set_feeds_config(caller.id, &mine) {
+        return err(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("saving feeds: {e}"),
+        );
+    }
+
+    // The file keeps only what is still the machine's: passthrough rows,
+    // taken from THIS request so an admin can still re-point them. Sources
+    // and nodes are cleared — they live in accounts now, and leaving stale
+    // copies behind would make the fallback in `aggregate` resurrect them
+    // the moment an account was emptied.
+    {
+        let mut cfg = app.config.lock().unwrap();
+        cfg.broadcast_destinations = req
+            .broadcast_destinations
+            .iter()
+            .filter(|d| d.format == "passthrough")
+            .cloned()
+            .collect();
+        cfg.udp_sources.clear();
+        cfg.cluster_nodes.clear();
+    }
+
+    let effective = {
+        let cfg = app.config.lock().unwrap().clone();
+        let accounts: Vec<(String, feeds::FeedsUserConfig)> = app
+            .users
+            .db
+            .users()
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|u| Some((u.callsign, app.users.db.feeds_config(u.id).ok()?)))
+            .collect();
+        feeds::aggregate(
+            &accounts,
+            &cfg.udp_sources,
+            &cfg.cluster_nodes,
+            &cfg.broadcast_destinations,
+        )
+    };
+
     // Apply: sources first (binds can fail → reject), then destinations
     // and nodes (infallible diffs).
     if let Err(e) = app
         .pipeline
-        .apply_sources(&req.udp_sources, &app.input_tx)
+        .apply_sources(&effective.udp_sources, &app.input_tx)
         .await
     {
         return err(StatusCode::BAD_REQUEST, format!("source listener: {e}"));
     }
-    let new_cfg = {
-        let mut cfg = app.config.lock().unwrap();
-        cfg.udp_sources = req.udp_sources;
-        cfg.cluster_nodes = req.cluster_nodes;
-        cfg.broadcast_destinations = req.broadcast_destinations;
-        cfg.clone()
-    };
+    let new_cfg = app.config.lock().unwrap().clone();
     if let Err(e) = app
         .pipeline
-        .apply_destinations(new_cfg.broadcast_destinations())
+        .apply_destinations(crate::config::destinations_of(&effective.destinations))
     {
         return err(
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("destinations: {e}"),
         );
     }
-    app.nodes.apply(&new_cfg.cluster_nodes, &app.input_tx);
+    app.nodes.apply(&effective.cluster_nodes, &app.input_tx);
 
     match new_cfg.save(&app.config_path) {
         Ok(()) => Json(serde_json::json!({"ok": true})).into_response(),
