@@ -74,6 +74,32 @@ that operator's screens. Two consequences, both wanted:
    the destinations. Prefixing it means a user's filter is a prefix test, with
    no second lookup and no new field on `Spot`.
 
+### REVISED 2026-08-30, before writing the aggregation
+
+**The qualified name must not reach `Spot::source_name`.** Probing the first
+consumer found why: `format::format` uses `source_name` as the **spotter
+callsign** on the DX cluster line, and filters it to `[A-Z0-9/-]`. A colon is
+not in that set, so `VU2CPL:MSHV` does not error and does not truncate — it
+becomes `VU2CPLMSHV`, and `DX de VU2CPLMSHV:` goes out to every logger. It
+looks like a plausible callsign, so nobody would notice it was wrong.
+
+That is one consumer. The others are `spots_per_source`, the Spots table's
+Source column, the destination allowlist, `send_raw`'s passthrough keying and
+the status page. "Qualify everywhere and strip at each boundary" needs every
+one of them to be right, and this one proves the failure is silent.
+
+**So namespacing stays inside the config and apply layer**, where uniqueness
+is actually needed — the listener map, the client map, the status map. When a
+spot is produced the qualified key is split: `source_name` stays bare, and
+the owner goes in a new `Spot` field of its own.
+
+Ownership is still derivable from the spot, which was the point; it just
+travels in its own field instead of smuggled inside a string. The per-user
+filter becomes `spot.owner == callsign` — explicit, and impossible to leak
+onto the wire. A regression test in `format.rs` records the trap.
+
+The original reasoning, kept because the collision problem it solves is real:
+
 That last point is what makes "one stream, filtered per user" nearly free:
 the filter is already plumbed everywhere, it just has nothing to key on yet.
 

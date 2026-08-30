@@ -110,3 +110,54 @@ mod tests {
         assert!(format(&s).contains("UNKNOWN"));
     }
 }
+
+#[cfg(test)]
+mod source_name_reaches_the_wire {
+    use super::*;
+    use crate::Spot;
+
+    /// `source_name` IS the spotter callsign on the cluster line, so it must
+    /// reach here **bare** — never namespaced with an owner.
+    ///
+    /// This is why multi-station namespacing stays inside the config and
+    /// apply layer, and why `Spot` carries the owner in its own field rather
+    /// than prefixed onto the name (`docs/MULTI-STATION.md`). The failure
+    /// mode is what makes it worth a test: the colon is not in this
+    /// function's allowed character set, so `VU2CPL:MSHV` does not error or
+    /// truncate — it silently becomes `VU2CPLMSHV`, which looks like a
+    /// perfectly plausible callsign in a logger.
+    #[test]
+    fn a_qualified_source_name_would_be_silently_welded() {
+        let mut s = Spot {
+            time_unix: 0,
+            snr_db: -10,
+            delta_time_s: 0.0,
+            delta_frequency_hz: 0,
+            mode: "FT8".into(),
+            mode_inferred: false,
+            message: "CQ K1JT".into(),
+            is_cq: true,
+            comment: String::new(),
+            low_confidence: false,
+            off_air: false,
+            dial_frequency_hz: 14_074_000,
+            source_name: "MSHV".into(),
+            spotter: None,
+            is_skimmer: false,
+        };
+        let bare = format(&s);
+        s.source_name = "VU2CPL:MSHV".into();
+        let qualified = format(&s);
+        println!("bare:      {bare}");
+        println!("qualified: {qualified}");
+        assert!(bare.contains("MSHV:"), "{bare}");
+        assert!(
+            qualified.contains("VU2CPLMSHV:"),
+            "the colon is filtered out, silently welding owner to name: {qualified}"
+        );
+        assert!(
+            !qualified.contains("VU2CPL:MSHV"),
+            "and nothing here would tell you it happened"
+        );
+    }
+}
