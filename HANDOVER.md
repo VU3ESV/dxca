@@ -978,6 +978,38 @@ The published v2.12.2 release notes originally carried the wrong
 toolchain-drift explanation; corrected 2026-08-30, with a note that the fixes
 land after the tag and touch no shipped code.
 
+### DONE: the panadapter feed — Aether on the telnet server (2026-08-30)
+
+**The 2026-08-28 TODO is answered, and the answer was not MQTT.** That entry
+ended with DXCA's publish side proven and *nothing subscribing*, because
+neither Flex nor Aether reads MQTT natively and no Node-RED bridge was ever
+written. Manoj asked whether a **broadcast destination** could do it instead;
+it cannot, and the reason is worth keeping.
+
+**All three UDP formats are the wrong shape for a Flex.** `cluster` is a
+`DX de …` line in a *UDP datagram* — the trap here, because it looks right
+while anything expecting a DX cluster wants a TCP telnet session; `wsjtx` is
+synthesized WSJT-X binary packets; `passthrough` is a raw decoder relay.
+
+**What worked, with no code at all: Aether pointed at the telnet cluster
+server on 7575.** Aether is the DX-cluster consumer, and DXCA has been a
+cluster server since M3. In trial as of 2026-08-30.
+
+Two things to know about that feed, from `pipeline.rs:346-368`:
+
+- It is **dedupe-filtered but not user-filtered**: first spot per
+  CALL-BAND-MODE per window reaches telnet. A spot with no callsign has no
+  dedupe key and is broadcast anyway, as UNKNOWN.
+- **It carries every spot, not alerts.** Alert levels are per-user — they
+  depend on that account's ClubLog matrix — while telnet, UDP and MQTT all
+  carry the server-wide feed. `LOGIN` is for passing cluster commands
+  upstream, not for filtering.
+
+**So "only New DXCC on the panadapter" is not expressible today**, and it is
+the obvious next ask if the trial shows the full feed is too much. It would
+need a per-user filtered output, which is a real feature and not a
+destination setting — do not bend `unfiltered`/`allowed_sources` into it.
+
 ### DONE: uncredited contacts are named at refresh time (2026-08-30)
 
 Asked for after the whitelist fix raised the obvious next question. VU24DX's

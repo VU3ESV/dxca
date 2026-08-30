@@ -836,6 +836,14 @@ Each spot is published **twice**, to sibling topics under the base (default
 | `<base>/json` | `{"callsign":"K1JT","frequency_hz":14074000,"band":"20M","mode":"FT8","snr_db":-10,"comment":"FT8 -10 dB","is_cq":true,…}` |
 | `<base>/cluster` | `DX de DXCA:  14074.0  K1JT  FT8 -10 dB  1428Z` |
 
+**For a FlexRadio panadapter, the telnet cluster server is the shorter
+route.** Aether takes a DX cluster directly, so pointing it at DXCA's telnet
+server on **7575** needs no bridge and no MQTT at all — the UDP broadcast
+formats are the wrong shape for this (`cluster` is a `DX de` line in a
+*datagram*, not a telnet session). MQTT remains the option for anything that
+wants structured spots, but it needs something on the other end: neither Flex
+nor Aether reads MQTT natively.
+
 The JSON is for anything that wants structure — a Node-RED flow reshaping it
 for a panadapter — and the cluster line for anything that already parses the
 DX-Spider format. Band is derived from the frequency, so a consumer never has
