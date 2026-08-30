@@ -8,13 +8,27 @@ and the FlexRadio panadapter settings moved into Destinations from their own
 entry. The multi-station per-account feeds work was **withdrawn** — see the
 entries under Open items.
 
-**Four of the five hosts run it. `adersh@192.168.1.151` is still on
-v2.15.1** — its box was unreachable during the deploy pass (`ssh: connect to
-host 192.168.1.151 port 22: Operation timed out`), which is the third-party
-power-state case, not a fault. It needs
-`deploy/pi-deploy.sh --no-seed adersh@192.168.1.151` when it next answers.
-v2.16.0 is a UI-only change, so nothing on that host is wrong meanwhile — it
-simply still shows five rail entries instead of two.
+**All five hosts run it as of 2026-08-30.** `adersh@192.168.1.151` was the
+last one — it had missed the deploy pass with `ssh: connect to host
+192.168.1.151 port 22: Operation timed out`, which read as the third-party
+power-state case but was **not**: the Pi was up and its `192.168.1.151/32`
+route was in the table the whole time, and the WireGuard *handshake* had gone
+stale. `sudo wg-quick down Adersh_vu2cpl; sudo wg-quick up Adersh_vu2cpl` on
+the Mac brought it back within 20 seconds, and
+`deploy/pi-deploy.sh --no-seed adersh@192.168.1.151` then ran clean.
+
+**Diagnostic note for next time:** a tunnelled host that fails both ping and
+ssh while `netstat -rn` still shows its /32 route is the handshake, not the
+box. Bounce the tunnel before concluding the far end is powered off. Verify
+the fleet with `curl -s http://<host>:7580/api/status` — it returns `version`
+without an ssh session, and the binary has **no `--version` flag** (running
+`/opt/dxca/dxca --version` starts a second server and dies on the port clash).
+
+**Windows `192.168.1.170` reports `cty_entities: 0`** where all four Pis
+report 402, so DXCC entity resolution is dead on that install. Raised
+2026-08-30 and **deliberately left alone** on Manoj's instruction — a known
+accepted state, not an open bug. It also **blocks ICMP**, so a failed ping
+there is not evidence the host is down; it serves `/api/status` fine.
 
 **v2.15.1 — alerts on the FlexRadio panadapter**, over the SmartSDR API on
 TCP 4992, colour-coded by level and expiring on a per-level ladder (DXCC an
