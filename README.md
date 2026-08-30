@@ -25,8 +25,10 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
-**v2.15.0** (2026-08-30): alerts can now go straight to a **FlexRadio
-panadapter** over the SmartSDR API, colour-coded by level
+**v2.15.1** (2026-08-30): alerts can now go straight to a **FlexRadio
+panadapter** over the SmartSDR API, colour-coded by level and with a
+**per-level lifetime** — an hour for New DXCC, a quarter of it for Band and
+Mode, a minute for the rest
 ([FlexRadio panadapter](#flexradio-panadapter)). Plus **health alerts** —
 Telegram when DXCA is running and nothing is reaching it
 ([Health alerts](#health-alerts)). Award totals
@@ -789,7 +791,11 @@ reported, so a still-quiet feed is announced once more a threshold later.
 
 DXCA can put **your alerts** on a Flex panadapter itself, over the SmartSDR
 API on TCP **4992**. Set the radio's IP under **Settings › My station ›
-Telegram › FlexRadio panadapter**.
+FlexRadio**.
+
+It is under **My station**, not with the spot outputs, because it is
+per-account config — the Server settings are admin-only, and this belongs to
+whoever's radio it is.
 
 Each spot is placed with a colour matching the **Spots screen's own palette**,
 so a red mark means on the radio what a red row means on screen:
@@ -800,6 +806,19 @@ so a red mark means on the radio what a red row means on screen:
 | New Band | blue | | ? Band | blue, dimmed |
 | New Mode | amber | | ? Mode | amber, dimmed |
 | New Slot | orange | | ? Slot | orange, dimmed |
+
+**Spots expire on a ladder**, adjustable per account:
+
+| level | default life | why |
+|---|---|---|
+| New DXCC | **60 min** | you may be mid-QSO when it appears and still want to find it after |
+| New Band / Mode | **15 min** | about as long as you would stay on a band looking |
+| everything else | **1 min** | worth knowing only while the station is still calling |
+
+That last floor is what keeps the display usable. New Slot and the four `?`
+levels are most of the alert traffic, and giving them twenty minutes paints
+the whole band inside an hour — burying the one red mark the feature exists
+to show.
 
 **Only alerts are sent, never the whole feed** — and that is the point. The
 alert level comes from your ClubLog matrix, which nothing else on the network

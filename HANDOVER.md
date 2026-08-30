@@ -2,9 +2,11 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-08-30 · **Status:**
-**v2.15.0 — alerts on the FlexRadio panadapter**, over the SmartSDR API on
-TCP 4992, colour-coded by level. Per-account, off by default, and alerts
-only — never the whole feed.
+**v2.15.1 — alerts on the FlexRadio panadapter**, over the SmartSDR API on
+TCP 4992, colour-coded by level and expiring on a per-level ladder (DXCC an
+hour, Band/Mode 15 min, the rest 1). Per-account, off by default, alerts only.
+Its settings are their own page under **My station**; the old "Broadcast
+destinations" page is now **Spot outputs**.
 
 **v2.14.0 — health alerts.** Telegram when DXCA is up and nothing is reaching
 it: feed quiet, or a node disconnected. Both opt-in per account, off by
@@ -994,6 +996,54 @@ pin, run `just gate`, fix what the new rustfmt and clippy think, same commit.
 The published v2.12.2 release notes originally carried the wrong
 toolchain-drift explanation; corrected 2026-08-30, with a note that the fixes
 land after the tag and touch no shipped code.
+
+### DONE: Flex settings moved, page renamed, lifetimes per level — v2.15.1
+
+Three asks in one pass.
+
+**Its own page under My station, not with the spot outputs.** Manoj asked to
+move it to the destinations page; the finding that changed the answer is that
+the **Server group is admin-only** (`GROUPS.filter((g) => !g.admin ||
+isAdmin)`) while the Flex config is **per-account**, living in that user's
+`notify_json`. Filing it there would have hidden it from any non-admin whose
+radio it actually is. Every install currently has one admin user, so nothing
+would have broken today — which is exactly why it needed saying now.
+
+**"Broadcast destinations" → "Spot outputs."** Nothing there broadcasts; they
+are unicast UDP sends and MQTT publishes. "Outputs" pairs with the UDP
+sources and cluster nodes above it, which are where spots come *in*. Renamed
+in the nav, in the page heading and in its HelpTip — the heading was still
+saying the old name after the nav changed, which would have shipped as a
+visible mismatch.
+
+**Per-level lifetimes, adjustable.** New DXCC 60 min, New Band/Mode 15, all
+else 1 — the last being the one that matters: New Slot and the four `?`
+levels are most of the alert traffic, and at twenty minutes they paint the
+whole band inside an hour, burying the red mark the feature exists to show.
+Built hard-coded first, then made adjustable on Manoj's follow-up; 0 in any
+field means the default beside it, as `flex_port` already did.
+
+**Three pages now write one `notifications` row** — Alerts, Telegram and
+FlexRadio. All three load the whole object and spread it back, and it was
+verified in the browser both ways: save on FlexRadio, check the DB, save from
+Telegram, check the flex fields survived.
+
+**Two labels wrapped again** — "New Band / Mode (min)" and "Everything else
+(min)" overflowed the settings grid, the same defect as the health fields
+yesterday. Shortened to "Band/Mode (min)" and "Others (min)". The column
+takes about 15 characters; anything longer wraps and drops the `?` icon to a
+second line. **Write that down: 15 characters is the budget.**
+
+**MISTAKE WORTH RECORDING: a local run dialled the production cluster nodes.**
+Restarting the look-only instance as `cd DIR && nohup BIN &` did *not* carry
+the working directory — the process came up with cwd
+`/Users/manoj/projects/dxca`, read the repo's `config/dxca.toml`, bound 7580
+and connected to VE7CC and VU2OY under this station's `login_call`, which is
+precisely the session fight HANDOVER warns about. Killed within ~30 seconds;
+noderedpi4 never lost a node (9/9 throughout). **Use `cd DIR && (BIN > log
+2>&1 &)` and then verify** — check the startup line says the sandbox port and
+`nodes []`, and check `lsof -a -p PID -d cwd`. A run.log in the right
+directory does not prove the process is in it.
 
 ### DONE: alerts on the FlexRadio panadapter — v2.15.0 (2026-08-30)
 

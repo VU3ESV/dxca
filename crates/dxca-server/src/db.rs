@@ -289,10 +289,30 @@ pub struct NotifyUserConfig {
     /// SmartSDR's API port. 0 means the 4992 default.
     #[serde(default)]
     pub flex_port: u16,
-    /// How long a spot stays on the panadapter. 0 means the 20-minute
-    /// default, which is what the Node-RED flow this was ported from used.
+
+    // How long a spot stays on the panadapter, per level. 0 means the
+    // default shown against each.
+    //
+    // The ladder matters more than the numbers. A **New DXCC** is worth
+    // leaving up for an hour — you may be mid-QSO when it appears and still
+    // want to find it afterwards. A **New Band or Mode** is worth about as
+    // long as you would stay on a band looking for it. Everything below
+    // that — New Slot and the four worked-but-unconfirmed levels — is worth
+    // knowing about only while the station is still calling.
+    //
+    // That last floor is what keeps the display usable: those levels are
+    // most of the alert traffic, and at nine nodes a twenty-minute life
+    // would paint the whole band inside an hour, burying the one red mark
+    // the feature exists to show.
+    /// New DXCC. Default 60.
     #[serde(default)]
-    pub flex_lifetime_minutes: u64,
+    pub flex_life_dxcc_minutes: u64,
+    /// New Band and New Mode. Default 15.
+    #[serde(default)]
+    pub flex_life_band_mode_minutes: u64,
+    /// New Slot and the four `?` levels. Default 1.
+    #[serde(default)]
+    pub flex_life_other_minutes: u64,
 }
 
 impl Default for NotifyUserConfig {
@@ -323,7 +343,9 @@ impl Default for NotifyUserConfig {
             flex_enabled: false,
             flex_host: String::new(),
             flex_port: 0,
-            flex_lifetime_minutes: 0,
+            flex_life_dxcc_minutes: 0,
+            flex_life_band_mode_minutes: 0,
+            flex_life_other_minutes: 0,
         }
     }
 }

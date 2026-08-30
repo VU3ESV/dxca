@@ -1,5 +1,9 @@
 <script lang="ts">
-  // Settings › Server › Broadcast destinations — every way a spot leaves DXCA.
+  // Settings › Server › Spot outputs — every way a spot leaves DXCA.
+  //
+  // Renamed from "Broadcast destinations": nothing here broadcasts, they are
+  // unicast UDP sends and MQTT publishes, and "outputs" pairs with the UDP
+  // sources and cluster nodes above, which are where spots come IN.
   //
   // UDP and MQTT are one page because they answer one question: where do spots
   // go out. They keep SEPARATE save buttons, which looks like an inconsistency
@@ -28,8 +32,8 @@
 <ConfigGate>
   <div class="card">
     <h2>
-      Broadcast destinations
-      <HelpTip label="Broadcast destinations">
+      Spot outputs
+      <HelpTip label="Spot outputs">
         <span class="para">
           Each row is one UDP feed out. <b>cluster</b> sends the plain
           DX-cluster line, <b>wsjtx</b> the WSJT-X decode datagram, and

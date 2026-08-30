@@ -453,6 +453,31 @@ impl UserService {
         }
     }
 
+    /// How long each level stays on the panadapter.
+    ///
+    /// The ladder is the whole point. A **New DXCC** is worth leaving up for
+    /// an hour — you may be mid-QSO when it appears and still want to find
+    /// it afterwards. A **New Band or Mode** is worth a quarter hour, about
+    /// as long as you would stay on a band looking for it. Everything
+    /// below — New Slot and the four worked-but-unconfirmed levels — is
+    /// worth knowing about only while the station is still calling, so it
+    /// gets a minute.
+    ///
+    /// That floor is what keeps the display usable. Those lower levels are
+    /// most of the alert traffic, and at nine nodes a twenty-minute life
+    /// would paint the whole band inside an hour, burying the one red mark
+    /// this feature exists to show.
+    /// Adjustable per account; 0 on any field means the default beside it.
+    fn flex_lifetime_secs(cfg: &NotifyUserConfig, level: AlertLevel) -> u64 {
+        let or = |set: u64, default: u64| if set == 0 { default } else { set };
+        let minutes = match level {
+            AlertLevel::NewDxcc => or(cfg.flex_life_dxcc_minutes, 60),
+            AlertLevel::NewBand | AlertLevel::NewMode => or(cfg.flex_life_band_mode_minutes, 15),
+            _ => or(cfg.flex_life_other_minutes, 1),
+        };
+        minutes.saturating_mul(60)
+    }
+
     /// Queue one alert onto the operator's panadapter.
     ///
     /// Never blocks: [`FlexClient::spot`] is a channel push, and the TCP
@@ -476,11 +501,6 @@ impl UserService {
         // entity alone when they do not — the colour already says which
         // level it is, so the entity is the half worth keeping.
         let comment = flex::comment_for(c.level.label(), c.dxcc_name.as_deref());
-        let minutes = if notify.flex_lifetime_minutes == 0 {
-            20
-        } else {
-            notify.flex_lifetime_minutes
-        };
         client.spot(&flex::FlexSpot {
             callsign: call.to_string(),
             freq_mhz: spot.frequency_mhz(),
@@ -495,7 +515,7 @@ impl UserService {
             },
             timestamp_unix: spot.time_unix,
             color: Self::flex_color(c.level).to_string(),
-            lifetime_secs: minutes.saturating_mul(60),
+            lifetime_secs: Self::flex_lifetime_secs(notify, c.level),
         });
     }
 
