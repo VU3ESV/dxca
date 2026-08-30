@@ -103,15 +103,40 @@ impl PipelineState {
             .map(|s| (s.name.clone(), s.port))
             .collect();
 
-        // Bind additions before touching anything — all-or-nothing.
+        // Bind additions before touching anything — all-or-nothing, so a
+        // genuine clash is rejected rather than dying inside a task.
+        //
+        // WITH ONE EXCEPTION: a listener being RETIRED that holds a port an
+        // addition wants is dropped first. Otherwise moving a port between
+        // names fails with EADDRINUSE against ourselves — and that is not an
+        // edge case, it is the upgrade path. The first save after feeds move
+        // to an account renames `MSHV` to `VU2CPL:MSHV` on the same port,
+        // which is exactly this shape.
         let mut added = Vec::new();
         {
-            let current = self.sources.lock().unwrap();
+            let mut current = self.sources.lock().unwrap();
             for key in &wanted {
                 if !current.contains_key(key) {
                     added.push(key.clone());
                 }
             }
+            let doomed: Vec<(String, u16)> = current
+                .keys()
+                .filter(|k| !wanted.contains(k))
+                .cloned()
+                .collect();
+            for key in doomed {
+                if added.iter().any(|(_, port)| *port == key.1)
+                    && let Some(handle) = current.remove(&key)
+                {
+                    handle.abort();
+                }
+            }
+        }
+        // The abort is asynchronous: the task has to be scheduled before the
+        // socket is dropped and the port actually freed.
+        if !added.is_empty() {
+            tokio::task::yield_now().await;
         }
         let mut new_tasks = Vec::new();
         for (name, port) in added {

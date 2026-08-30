@@ -173,6 +173,30 @@ user, and under one shared stream it has no obvious owner.
 Manoj's call, 2026-08-30: **leave it admin-owned.** It is the one output that
 is genuinely about the server's own machine rather than about a station.
 
+## The practical split (Manoj, 2026-08-30)
+
+The general model above is right, but the deployment is narrower and the UI
+follows the narrower one:
+
+> Admin is assumed to be on the local network. All other guest users are
+> configured only for spot alerts and ingestion, so only the admin is going
+> to use UDP sources, RUMlog and so on.
+
+So:
+
+| | who sees it | why |
+|---|---|---|
+| **Cluster nodes** | every account | the one feed a guest owns — what they ingest and are alerted on |
+| ClubLog, alerts, Telegram, FlexRadio | every account | already per-account |
+| **UDP sources** | admin only | the decoders are on the admin's LAN; a guest has none |
+| **Spot outputs**, passthrough | admin only | they feed the admin's loggers |
+| Reference data, Users | admin only | unchanged |
+
+**The storage does not change for this.** Sources and outputs are still owned
+by an account — the admin's — and still namespaced. Only the *page* is
+admin-gated. That keeps one mechanism rather than two, and leaves the door
+open if a guest ever does want their own decoder.
+
 ## Operational consequence: the TOML stops disabling things
 
 Once an account owns feeds, **editing `config/dxca.toml` no longer changes

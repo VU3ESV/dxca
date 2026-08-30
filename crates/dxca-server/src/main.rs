@@ -238,8 +238,9 @@ fn migrate_feeds(db: &dxca_server::db::Db, cfg: &config::Config) {
         Migration::Ambiguous { accounts } => eprintln!(
             "dxca: feeds migration: {accounts} accounts and no way to tell whose              the config's sources and nodes are — refusing to guess. An admin              must assign them."
         ),
-        // Silent: the overwhelmingly common case on every boot after the first.
-        Migration::AlreadyMoved | Migration::NothingToMove => {}
+        // Silent: the common cases on every boot after the first, plus a
+        // fresh install waiting for its first account.
+        Migration::AlreadyMoved | Migration::NothingToMove | Migration::NoAccountsYet => {}
     }
 }
 

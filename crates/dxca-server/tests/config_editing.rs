@@ -206,11 +206,13 @@ async fn admin_edits_hot_apply_and_persist() {
     .await;
     assert_eq!(status, 400, "{body}");
 
-    // The real edit: source A → B (new port), destination → recorder 2,
-    // and one cluster node pointing at the fake listener.
+    // The real edit, now across TWO endpoints (docs/MULTI-STATION.md).
+    //
+    // Feeds belong to the account: source A → B on a new port, and one
+    // cluster node pointing at the fake listener.
     let (status, _, body) = http(
         "PUT",
-        format!("{base}/api/config/global"),
+        format!("{base}/api/config/me/feeds"),
         Some(cookie.clone()),
         Some(serde_json::json!({
             "udp_sources": [{"name": "B", "port": PORT_B}],
@@ -218,6 +220,21 @@ async fn admin_edits_hot_apply_and_persist() {
                 "name": "FAKE", "host": "127.0.0.1", "port": node_port,
                 "login_call": "VU2CPL",
             }],
+            "destinations": [],
+        })),
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+
+    // Passthrough is still the machine's, and still goes through the
+    // admin-only endpoint.
+    let (status, _, body) = http(
+        "PUT",
+        format!("{base}/api/config/global"),
+        Some(cookie.clone()),
+        Some(serde_json::json!({
+            "udp_sources": [],
+            "cluster_nodes": [],
             "broadcast_destinations": [{
                 "name": "logger2", "ip": "127.0.0.1", "port": p2,
                 "format": "passthrough",
@@ -267,13 +284,18 @@ async fn admin_edits_hot_apply_and_persist() {
     // saved them, and only passthrough is still the machine's, so only
     // passthrough is still in the file.
     let reloaded = Config::load(&config_path).unwrap();
-    assert!(
-        reloaded.udp_sources.is_empty(),
-        "sources moved to the account, and stale copies here would let the \
-         aggregate's fallback resurrect them: {:?}",
-        reloaded.udp_sources
+    // The file's copies are LEFT as they were. Nothing reads them while an
+    // account owns feeds, and they are the rollback path: the previous
+    // binary reads this file, so clearing them would mean a downgrade came
+    // up with no sources and no nodes.
+    assert_eq!(
+        reloaded.udp_sources[0].name, "A",
+        "the file keeps its original copy as the rollback"
     );
-    assert!(reloaded.cluster_nodes.is_empty(), "nodes moved too");
+    assert!(
+        reloaded.cluster_nodes.is_empty(),
+        "and gains nothing it never had"
+    );
     assert_eq!(
         reloaded.broadcast_destinations.len(),
         1,
@@ -286,7 +308,7 @@ async fn admin_edits_hot_apply_and_persist() {
     // qualified one coming back would be re-qualified on the next save.
     let (status, _, body) = http(
         "GET",
-        format!("{base}/api/config/global"),
+        format!("{base}/api/config/me/feeds"),
         Some(cookie.clone()),
         None,
     )

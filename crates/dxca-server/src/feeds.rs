@@ -222,6 +222,8 @@ pub fn aggregate(
 pub enum Migration {
     /// Nothing in the TOML worth moving.
     NothingToMove,
+    /// Setup has not run: there is nobody to own anything yet.
+    NoAccountsYet,
     /// Some account already owns feeds; the TOML is no longer the source.
     AlreadyMoved,
     /// Moved into the named account.
@@ -269,6 +271,12 @@ pub fn migrate_from_toml(
     }
     if accounts.iter().any(|(_, _, f)| !f.is_empty()) {
         return (Migration::AlreadyMoved, None);
+    }
+    // No accounts at all is a fresh install that has not run setup yet — not
+    // an ambiguity, and not worth a warning on every boot until someone
+    // creates the first account. The TOML runs the server meanwhile.
+    if accounts.is_empty() {
+        return (Migration::NoAccountsYet, None);
     }
     let [(user_id, callsign, _)] = accounts else {
         return (
@@ -524,6 +532,16 @@ mod tests {
         let accounts = vec![(1_i64, "VU2CPL".to_string(), first)];
         let (what, stored) = migrate_from_toml(&accounts, &[source("MSHV", 2333, true)], &[], &[]);
         assert_eq!(what, Migration::AlreadyMoved);
+        assert!(stored.is_none());
+    }
+
+    /// A fresh install has nobody to own anything yet. That is not an
+    /// ambiguity, and warning about it on every boot until setup runs would
+    /// train the operator to ignore the log.
+    #[test]
+    fn a_fresh_install_with_no_accounts_is_quiet() {
+        let (what, stored) = migrate_from_toml(&[], &[source("MSHV", 2333, true)], &[], &[]);
+        assert_eq!(what, Migration::NoAccountsYet);
         assert!(stored.is_none());
     }
 
