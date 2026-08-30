@@ -948,6 +948,34 @@ The published v2.12.2 release notes originally carried the wrong
 toolchain-drift explanation; corrected 2026-08-30, with a note that the fixes
 land after the tag and touch no shipped code.
 
+### DONE: LoTW marker in Telegram alerts (2026-08-30)
+
+The Spots table has marked LoTW uploaders with a green `●` since M5; Telegram
+did not. It does now — an **asterisk after the callsign**:
+
+```
+🔴 NEW DXCC: 3Y0J*
+```
+
+**Asked for as a green dot, delivered as an asterisk, on Manoj's own
+correction mid-build** — and the constraint is real either way: Telegram's
+HTML supports `<b>`, `<i>`, `<a>` and friends but **no colour**, so a `●`
+arrives uncoloured and reads as punctuation. The only green dot Telegram will
+render is the emoji 🟢, which beside a callsign competes with the level emoji
+that carries the actual urgency. An asterisk is the footnote mark this
+already is.
+
+`alert_html` gained an `is_lotw` argument, fed from `is_lotw_user(&call)` at
+the fan-out site. The mark is concatenated onto the callsign *before*
+`escape_html`, not onto escaped output, and it rides on the call rather than
+the label so it is present at every alert level. Two tests: one asserts the
+marked and unmarked messages differ in nothing else, one walks four levels.
+
+Not done, deliberately: the **Alerts history** table does not show the mark.
+It stores what was sent, and the LoTW list is mutable — a call that was not
+an uploader in March may be one now, so a historical row rendering today's
+answer would be quietly wrong. Add it only with the flag stored per row.
+
 ### DONE: ClubLog's invalid-operations list is honoured (2026-08-30)
 
 **Found by a question, not by a test.** VU24DX's Stats tab read **314 DXCC

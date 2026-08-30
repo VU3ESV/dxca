@@ -543,6 +543,21 @@ Spotter: VU2XYZ   Node: N2WQ-2
 1428Z
 ```
 
+**A LoTW station is marked with an asterisk after its callsign**, the same
+fact the Spots table shows as a green dot:
+
+```
+🔴 NEW DXCC: 3Y0J*
+Bouvet  14.074 MHz  20M  FT8  -10 dB
+```
+
+An asterisk rather than a dot because Telegram's HTML has no colour: an
+uncoloured dot reads as punctuation, and the emoji circle that *would* stay
+green shouts louder than the alert level beside it. The mark belongs to the
+callsign, so it appears at every alert level, and it means what it does on
+screen — the station uploads to Logbook of the World, so the QSO stands a
+good chance of confirming without a card chase.
+
 Labelled rather than joined into a sentence, because on a phone those two
 labels are what you scan for. Locally decoded spots show only `Node:` —
 there is no spotting station to name. The time is the spot's, not the

@@ -362,7 +362,7 @@ impl UserService {
             if !self.cooldown_ok(user_id, &call, &notify) {
                 continue;
             }
-            let text = alert_html(&c, &call, spot);
+            let text = alert_html(&c, &call, spot, self.is_lotw_user(&call));
             let telegram = self.telegram.clone();
             let (token, chat) = (notify.telegram_bot_token, notify.telegram_chat_id);
             // Recorded for the My Alerts history — including failures, which
@@ -421,8 +421,21 @@ impl UserService {
     }
 }
 
+/// The LoTW marker in a Telegram alert: the station uploads to Logbook of
+/// the World, so a QSO with it is likely to confirm without a card chase.
+///
+/// The Spots table marks this with a green `●`, which does not survive the
+/// trip: Telegram's HTML has no colour, so a dot would arrive as an
+/// uncoloured blob indistinguishable from punctuation, and the emoji circle
+/// that *would* stay green is far too loud beside a callsign. An asterisk is
+/// the footnote mark it actually is — small, monochrome by nature, and legible
+/// in every client font.
+const LOTW_MARK: &str = "*";
+
 /// The 1.x Telegram message: emoji level label, HTML-escaped, source line.
-fn alert_html(c: &Classification, call: &str, spot: &Spot) -> String {
+///
+/// `is_lotw` appends [`LOTW_MARK`] to the callsign.
+fn alert_html(c: &Classification, call: &str, spot: &Spot, is_lotw: bool) -> String {
     // The `?` half reuses its New counterpart's hue as a hollow circle: same
     // axis (DXCC/band/mode/slot), lesser catch — worked already, still not
     // confirmed. Colour says WHICH axis, filled-vs-hollow says how badly you
@@ -441,7 +454,10 @@ fn alert_html(c: &Classification, call: &str, spot: &Spot) -> String {
     let dxcc = c.dxcc_name.clone().unwrap_or_default();
     let freq = format!("{:.3} MHz", spot.frequency_mhz());
     let band = c.band.unwrap_or("");
-    let title = format!("{label}: {call}");
+    // The mark rides on the callsign, not the label, so it stays put whatever
+    // the alert level is — and it goes through `escape_html` with the call
+    // rather than being concatenated onto escaped output.
+    let title = format!("{label}: {call}{}", if is_lotw { LOTW_MARK } else { "" });
     let body = format!(
         "{}{freq}  {band}  {}  {} dB",
         if dxcc.is_empty() {
@@ -514,7 +530,12 @@ mod alert_message_tests {
     /// may send the operator to the radio should say which is which.
     #[test]
     fn a_relayed_alert_labels_the_spotter_and_the_node() {
-        let html = alert_html(&classification(), "3Y0J", &spot("N2WQ-2", Some("VU2XYZ")));
+        let html = alert_html(
+            &classification(),
+            "3Y0J",
+            &spot("N2WQ-2", Some("VU2XYZ")),
+            false,
+        );
         assert!(html.contains("Spotter: VU2XYZ"), "got {html}");
         assert!(html.contains("Node: N2WQ-2"), "got {html}");
         assert!(!html.contains(" via "), "labelled, not prose: {html}");
@@ -526,7 +547,7 @@ mod alert_message_tests {
     /// an empty label would read as missing data rather than as "us".
     #[test]
     fn a_local_alert_names_only_the_node() {
-        let html = alert_html(&classification(), "3Y0J", &spot("MSHV", None));
+        let html = alert_html(&classification(), "3Y0J", &spot("MSHV", None), false);
         assert!(html.contains("Node: MSHV"), "got {html}");
         assert!(!html.contains("Spotter:"), "no empty label: {html}");
     }
@@ -535,8 +556,48 @@ mod alert_message_tests {
     /// retried alert must still say when the station was heard.
     #[test]
     fn the_alert_carries_the_spot_time_in_utc() {
-        let html = alert_html(&classification(), "3Y0J", &spot("N2WQ-2", Some("VU2XYZ")));
+        let html = alert_html(
+            &classification(),
+            "3Y0J",
+            &spot("N2WQ-2", Some("VU2XYZ")),
+            false,
+        );
         assert!(html.contains("1428Z"), "got {html}");
+    }
+
+    /// A LoTW station is marked right after its callsign — the same fact the
+    /// Spots table shows as a green dot, in the one form that survives
+    /// Telegram's colourless HTML.
+    #[test]
+    fn a_lotw_station_is_marked_after_the_callsign() {
+        let s = spot("N2WQ-2", Some("VU2XYZ"));
+        let plain = alert_html(&classification(), "3Y0J", &s, false);
+        let lotw = alert_html(&classification(), "3Y0J", &s, true);
+
+        assert!(lotw.contains("3Y0J*"), "marked after the call: {lotw}");
+        assert!(!plain.contains("3Y0J*"), "unmarked otherwise: {plain}");
+        // The mark is the ONLY difference — it must not disturb the level
+        // label, the body line, the origin lines or the time.
+        assert_eq!(lotw.replace("3Y0J*", "3Y0J"), plain);
+    }
+
+    /// The mark belongs to the callsign, not to the alert level, so it is
+    /// there on every level rather than only on the loudest one.
+    #[test]
+    fn the_lotw_mark_is_independent_of_the_alert_level() {
+        for level in [
+            AlertLevel::NewDxcc,
+            AlertLevel::NewSlot,
+            AlertLevel::UnconfBand,
+            AlertLevel::UnconfMode,
+        ] {
+            let c = Classification {
+                level,
+                ..classification()
+            };
+            let html = alert_html(&c, "3Y0J", &spot("MSHV", None), true);
+            assert!(html.contains("3Y0J*"), "{level:?}: {html}");
+        }
     }
 
     /// A node that spots under its own callsign shows both labels reading
@@ -544,7 +605,12 @@ mod alert_message_tests {
     /// spot itself, rather than relaying somebody else's.
     #[test]
     fn a_node_spotting_under_its_own_name_shows_both_labels() {
-        let html = alert_html(&classification(), "3Y0J", &spot("W3LPL", Some("W3LPL")));
+        let html = alert_html(
+            &classification(),
+            "3Y0J",
+            &spot("W3LPL", Some("W3LPL")),
+            false,
+        );
         assert!(html.contains("Spotter: W3LPL"), "got {html}");
         assert!(html.contains("Node: W3LPL"), "got {html}");
     }
