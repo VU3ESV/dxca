@@ -2,17 +2,33 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-08-30 · **Status:**
-**v2.13.1 built on `main`, NOT YET TAGGED, RELEASED OR DEPLOYED.** Two
-changes: ClubLog's **invalid-operations list** is finally honoured (DXCC
-totals now agree with ClubLog's own — see the entry under Open items) and
-Telegram alerts mark **LoTW stations with an asterisk**. The fleet is still
-on v2.13.0.
+**v2.13.1 TAGGED, RELEASED AND ON ALL FIVE HOSTS (2026-08-30).** Two changes:
+ClubLog's **invalid-operations list** is finally honoured (DXCC totals now
+agree with ClubLog's own — see the entry under Open items) and Telegram alerts
+mark **LoTW stations with an asterisk**. Release published with the Windows
+zip. All five report v2.13.1 on `/api/status`: noderedpi4, Windows
+`192.168.1.170`, adersh, vu2wj, vu2oy.
 
-**Deploying is not enough on its own.** The fix changes how a matrix is
-*built*; stored matrices are untouched by an upgrade, so **every account
-needs one ClubLog refresh** before its numbers move. The check that proves
-it: VU24DX on `adersh@192.168.1.151` should read **313** DXCC worked, down
-from 314, matching the ClubLog dashboard on the same page.
+**DEPLOYING IS NOT ENOUGH ON ITS OWN, and this bit surprises.** The fix
+changes how a matrix is *built*; stored matrices are untouched by an upgrade,
+so an upgraded host shows **exactly the old numbers** until each account runs
+**Settings › ClubLog account › Refresh log now**. Manoj hit this within
+minutes of the deploy — VU24DX still read 314 against ClubLog's 313 on a host
+already running the fix. Auto-refresh (default 24h) gets there on its own;
+the button is the same thing, now. Any future change to matrix *building*
+carries this same footgun — say so in the release notes.
+
+The check that proves the fix: VU24DX on `adersh@192.168.1.151` should read
+**313** after that refresh, matching the ClubLog dashboard lower down the same
+page. That host's cty.xml carries all 2,838 invalid operations including the
+three `SV2RSG/A` windows, confirmed on the box.
+
+**The Windows box has no cty.xml** — `/api/status` reports `cty_entities: 0`,
+and `C:\DXCA\data` holds only `dxca.db` and `lotw-users.txt`. Pre-existing,
+not caused by this release, but it means that install cannot classify DXCC at
+all: no entity names, no New-DXCC alerts, and the invalid-operations fix is
+inert there. Fix by setting the ClubLog API key in Settings › Server ›
+Reference data and pressing refresh.
 
 Previous status:
 **v2.12.1 on ALL FOUR HOSTS (2026-08-29 evening)** — noderedpi4, Windows
