@@ -1,7 +1,20 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-29 · **Status:**
+**Created:** 2026-08-26 · **Last updated:** 2026-08-30 · **Status:**
+**v2.13.1 built on `main`, NOT YET TAGGED, RELEASED OR DEPLOYED.** Two
+changes: ClubLog's **invalid-operations list** is finally honoured (DXCC
+totals now agree with ClubLog's own — see the entry under Open items) and
+Telegram alerts mark **LoTW stations with an asterisk**. The fleet is still
+on v2.13.0.
+
+**Deploying is not enough on its own.** The fix changes how a matrix is
+*built*; stored matrices are untouched by an upgrade, so **every account
+needs one ClubLog refresh** before its numbers move. The check that proves
+it: VU24DX on `adersh@192.168.1.151` should read **313** DXCC worked, down
+from 314, matching the ClubLog dashboard on the same page.
+
+Previous status:
 **v2.12.1 on ALL FOUR HOSTS (2026-08-29 evening)** — noderedpi4, Windows
 `192.168.1.170`, `adersh@192.168.1.151`, `vu2wj@192.168.1.201`. Three changes
 on top of the shell rework: the **network-failure fix** (a dropped route no

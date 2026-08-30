@@ -25,7 +25,12 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
-**v2.13.0** (2026-08-30): dxca is the
+**v2.13.1** (2026-08-30): award totals now honour ClubLog's
+**[invalid-operations list](#invalid-operations)**, so they agree with
+ClubLog's own — an entity worked only through an operation ClubLog rejected
+no longer counts. **Existing installs need one ClubLog refresh** before their
+totals move; stored matrices are not rebuilt on upgrade. Telegram alerts also
+mark **LoTW stations with an asterisk** after the callsign. dxca is the
 live shack aggregator with a real web GUI, and **runs on
 Windows**, with a prebuilt `.exe` and installer as a release asset (read
 [Windows](#windows) first; it is the least proven of the four platforms). Decoder UDP sources and
