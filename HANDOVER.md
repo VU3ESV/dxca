@@ -11,7 +11,9 @@ entries under Open items.
 **MERGED, NOT RELEASED — a fourth Destinations tab: TCI (ExpertSDR3
 panorama).** `vu2cpl/dxca` PR #1 from VU3ESV, merged to `main` on 2026-09-01.
 **No tag, no release, on no host** — the five installs still run v2.16.0, and
-the merge carried no version bump. See the entry at the top of Open items.
+the merge carried no version bump. It merged with one real defect known and
+**deliberately left for the release pass** (Manoj, 2026-09-01). Both entries
+are at the top of Open items.
 
 **All five hosts run it as of 2026-08-30.** `adersh@192.168.1.151` was the
 last one — it had missed the deploy pass with `ssh: connect to host
@@ -914,6 +916,38 @@ last *published* release, because tags can outrun releases.
 
 ## Open items → next session
 
+### NEXT: fix the TCI reconnect before tagging it (Manoj, 2026-09-01)
+
+**Decided: the TCI destination merged as it is, and its one real defect is
+fixed in the pass that releases it** — not before. Nothing is running it: no
+tag, no release, no host, so no operator is exposed to this today. The fix
+belongs in the release pass rather than a separate round trip with VU3ESV.
+
+What has to happen in that pass, in this order:
+
+1. **Stop `pending.clear()` throwing the owed deletions away on a reconnect.**
+   `crates/dxca-connect/src/tci.rs`, in `worker`: both the failure path and a
+   successful re-dial clear the list of spots owed a `SPOT_DELETE`, on the
+   premise that the server lost them. For TCI that premise looks wrong — spots
+   are server-side state that outlives a client disconnect — so a transient
+   drop with the radio still up strands DXCA's marks on the panorama for good,
+   which is exactly the silting-up the module was written to prevent. The full
+   write-up, including the counter-risk it was trading against — re-deleting a
+   call some other logger had just re-spotted — is in the entry below.
+
+2. **Then make the docs match whatever the code ends up doing.** The README
+   section and the TCI tab's HelpTip both warn that a DXCA *restart* leaves
+   spots on the panorama, and say nothing about a reconnect doing the same.
+   Fix 1 and that wording is right as it stands. Decide against 1 and the
+   wording is what has to move instead — one of the two must give.
+
+3. **Then tag and release**, per the standing convention below: a tag is not a
+   release, and the Windows zip ships with it.
+
+Follow-ups 2 and 3 in the entry below — the idle-drain comment overclaiming,
+and the direct `tungstenite` pin — are comment-and-`Cargo.toml` scale. Worth
+taking in the same pass while it is open; neither blocks a tag on its own.
+
 ### DONE (merged, unreleased): alerts on an ExpertSDR3 panorama (TCI) — PR #1
 
 `crates/dxca-connect/src/tci.rs`, pushed from the same alert fan-out in
@@ -974,8 +1008,10 @@ keeps those two clean.
    remove them, which is the silting-up the module exists to prevent. The
    counter-risk is real but narrow: re-deleting a call some other logger had
    just re-spotted. The UI and README warn only about a DXCA *restart*, not a
-   reconnect. **This is the one with operational consequence — fix it before
-   the feature is tagged.**
+   reconnect. **Deliberately left for the release pass** (Manoj, 2026-09-01) —
+   see the NEXT entry above. Of the three it is the one with operational
+   consequence, so it goes first in that pass — not rediscovered once the tag
+   is being cut.
 2. **The idle-cost claim expires after the first alert.** The worker blocks on
    the channel only while there is no link; once connected there is no idle
    disconnect, so it wakes every 250 ms to drain for the life of the process.
