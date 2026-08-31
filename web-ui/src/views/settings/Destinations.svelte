@@ -1,10 +1,11 @@
 <script lang="ts">
   // Settings › Server › Destinations — every way a spot leaves DXCA.
   //
-  // Three kinds, one question: where do spots go out. UDP sends, MQTT
-  // publishes, and the FlexRadio panadapter, which used to be its own entry
-  // under My station until it was pointed out that a radio is a destination
-  // like any other.
+  // Four kinds, one question: where do spots go out. UDP sends, MQTT
+  // publishes, and the two radio displays — the FlexRadio panadapter, which
+  // used to be its own entry under My station until it was pointed out that a
+  // radio is a destination like any other, and the ExpertSDR3 panorama over
+  // TCI beside it.
   //
   // Called "Destinations" rather than "Spot outputs" because "outputs" reads
   // oddly for a radio; and not "Broadcast destinations", the older name,
@@ -12,15 +13,16 @@
   //
   // Each tab keeps its OWN save button, which looks like an inconsistency and
   // is not: the UDP rows live in config/dxca.toml, the MQTT rows carry a
-  // broker password and live in the 0600 database, and the Flex settings are
-  // in the account's notify row. One button would have to write three stores
-  // and could half-succeed.
+  // broker password and live in the 0600 database, and the Flex and TCI
+  // settings are in the account's notify row. One button would have to write
+  // three stores and could half-succeed.
   import { onMount } from 'svelte';
   import HelpTip from '../../lib/HelpTip.svelte';
   import ApplySave from '../../lib/ApplySave.svelte';
   import ConfigGate from '../../lib/ConfigGate.svelte';
   import Mqtt from './Mqtt.svelte';
   import FlexRadio from './FlexRadio.svelte';
+  import Tci from './Tci.svelte';
   import { server, loadServerConfig, drop } from '../../lib/serverconfig.svelte';
 
   onMount(loadServerConfig);
@@ -30,11 +32,11 @@
   // visit gets missed, and someone who came for the panadapter settings would
   // conclude they had gone.
   const SEG_KEY = 'dxca.destseg';
-  type Seg = 'udp' | 'mqtt' | 'flex';
+  type Seg = 'udp' | 'mqtt' | 'flex' | 'tci';
   function restoreSeg(): Seg {
     try {
       const v = localStorage.getItem(SEG_KEY);
-      return v === 'mqtt' || v === 'flex' ? v : 'udp';
+      return v === 'mqtt' || v === 'flex' || v === 'tci' ? v : 'udp';
     } catch {
       return 'udp';
     }
@@ -67,6 +69,8 @@
       onclick={() => pick('mqtt')}>MQTT</button>
     <button role="tab" aria-selected={seg === 'flex'} class:active={seg === 'flex'}
       onclick={() => pick('flex')}>FlexRadio</button>
+    <button role="tab" aria-selected={seg === 'tci'} class:active={seg === 'tci'}
+      onclick={() => pick('tci')}>TCI</button>
   </div>
 
   {#if seg === 'udp'}
@@ -134,7 +138,9 @@
   </div>
   {:else if seg === 'mqtt'}
     <Mqtt />
-  {:else}
+  {:else if seg === 'flex'}
     <FlexRadio />
+  {:else}
+    <Tci />
   {/if}
 </ConfigGate>

@@ -313,6 +313,48 @@ pub struct NotifyUserConfig {
     /// New Slot and the four `?` levels. Default 1.
     #[serde(default)]
     pub flex_life_other_minutes: u64,
+
+    /// Put this account's alerts on an **ExpertSDR3 panorama**, via the TCI
+    /// protocol on WebSocket 40001.
+    ///
+    /// The Flex fields above for a different make of radio, and independent
+    /// of them in every direction: a station can run one, the other, both,
+    /// or neither, and either without Telegram. Everything that narrows
+    /// Telegram — levels, bands, modes, spotter kind, band mask, cooldown —
+    /// narrows this too, so one set of choices governs all three sinks.
+    #[serde(default)]
+    pub tci_enabled: bool,
+    /// The radio's address. Empty switches the sink off however
+    /// `tci_enabled` is set.
+    #[serde(default)]
+    pub tci_host: String,
+    /// ExpertSDR3's TCI port. 0 means the 40001 default.
+    #[serde(default)]
+    pub tci_port: u16,
+
+    // How long a spot stays on the panorama, per level — the same ladder as
+    // the Flex fields above, and for the same reason: New Slot and the four
+    // `?` levels are most of the alert traffic, and a generous life on them
+    // paints the whole band inside an hour.
+    //
+    // Kept separate from the Flex numbers rather than shared. A station with
+    // both radios has two displays of different sizes and habits, and the
+    // day someone wants an hour on one and ten minutes on the other, shared
+    // fields would be a migration instead of a number.
+    //
+    // These are enforced by DXCA, not by the radio: TCI's `SPOT` has no
+    // lifetime argument, so the client sends `SPOT_DELETE` when the time is
+    // up. A spot therefore outlives its deadline if DXCA is restarted in
+    // between — the server has no record of what is on the panorama.
+    /// New DXCC. Default 60.
+    #[serde(default)]
+    pub tci_life_dxcc_minutes: u64,
+    /// New Band and New Mode. Default 15.
+    #[serde(default)]
+    pub tci_life_band_mode_minutes: u64,
+    /// New Slot and the four `?` levels. Default 1.
+    #[serde(default)]
+    pub tci_life_other_minutes: u64,
 }
 
 impl Default for NotifyUserConfig {
@@ -346,6 +388,12 @@ impl Default for NotifyUserConfig {
             flex_life_dxcc_minutes: 0,
             flex_life_band_mode_minutes: 0,
             flex_life_other_minutes: 0,
+            tci_enabled: false,
+            tci_host: String::new(),
+            tci_port: 0,
+            tci_life_dxcc_minutes: 0,
+            tci_life_band_mode_minutes: 0,
+            tci_life_other_minutes: 0,
         }
     }
 }
@@ -1242,6 +1290,28 @@ mod tests {
         assert!(!cfg.notify_manual_only, "must default off");
         assert!(cfg.telegram_enabled, "the rest of the row still loads");
         assert_eq!(cfg.cooldown_minutes, 15);
+    }
+
+    /// Every existing install's `notify_json` predates the TCI fields, so
+    /// the upgrade must read as "off" and leave the rest of the row — the
+    /// Flex settings in particular — exactly as they were. A missing key
+    /// that deserialized to anything but off would start pushing an
+    /// operator's alerts at an address they never entered.
+    #[test]
+    fn tci_defaults_off_for_a_stored_row_that_predates_it() {
+        let old_row = r#"{"telegram_enabled":true,"telegram_bot_token":"t",
+            "telegram_chat_id":"c","cooldown_minutes":15,
+            "notify_new_dxcc":true,"notify_bands":[],"notify_modes":[],
+            "flex_enabled":true,"flex_host":"192.168.1.148","flex_port":4992}"#;
+        let cfg: NotifyUserConfig = serde_json::from_str(old_row).expect("old row parses");
+        assert!(!cfg.tci_enabled, "must default off");
+        assert_eq!(cfg.tci_host, "");
+        // 0 is the sentinel for "use the default port", not a real port.
+        assert_eq!(cfg.tci_port, 0);
+        assert_eq!(cfg.tci_life_dxcc_minutes, 0);
+        // The neighbouring radio is untouched.
+        assert!(cfg.flex_enabled);
+        assert_eq!(cfg.flex_host, "192.168.1.148");
     }
 
     #[test]

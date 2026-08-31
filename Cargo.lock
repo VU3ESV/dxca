@@ -216,6 +216,7 @@ dependencies = [
  "rumqttc",
  "serde_json",
  "tokio",
+ "tungstenite",
  "ureq",
 ]
 

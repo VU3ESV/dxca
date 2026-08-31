@@ -50,3 +50,10 @@ flate2 = "1"
 # (plain 1883 with username/password). Turning `use-rustls` back on is the
 # change to make if a broker ever needs 8883.
 rumqttc = { version = "0.25", default-features = false }
+# TCI (ExpertSDR3) spot injection. TCI is a WebSocket protocol, so the
+# synchronous client here is the sibling of flex.rs's raw TcpStream — same
+# thread-per-radio shape, one framing layer up. Costs no new crate in the
+# tree: axum's `ws` feature already pulls tungstenite 0.29, and `handshake`
+# is the only feature this needs on top. default-features off drops the TLS
+# backends, which a LAN radio with no `wss://` mode cannot use.
+tungstenite = { version = "0.29", default-features = false, features = ["handshake"] }

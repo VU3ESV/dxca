@@ -7,6 +7,7 @@ use crate::db::{Db, NotifyUserConfig};
 use dxca_connect::clublog::{self, Endpoints};
 use dxca_connect::flex;
 use dxca_connect::lotw;
+use dxca_connect::tci;
 use dxca_connect::telegram::{Telegram, escape_html};
 use dxca_core::classify::{AlertClassifier, AlertConfig, AlertLevel, Classification};
 use dxca_core::dxcc::DxccResolver;
@@ -33,6 +34,8 @@ pub struct UserService {
     /// the process — a radio that goes away is handled inside the client by
     /// reconnecting, not by tearing this down.
     flex: Mutex<HashMap<(String, u16), Arc<flex::FlexClient>>>,
+    /// Live TCI sessions, keyed and kept exactly as `flex` above.
+    tci: Mutex<HashMap<(String, u16), Arc<tci::TciClient>>>,
 }
 
 fn now_unix() -> i64 {
@@ -78,6 +81,7 @@ impl UserService {
             lotw_users: RwLock::new(Arc::new(lotw_users)),
             lotw_path,
             flex: Mutex::new(HashMap::new()),
+            tci: Mutex::new(HashMap::new()),
         }
     }
 
@@ -328,13 +332,14 @@ impl UserService {
             let Ok(notify) = self.db.notify_config(user_id) else {
                 continue;
             };
-            // Telegram and the panadapter are two sinks for the same
-            // alerts, and either alone is a reasonable way to run — so the
-            // gate asks whether ANY of them wants this account's alerts,
+            // Telegram and the two radio displays are three sinks for the
+            // same alerts, and any one alone is a reasonable way to run — so
+            // the gate asks whether ANY of them wants this account's alerts,
             // not whether Telegram does.
             let wants_telegram = notify.telegram_enabled;
             let wants_flex = notify.flex_enabled && !notify.flex_host.is_empty();
-            if !wants_telegram && !wants_flex {
+            let wants_tci = notify.tci_enabled && !notify.tci_host.is_empty();
+            if !wants_telegram && !wants_flex && !wants_tci {
                 continue;
             }
             let Some(c) = self.classify(user_id, spot) else {
@@ -384,11 +389,14 @@ impl UserService {
             if !self.cooldown_ok(user_id, &call, &notify) {
                 continue;
             }
-            // The panadapter first: it is a queue push, never a network
-            // round trip, so it costs nothing to do inline and lands while
+            // The panadapters first: each is a queue push, never a network
+            // round trip, so they cost nothing to do inline and land while
             // the Telegram is still in flight.
             if wants_flex {
                 self.push_flex(&notify, &c, &call, spot);
+            }
+            if wants_tci {
+                self.push_tci(&notify, &c, &call, spot);
             }
             if !wants_telegram {
                 continue;
@@ -439,18 +447,28 @@ impl UserService {
     /// The four `?` levels are the same hues at 58% mixed toward the muted
     /// grey — the `color-mix` the stylesheet performs, precomputed here
     /// because the radio wants a literal.
-    fn flex_color(level: AlertLevel) -> &'static str {
+    ///
+    /// One palette, two radios. SmartSDR wants the hex string and TCI wants
+    /// the decimal, so the value lives here as a number and each sink
+    /// renders it — a second copy of these constants is how the two displays
+    /// would quietly drift apart.
+    fn alert_argb(level: AlertLevel) -> u32 {
         match level {
-            AlertLevel::NewDxcc => "0xFFF5636B",    // --err
-            AlertLevel::NewBand => "0xFF2F81F7",    // --accent
-            AlertLevel::NewMode => "0xFFFAB219",    // --warn
-            AlertLevel::NewSlot => "0xFFF0883E",    // --alert-slot
-            AlertLevel::UnconfDxcc => "0xFFC97479", // the four above, dimmed
-            AlertLevel::UnconfBand => "0xFF5686CA",
-            AlertLevel::UnconfMode => "0xFFCCA249",
-            AlertLevel::UnconfSlot => "0xFFC68A5F",
-            _ => "0xFF8C8C8C",
+            AlertLevel::NewDxcc => 0xFFF5_636B,    // --err
+            AlertLevel::NewBand => 0xFF2F_81F7,    // --accent
+            AlertLevel::NewMode => 0xFFFA_B219,    // --warn
+            AlertLevel::NewSlot => 0xFFF0_883E,    // --alert-slot
+            AlertLevel::UnconfDxcc => 0xFFC9_7479, // the four above, dimmed
+            AlertLevel::UnconfBand => 0xFF56_86CA,
+            AlertLevel::UnconfMode => 0xFFCC_A249,
+            AlertLevel::UnconfSlot => 0xFFC6_8A5F,
+            _ => 0xFF8C_8C8C,
         }
+    }
+
+    /// The same colour as SmartSDR wants it: `0xAARRGGBB`, uppercase.
+    fn flex_color(level: AlertLevel) -> String {
+        format!("0x{:08X}", Self::alert_argb(level))
     }
 
     /// How long each level stays on the panadapter.
@@ -514,8 +532,61 @@ impl UserService {
                 _ => spot.source_name.clone(),
             },
             timestamp_unix: spot.time_unix,
-            color: Self::flex_color(c.level).to_string(),
+            color: Self::flex_color(c.level),
             lifetime_secs: Self::flex_lifetime_secs(notify, c.level),
+        });
+    }
+
+    /// How long each level stays on the ExpertSDR3 panorama.
+    ///
+    /// The same ladder as [`Self::flex_lifetime_secs`], read from this
+    /// account's TCI fields; 0 on any field means the default beside it.
+    ///
+    /// The difference is who enforces it. SmartSDR is told `lifetime_seconds`
+    /// and forgets the spot itself; TCI has no such argument, so the number
+    /// here becomes a deadline the client keeps and acts on with
+    /// `SPOT_DELETE`.
+    fn tci_lifetime_secs(cfg: &NotifyUserConfig, level: AlertLevel) -> u64 {
+        let or = |set: u64, default: u64| if set == 0 { default } else { set };
+        let minutes = match level {
+            AlertLevel::NewDxcc => or(cfg.tci_life_dxcc_minutes, 60),
+            AlertLevel::NewBand | AlertLevel::NewMode => or(cfg.tci_life_band_mode_minutes, 15),
+            _ => or(cfg.tci_life_other_minutes, 1),
+        };
+        minutes.saturating_mul(60)
+    }
+
+    /// Queue one alert onto the operator's ExpertSDR3 panorama.
+    ///
+    /// Never blocks, and shares one session per address, exactly as
+    /// [`Self::push_flex`] does — see that method for the reasoning, which
+    /// is identical.
+    fn push_tci(&self, notify: &NotifyUserConfig, c: &Classification, call: &str, spot: &Spot) {
+        let port = if notify.tci_port == 0 {
+            tci::DEFAULT_PORT
+        } else {
+            notify.tci_port
+        };
+        let key = (notify.tci_host.clone(), port);
+        let client = {
+            let mut map = self.tci.lock().unwrap();
+            map.entry(key)
+                .or_insert_with(|| Arc::new(tci::TciClient::connect(&notify.tci_host, port)))
+                .clone()
+        };
+        client.spot(&tci::TciSpot {
+            callsign: call.to_string(),
+            // TCI wants whole hertz. `frequency_mhz` is the parsed kHz over
+            // 1000, so this is a round trip back to what the cluster line
+            // said — `round` and not a cast, or 14074.0 kHz arrives as
+            // 14073999 Hz and the mark sits a hertz low.
+            freq_hz: (spot.frequency_mhz() * 1_000_000.0).round().max(0.0) as u64,
+            mode: spot.mode.clone(),
+            // Roomier than SmartSDR's twenty characters, so the level and
+            // the entity both fit and there is nothing to choose between.
+            text: tci::text_for(c.level.label(), c.dxcc_name.as_deref()),
+            color_argb: Self::alert_argb(c.level),
+            lifetime_secs: Self::tci_lifetime_secs(notify, c.level),
         });
     }
 
