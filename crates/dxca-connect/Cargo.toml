@@ -13,4 +13,5 @@ tokio = { workspace = true }
 ureq = { workspace = true }
 flate2 = { workspace = true }
 rumqttc = { workspace = true }
+tungstenite = { workspace = true }
 serde_json = { workspace = true }
