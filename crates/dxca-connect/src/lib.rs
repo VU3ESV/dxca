@@ -22,6 +22,7 @@ pub mod dxcluster;
 pub mod flex;
 pub mod lotw;
 pub mod mqtt;
+pub mod tci;
 pub mod telegram;
 pub mod telnet;
 pub mod wsjtx_udp;

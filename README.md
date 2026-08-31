@@ -843,6 +843,56 @@ Three things worth knowing about the implementation:
   `client gui` — the command that claims a station and its slices — is never
   sent, so DXCA cannot capture a slice.
 
+### ExpertSDR3 panorama (TCI)
+
+The same feature for the other radio. DXCA can put **your alerts** on an
+ExpertSDR3 panorama over the **TCI** protocol — SunSDR and anything else
+ExpertSDR3 drives — on WebSocket **40001**. Set the radio's IP under
+**Settings › Server › Destinations › TCI**.
+
+Everything in the FlexRadio section above applies unchanged: the same colour
+palette, the same lifetime ladder and its defaults, the same per-account
+settings, the same "only alerts, never the whole feed", and the same warning
+about a second client already feeding the display. The two are independent in
+every direction — a station can run one, the other, both, or neither, and
+either without Telegram.
+
+Written against the published spec: *TCI Protocol*, Expert Group LLC, rev
+1.0.7 / TCI 2.0, 12 Jan 2024. One command carries a spot:
+
+```text
+SPOT:RN6LHF,CW,7100000,16711680,ANY_TEXT;
+     \____/ \/ \_____/ \______/ \______/
+     call  mode  Hz     ARGB     text
+```
+
+Four things differ from the Flex path, and each shaped the implementation:
+
+- **It is a WebSocket, not a raw socket.** TCI "uses a full duplex web socket
+  protocol that runs on top of a TCP connection" (§1.4), so the bytes on 40001
+  are an HTTP upgrade and then RFC 6455 frames. Writing `SPOT:...;` to a plain
+  TCP socket is discarded by the server without a word — the same
+  silent-success trap the Flex notes warn about, one layer down. This costs no
+  new dependency: `tungstenite` was already in the tree under axum.
+- **There is no lifetime field.** `SPOT` has five arguments and that is all of
+  them. A spot stays on the panorama until something removes it, so **DXCA
+  holds each deadline itself** and sends `SPOT_DELETE:<call>;` when it passes.
+  The consequence worth knowing: if DXCA restarts in between, whatever is on
+  the panorama stays until you clear it in ExpertSDR3.
+- **`:` `,` and `;` are reserved** (§3.1) and one of them inside a value
+  truncates the command, exactly as a space does in SmartSDR's. They are
+  replaced with spaces. **Spaces themselves are fine** here, which is the
+  opposite of Flex — so the text reads as prose, and the level and entity both
+  fit rather than one having to win.
+- **`SPOT_CLEAR;` is never sent**, not even to tidy up on connect. The server
+  synchronises state across every connected client (§3.1), so it would also
+  wipe the spots another logger put there. DXCA only ever deletes a spot it
+  placed itself.
+
+The connection is drained on every pass, for the Flex reason plus one: the
+server pushes sensor notifications whether or not anyone asked, *and*
+WebSocket Pings must be Ponged or the peer hangs up.
+
 ### Telnet login (optional, off by default)
 
 Set `telnet_interactive = true` and a telnet session can authenticate with
