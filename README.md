@@ -25,6 +25,12 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**Unreleased** (merged 2026-09-01, not yet tagged): **Destinations gained a
+fourth tab, TCI** — the same alerts on an **ExpertSDR3 panorama** (SunSDR and
+anything else ExpertSDR3 drives), over WebSocket **40001**. Independent of the
+FlexRadio tab and of Telegram: a station can run one, the other, both, or
+neither. See [ExpertSDR3 panorama (TCI)](#expertsdr3-panorama-tci).
+
 **v2.16.0** (2026-08-30): the Settings rail is down to seven entries.
 Everywhere a spot arrives from is one **Sources** page (UDP decoders, cluster
 nodes), everywhere it leaves by is one **Destinations** page (UDP, MQTT,

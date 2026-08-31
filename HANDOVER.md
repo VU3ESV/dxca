@@ -1,12 +1,17 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-30 · **Status:**
+**Created:** 2026-08-26 · **Last updated:** 2026-09-01 · **Status:**
 **v2.16.0 — Settings is two pages: Sources and Destinations**, each with
 tabs. Five rail entries became two, mirroring the two ends of the pipeline,
 and the FlexRadio panadapter settings moved into Destinations from their own
 entry. The multi-station per-account feeds work was **withdrawn** — see the
 entries under Open items.
+
+**MERGED, NOT RELEASED — a fourth Destinations tab: TCI (ExpertSDR3
+panorama).** `vu2cpl/dxca` PR #1 from VU3ESV, merged to `main` on 2026-09-01.
+**No tag, no release, on no host** — the five installs still run v2.16.0, and
+the merge carried no version bump. See the entry at the top of Open items.
 
 **All five hosts run it as of 2026-08-30.** `adersh@192.168.1.151` was the
 last one — it had missed the deploy pass with `ssh: connect to host
@@ -908,6 +913,83 @@ the cross-build exists to avoid. Notes should cover everything since the
 last *published* release, because tags can outrun releases.
 
 ## Open items → next session
+
+### DONE (merged, unreleased): alerts on an ExpertSDR3 panorama (TCI) — PR #1
+
+`crates/dxca-connect/src/tci.rs`, pushed from the same alert fan-out in
+`users.rs` that feeds Flex. From VU3ESV, merged to `main` on 2026-09-01 as
+`8525e5e`. **The merge carried no version bump** — `Cargo.toml` is still
+2.16.0 — so there is no tag, no release, and no host running it. **Put the
+version on this heading when it ships.** The Destinations tab list in the
+v2.16.0 entry below is left as it is on purpose: that entry records what
+v2.16.0 shipped, and TCI was not in it.
+
+**Destinations has a fourth tab** — UDP | MQTT | FlexRadio | TCI. The two
+radio tabs are independent in every direction: one, the other, both or
+neither, and either without Telegram. Settings are per-account in
+`notify_json` under `tci_*`, defaulting off, so a stored row that predates
+them reads as off with the Flex fields beside it untouched — there is a test
+for exactly that, which is the upgrade risk worth having one for.
+
+**Four things differ from the Flex path**, and each shaped the module:
+
+* **It is a WebSocket, not a raw socket.** `SPOT:...;` written to a plain TCP
+  socket is discarded by the server without a word — the same silent-success
+  trap `flex.rs`'s header warns about, one layer down. It cost no new package:
+  `tungstenite` was already in the tree under axum, so `Cargo.lock` grew by
+  one line.
+* **`SPOT` has no lifetime argument.** SmartSDR is told how long to keep a
+  spot and forgets it itself; TCI is not, so the worker holds each call's
+  deadline and sends `SPOT_DELETE:<call>;` when it passes. Same ladder as
+  Flex — DXCC 60 min, Band/Mode 15, the rest 1 — but **DXCA enforces it**,
+  which means a restart leaves whatever is already on the panorama.
+* **`:` `,` `;` are reserved** and truncate the command exactly as a space
+  does in SmartSDR's; they become spaces. **Spaces themselves are legal
+  here**, the opposite of Flex, so level and entity both fit rather than one
+  having to win.
+* **`SPOT_CLEAR;` is never sent**, not even to tidy up on connect. The server
+  synchronises state across every connected client, so it would wipe the
+  spots another logger put there.
+
+The ARGB palette is now **one table with two renderings** — hex for SmartSDR,
+decimal for TCI — rather than a second copy that would quietly drift.
+
+**Gate verified on the branch before merging, 2026-09-01.** The four steps
+`just gate` runs, run individually with the rustup bin dir on PATH: fmt
+clean, clippy clean with warnings denied, `cargo test --workspace` **258
+passed / 0 failed** (10 of them new `tci::` tests, two of those standing up a
+real WebSocket server), and `pnpm -C web-ui build` clean. On top of the gate,
+**both ship targets cross-build** — `x86_64-pc-windows-gnu` and
+`aarch64-unknown-linux-gnu.2.36` via `cargo zigbuild`. The new dep carries
+`default-features = false`, so no TLS backend is dragged in, which is what
+keeps those two clean.
+
+**Known follow-ups — merged with these open (2026-09-01):**
+
+1. **A reconnect abandons every pending deletion.** Both the failure path and
+   a successful re-dial call `pending.clear()`, on the premise that the server
+   lost the spots. For TCI that premise looks wrong — spots are server-side
+   state that survives a client disconnect — so a transient drop with the
+   radio still up leaves DXCA's spots on the panorama with nothing left to
+   remove them, which is the silting-up the module exists to prevent. The
+   counter-risk is real but narrow: re-deleting a call some other logger had
+   just re-spotted. The UI and README warn only about a DXCA *restart*, not a
+   reconnect. **This is the one with operational consequence — fix it before
+   the feature is tagged.**
+2. **The idle-cost claim expires after the first alert.** The worker blocks on
+   the channel only while there is no link; once connected there is no idle
+   disconnect, so it wakes every 250 ms to drain for the life of the process.
+   Negligible on a Pi, but the module docs claim more than the code does.
+3. **`tungstenite = "0.29"` is pinned directly** while axum is what keeps it
+   deduped. An axum bump that moves tungstenite lands two copies in the tree.
+
+**GOTCHA WORTH RECORDING:** a bare `cargo test --workspace` on the Mac dies at
+the doctest step — `could not execute process rustdoc … No such file or
+directory`. Homebrew's rustup symlinks only the `cargo`/`rustc` proxies into
+`/usr/local/bin`; there is no `rustdoc` there. The `Justfile` already prepends
+`/opt/homebrew/opt/rustup/bin` for exactly this reason, so **run `just gate`,
+never a bare `cargo test`** — a run that stops at the doctests looks like a
+much smaller test count than the 258 the workspace actually has.
 
 ### DONE: Settings is Sources and Destinations — v2.16.0 (2026-08-30)
 
