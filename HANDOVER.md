@@ -2,6 +2,40 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-09-01 · **Status:**
+**v2.18.0 — WAS endorsements, Triple Play, and Awards as its own Stats
+tab** (Manoj: *"add band wise and mode wise WAS as a new award tab —
+triple play?"*, then *"triple play is WAS in all 3 modes, not band"*).
+
+`AwardStatus` gains a **mode axis** (`modes` / `confirmedModes`,
+serde-defaulted so stored matrices still load), fed from the ADIF `MODE`
+through the same `modes::canonical` bucketing the DXCC slots use — LoTW's
+own `APP_LoTW_MODEGROUP` agrees with it, so one bucketing rule governs
+everything. `triple_play_count` and `triple_play_missing` sit on the
+matrix; the latter is the worklist, which is the half a score cannot give.
+**Triple Play's LoTW-only requirement is met by construction**, not by a
+check: `merge_lotw_confirmed` is the only thing that ever writes a
+confirmed state, because ClubLog's export has no `STATE`.
+
+**The correctness fix found while measuring it.** Asked for his real
+numbers, the naive count gave 49 states — one of them `SD`, credited by a
+**CHINA** QSL, because Shandong's subdivision code is also SD. LoTW's
+`STATE` is worldwide and several codes collide with US ones (SC = Santa
+Catarina, MO = Moscow oblast, MT/MS/AL/PA all have Brazilian twins). The
+spot side has been gated on a WAS-countable entity since 2.17.3; **the log
+side never was**. Both merge paths now gate on `counts_for_was`, and the
+regression test carries the exact China/SD record.
+
+His real position after the gate: **48 states**, CW 44 / Data 46 / Phone
+43, **Triple Play 39 of 50**.
+
+**Next, agreed with Manoj and explicitly step-by-step:** the **DX
+Marathon** (entities + CQ zones in a calendar year, no band/mode) and
+**WAZ** (40 zones, per band). Both are feasible from data already
+downloaded — ClubLog's export carries `CQZ` on 56,283 of 56,845 records,
+and cty.xml's `DxccEntity.cq_zone` has been parsed-but-unused since 2.0.
+Marathon needs the one axis the matrix has never had: **time**, keyed by
+QSO year.
+
 **v2.17.7 — "All" owns the first line of every chip group** (Manoj:
 *"keep all in one line and rest in the next lines, will look cleaner"*,
 and *"even in modes"*). One change in `ChipGroup.svelte` covers Sources,

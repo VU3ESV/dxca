@@ -641,7 +641,7 @@ mod tests {
         // the 6M spots flag New Band — rank says an unworked band beats a
         // grid gap, which is its own test below.)
         m.record(324, "6M", "DATA", "VU2CCC", true);
-        m.record_grid("MK83", "6M", false);
+        m.record_grid("MK83", "6M", Some("DATA"), false);
 
         let grid = |g| AwardRefs {
             grid: Some(g),
@@ -672,9 +672,9 @@ mod tests {
         // The US worked+confirmed on 20M-DATA, so a K call on 20M FT8
         // leaves the DXCC ladder quiet and the state axis decides.
         m.record(291, "20M", "DATA", "K9XX", true);
-        m.record_state("OH", "20M", false);
-        m.record_state("CA", "20M", true);
-        m.record_iota("AS-003", "15M", false);
+        m.record_state("OH", "20M", Some("DATA"), false);
+        m.record_state("CA", "20M", Some("DATA"), true);
+        m.record_iota("AS-003", "15M", Some("DATA"), false);
 
         let c = classify_refs(
             &m,
@@ -759,7 +759,7 @@ mod tests {
         assert_ne!(quiet.level, AlertLevel::NewIota, "no island data, no claim");
 
         // One known state is enough to make the axis trustworthy again.
-        m.record_state("OH", "20M", true);
+        m.record_state("OH", "20M", Some("DATA"), true);
         let live = classify_refs(
             &m,
             "K1ABC",
@@ -779,7 +779,7 @@ mod tests {
         let mut m = matrix();
         // A worked state, so the empty-axis guard is not what makes this
         // pass — the DXCC test is what is under examination here.
-        m.record_state("OH", "20M", true);
+        m.record_state("OH", "20M", Some("DATA"), true);
         // India stands in for "somewhere that is not the US" — the resolver
         // in these tests knows VU and K, and VU is not a WAS entity.
         let abroad = classify_refs(
@@ -799,7 +799,7 @@ mod tests {
         // or the guard would have switched WAS off altogether.
         let mut home = matrix();
         home.record(291, "20M", "DATA", "K9XX", true);
-        home.record_state("OH", "20M", true);
+        home.record_state("OH", "20M", Some("DATA"), true);
         let at_home = classify_refs(
             &home,
             "K1ABC",
@@ -817,7 +817,7 @@ mod tests {
     fn the_rarest_candidate_wins_and_filters_shift_the_pick() {
         let cfg = awards_config();
         let mut m = matrix(); // K* (US) never worked → NEW DXCC
-        m.record_state("OH", "20M", true); // axis live, TX still new
+        m.record_state("OH", "20M", Some("DATA"), true); // axis live, TX still new
         let refs = AwardRefs {
             state: Some("TX"),
             ..AwardRefs::NONE

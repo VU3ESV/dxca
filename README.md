@@ -25,6 +25,23 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.18.0** (2026-09-01): **WAS endorsements, Triple Play, and Awards as its
+own tab.** WAS is now counted **per band and per mode class** as well as
+overall, and **ARRL Triple Play** — all fifty states confirmed in CW, Phone
+and Digital — gets a score *and a worklist*, because "39 of 50" cannot tell
+you that Wyoming needs all three modes while Ohio needs only phone. DXCA
+satisfies Triple Play's LoTW-only rule by construction: the QSL report is
+the only thing that ever confirms a state. Awards moved out of a card under
+My ClubLog into its **own Stats tab**.
+
+**Also a real correctness fix:** LoTW's `STATE` is a worldwide subdivision
+code, and several collide with US postal codes — China's Shandong is `SD`,
+Brazil's Santa Catarina `SC`, Russia's Moscow oblast `MO`. The log side
+never checked the entity, so a Shandong QSL credited South Dakota. Both the
+ClubLog and LoTW merge paths now require a WAS-countable entity, the same
+gate spots have had since 2.17.3. **A log refresh is needed** to rebuild the
+mode axis and drop any false state.
+
 **v2.17.7** (2026-09-01): **"All" gets its own line in every filter group** —
 Sources, Alerts, Modes and Bands. It is a reset, not one of the choices, and
 at the head of a ragged run of chips in a 12rem rail it read as one of them.

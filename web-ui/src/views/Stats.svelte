@@ -54,14 +54,15 @@
   // three bar charts and concluded the table had been lost in the rework.
   // Remembering the choice means it has to be found once, not every visit.
   const SEG_KEY = 'dxca.statsseg';
-  function restoreSeg(): 'feed' | 'clublog' {
+  function restoreSeg(): 'feed' | 'clublog' | 'awards' {
     try {
-      return localStorage.getItem(SEG_KEY) === 'clublog' ? 'clublog' : 'feed';
+      const v = localStorage.getItem(SEG_KEY);
+      return v === 'clublog' || v === 'awards' ? v : 'feed';
     } catch {
       return 'feed';
     }
   }
-  let seg = $state<'feed' | 'clublog'>(restoreSeg());
+  let seg = $state<'feed' | 'clublog' | 'awards'>(restoreSeg());
   $effect(() => {
     try {
       localStorage.setItem(SEG_KEY, seg);
@@ -163,6 +164,14 @@
       <button role="tab" aria-selected={seg === 'clublog'} class:active={seg === 'clublog'} onclick={() => (seg = 'clublog')}
         >My ClubLog</button
       >
+      <!-- Its own segment rather than a card under My ClubLog: the awards
+           are their own errand, and WAS alone now carries a band table, a
+           mode table and a Triple Play worklist. -->
+      {#if chasedAny()}
+        <button role="tab" aria-selected={seg === 'awards'} class:active={seg === 'awards'} onclick={() => (seg = 'awards')}
+          >Awards</button
+        >
+      {/if}
     </div>
     <HelpTip label="Two kinds of statistic">
       <span class="para">
@@ -177,7 +186,155 @@
     </HelpTip>
   </div>
 
-  {#if seg === 'feed'}
+  {#if seg === 'awards'}
+    {#if station?.award_stats && chasedAny()}
+      <div class="card">
+        <h2>
+          Awards
+          <HelpTip label="Awards">
+            <span class="para">
+              Only the awards ticked under <b>Settings › My station ›
+              Awards</b> appear here. Worked comes from your ClubLog log;
+              <b>confirmed needs the login on LoTW account</b>, because
+              ClubLog's export carries no state, island or QSL detail.
+            </span>
+            <span class="para">
+              <b>VUCC</b> counts 4-character grid squares per band, 50 MHz
+              and up only. <b>WAS</b> counts the fifty states, any band or
+              mode; DC counts as Maryland. <b>IOTA</b> counts island groups.
+            </span>
+          </HelpTip>
+        </h2>
+        <dl class="stats">
+          {#if isChased('iota')}
+            <div><dt>IOTA worked</dt><dd class="num">{station.award_stats.iota_worked}</dd></div>
+            <div>
+              <dt>IOTA confirmed</dt>
+              <dd class="num ok-num">{station.award_stats.iota_confirmed}</dd>
+            </div>
+          {/if}
+          {#if isChased('was')}
+            <div><dt>States worked</dt><dd class="num">{station.award_stats.was_worked}</dd></div>
+            <div>
+              <dt>States confirmed</dt>
+              <dd class="num ok-num">{station.award_stats.was_confirmed}</dd>
+            </div>
+            <div>
+              <dt>Triple Play</dt>
+              <dd class="num ok-num">{station.award_stats.triple_play} / 50</dd>
+            </div>
+          {/if}
+        </dl>
+        {#if isChased('was') && station.award_stats.was_missing.length && station.award_stats.was_missing.length < 50}
+          <p class="hint">
+            Missing states:
+            <span class="mono">{station.award_stats.was_missing.join(' ')}</span>
+          </p>
+        {/if}
+      </div>
+
+      {#if isChased('was')}
+        <div class="card">
+          <h2>
+            WAS endorsements
+            <HelpTip label="WAS endorsements">
+              <span class="para">
+                The same fifty states counted <b>per band</b> and <b>per
+                mode</b> — the endorsements ARRL issues on top of basic WAS.
+                Bands you have no states on are left out.
+              </span>
+              <span class="para">
+                <b>Triple Play</b> is the mode table's headline: all fifty
+                states confirmed in <b>CW, Phone and Digital</b> — 150
+                confirmations, any band, and <b>LoTW only</b>. DXCA meets
+                that last rule by construction: your LoTW QSL report is the
+                only thing that ever confirms a state here.
+              </span>
+            </HelpTip>
+          </h2>
+          <div class="wasgrid">
+            <div>
+              <table class="slices">
+                <thead><tr><th>Mode</th><th>Worked</th><th>Confirmed</th></tr></thead>
+                <tbody>
+                  {#each station.award_stats.was_by_mode as r (r.key)}
+                    <tr>
+                      <td>{r.key}</td>
+                      <td class="num" class:zero={!r.worked}>{r.worked}</td>
+                      <td class="num ok-num" class:zero={!r.confirmed}>{r.confirmed}</td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            </div>
+            <div>
+              {#if station.award_stats.was_by_band.length}
+                <table class="slices">
+                  <thead><tr><th>Band</th><th>Worked</th><th>Confirmed</th></tr></thead>
+                  <tbody>
+                    {#each station.award_stats.was_by_band as r (r.key)}
+                      <tr>
+                        <td>{r.key}</td>
+                        <td class="num" class:zero={!r.worked}>{r.worked}</td>
+                        <td class="num ok-num" class:zero={!r.confirmed}>{r.confirmed}</td>
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              {:else}
+                <p class="hint">No states on any band yet.</p>
+              {/if}
+            </div>
+          </div>
+
+          {#if station.award_stats.triple_play_missing.length}
+            <h3 class="sub">Triple Play — what is still needed</h3>
+            <!-- The worklist, not just the score: "39 of 50" cannot tell you
+                 that Wyoming needs all three while Ohio needs only phone. -->
+            <div class="tpgaps">
+              {#each station.award_stats.triple_play_missing as g (g.state)}
+                <span class="tpgap">
+                  <b class="mono">{g.state}</b>
+                  <span class="hint">{g.needed.join(' ')}</span>
+                </span>
+              {/each}
+            </div>
+          {:else}
+            <p class="hint">Triple Play complete — all fifty states in all three modes.</p>
+          {/if}
+        </div>
+      {/if}
+
+      {#if isChased('vucc')}
+        <div class="card">
+          <h2>VUCC by band</h2>
+          {#if station.award_stats.vucc.length}
+            <table class="slices">
+              <thead><tr><th>Band</th><th>Grids worked</th><th>Confirmed</th></tr></thead>
+              <tbody>
+                {#each station.award_stats.vucc as v (v.band)}
+                  <tr>
+                    <td>{v.band}</td>
+                    <td class="num">{v.worked}</td>
+                    <td class="num ok-num">{v.confirmed}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          {:else}
+            <p class="hint">No 50 MHz+ grids in the log yet — VUCC counts from 6M up.</p>
+          {/if}
+        </div>
+      {/if}
+    {:else}
+      <div class="card">
+        <p class="hint">
+          No awards ticked yet — pick them under
+          <b>Settings › My station › Awards</b>.
+        </p>
+      </div>
+    {/if}
+  {:else if seg === 'feed'}
     {#if error}
       <div class="card"><p class="err">{error}</p></div>
     {:else if !stats}
@@ -265,73 +422,6 @@
         <div><dt>Slots confirmed</dt><dd class="num ok-num">{shownStats.slots_confirmed}</dd></div>
       </dl>
     </div>
-
-    <!-- Only the awards this account chases (Settings › My station ›
-         Awards) — nothing here for anyone who has not opted in. -->
-    {#if station.award_stats && chasedAny()}
-      <div class="card">
-        <h2>
-          Awards
-          <HelpTip label="Awards">
-            <span class="para">
-              The awards ticked under <b>Settings › My station › Awards</b>
-              — only those show here. Worked comes from your ClubLog log;
-              <b>confirmed needs the login on LoTW account</b>, because
-              ClubLog's export carries no state, island or QSL detail.
-            </span>
-            <span class="para">
-              <b>VUCC</b> counts 4-character grid squares per band, 50 MHz
-              and up only. <b>WAS</b> counts the fifty states, any band or
-              mode; DC counts as Maryland. <b>IOTA</b> counts island groups.
-            </span>
-          </HelpTip>
-        </h2>
-        <dl class="stats">
-          {#if isChased('iota')}
-            <div><dt>IOTA worked</dt><dd class="num">{station.award_stats.iota_worked}</dd></div>
-            <div>
-              <dt>IOTA confirmed</dt>
-              <dd class="num ok-num">{station.award_stats.iota_confirmed}</dd>
-            </div>
-          {/if}
-          {#if isChased('was')}
-            <div><dt>States worked</dt><dd class="num">{station.award_stats.was_worked}</dd></div>
-            <div>
-              <dt>States confirmed</dt>
-              <dd class="num ok-num">{station.award_stats.was_confirmed}</dd>
-            </div>
-          {/if}
-        </dl>
-        {#if isChased('was') && station.award_stats.was_missing.length && station.award_stats.was_missing.length < 50}
-          <!-- The chase list — fifty minus worked is short for anyone actually
-               after WAS, and "which ones" is the question the number raises. -->
-          <p class="hint">
-            Missing states:
-            <span class="mono">{station.award_stats.was_missing.join(' ')}</span>
-          </p>
-        {/if}
-        {#if isChased('vucc') && station.award_stats.vucc.length}
-          <!-- Same table dress as the feed slices — three narrow columns,
-               numbers right-aligned, no new CSS to drift. -->
-          <table class="slices">
-            <thead>
-              <tr><th>VUCC band</th><th>Grids worked</th><th>Confirmed</th></tr>
-            </thead>
-            <tbody>
-              {#each station.award_stats.vucc as v (v.band)}
-                <tr>
-                  <td>{v.band}</td>
-                  <td class="num">{v.worked}</td>
-                  <td class="num ok-num">{v.confirmed}</td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        {:else if isChased('vucc')}
-          <p class="hint">No 50 MHz+ grids in the log yet — VUCC counts from 6M up.</p>
-        {/if}
-      </div>
-    {/if}
 
     {#if shownBandMode}
       <div class="card">
@@ -665,6 +755,32 @@
 
   .stats dd.num {
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Mode beside band where there is room, stacked when there is not. */
+  .wasgrid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 3rem;
+  }
+
+  .sub {
+    margin: 1.1rem 0 0.4rem;
+    font-size: 0.95rem;
+  }
+
+  /* One state per chip, with the modes it still owes. Denser than a table
+     and it wraps, which matters when the list starts at fifty. */
+  .tpgaps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 0.9rem;
+  }
+
+  .tpgap {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.3rem;
   }
 
   .slices {

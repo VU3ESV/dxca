@@ -31,13 +31,27 @@ pub struct AwardStatus {
     pub bands: HashSet<String>,
     #[serde(rename = "confirmedBands")]
     pub confirmed_bands: HashSet<String>,
+    // Mode-class axis (CW / PHONE / DATA), added 2.17.8 for WAS mode
+    // endorsements and Triple Play. Serde-defaulted, so a matrix stored
+    // before it existed still loads — it simply has no modes until the
+    // next log refresh rebuilds it.
+    #[serde(default)]
+    pub modes: HashSet<String>,
+    #[serde(default, rename = "confirmedModes")]
+    pub confirmed_modes: HashSet<String>,
 }
 
 impl AwardStatus {
-    fn record(&mut self, band: &str, confirmed: bool) {
+    fn record(&mut self, band: &str, mode: Option<&str>, confirmed: bool) {
         self.bands.insert(band.to_string());
         if confirmed {
             self.confirmed_bands.insert(band.to_string());
+        }
+        if let Some(m) = mode {
+            self.modes.insert(m.to_string());
+            if confirmed {
+                self.confirmed_modes.insert(m.to_string());
+            }
         }
     }
 
@@ -176,14 +190,24 @@ impl LogMatrix {
             // ClubLog's export carries GRIDSQUARE (verified 2026-09-01,
             // 98% of records) but never STATE or IOTA — those two record
             // nothing here and are fed by `merge_lotw_confirmed`.
+            let mode_class = crate::modes::canonical(&mode);
             if let Some(g) = r.grid_square() {
-                matrix.record_grid(&g, &band, confirmed);
+                matrix.record_grid(&g, &band, Some(mode_class), confirmed);
             }
-            if let Some(s) = r.state() {
-                matrix.record_state(&s, &band, confirmed);
+            // The DXCC gate is the LOG-side twin of the one `best_award`
+            // applies to spots: LoTW's STATE is a subdivision code for the
+            // whole world, and several collide with US postal codes —
+            // China's Shandong is `SD`, Brazil's Santa Catarina `SC`,
+            // Russia's Moscow oblast `MO`. Without this a Shandong QSL
+            // credited South Dakota, which is exactly what it did (VU2CPL,
+            // 2026-09-01: 49 states, one of them from China).
+            if let Some(s) = r.state()
+                && r.dxcc().is_some_and(crate::awards::counts_for_was)
+            {
+                matrix.record_state(&s, &band, Some(mode_class), confirmed);
             }
             if let Some(i) = r.iota() {
-                matrix.record_iota(&i, &band, confirmed);
+                matrix.record_iota(&i, &band, Some(mode_class), confirmed);
             }
         }
         (matrix, count, uncredited)
@@ -201,15 +225,24 @@ impl LogMatrix {
         let mut merged = 0;
         for r in crate::adif::parse(content) {
             let Some(band) = r.band() else { continue };
+            // LoTW reports the mode as `MODE`, with `APP_LoTW_MODEGROUP`
+            // carrying its own CW/PHONE/DATA bucketing; ours agrees, so the
+            // standard field is enough and we keep one bucketing rule.
+            let mode = r.mode();
+            let mode_class = mode.as_deref().and_then(crate::modes::canonical_opt);
             let mut any = false;
             if let Some(g) = r.grid_square() {
-                any |= self.record_grid(&g, &band, true);
+                any |= self.record_grid(&g, &band, mode_class, true);
             }
-            if let Some(s) = r.state() {
-                any |= self.record_state(&s, &band, true);
+            // See the note in `build_from_adif_reporting`: STATE is a
+            // worldwide subdivision code and several collide with US ones.
+            if let Some(s) = r.state()
+                && r.dxcc().is_some_and(crate::awards::counts_for_was)
+            {
+                any |= self.record_state(&s, &band, mode_class, true);
             }
             if let Some(i) = r.iota() {
-                any |= self.record_iota(&i, &band, true);
+                any |= self.record_iota(&i, &band, mode_class, true);
             }
             merged += usize::from(any);
         }
@@ -219,36 +252,60 @@ impl LogMatrix {
     /// Record a grid credit — VUCC bands only, 4-char square. Returns
     /// whether anything was recorded (the input was a real locator on a
     /// scoring band).
-    pub fn record_grid(&mut self, locator: &str, band: &str, confirmed: bool) -> bool {
+    pub fn record_grid(
+        &mut self,
+        locator: &str,
+        band: &str,
+        mode: Option<&str>,
+        confirmed: bool,
+    ) -> bool {
         let Some(g4) = crate::grid::grid4(locator) else {
             return false;
         };
         if !crate::bands::is_vucc_band(band) {
             return false;
         }
-        self.by_grid.entry(g4).or_default().record(band, confirmed);
+        self.by_grid
+            .entry(g4)
+            .or_default()
+            .record(band, mode, confirmed);
         true
     }
 
     /// Record a WAS credit; territories and noise fall out in
     /// `normalize_state` (DC folds into MD there too).
-    pub fn record_state(&mut self, raw: &str, band: &str, confirmed: bool) -> bool {
+    pub fn record_state(
+        &mut self,
+        raw: &str,
+        band: &str,
+        mode: Option<&str>,
+        confirmed: bool,
+    ) -> bool {
         let Some(st) = crate::awards::normalize_state(raw) else {
             return false;
         };
         self.by_state
             .entry(st.to_string())
             .or_default()
-            .record(band, confirmed);
+            .record(band, mode, confirmed);
         true
     }
 
     /// Record an IOTA credit under the normalized reference.
-    pub fn record_iota(&mut self, raw: &str, band: &str, confirmed: bool) -> bool {
+    pub fn record_iota(
+        &mut self,
+        raw: &str,
+        band: &str,
+        mode: Option<&str>,
+        confirmed: bool,
+    ) -> bool {
         let Some(r) = crate::awards::normalize_iota(raw) else {
             return false;
         };
-        self.by_iota.entry(r).or_default().record(band, confirmed);
+        self.by_iota
+            .entry(r)
+            .or_default()
+            .record(band, mode, confirmed);
         true
     }
 
@@ -333,14 +390,99 @@ impl LogMatrix {
             .map(|s| (*s).to_string())
             .collect();
         was_missing.sort();
+        // WAS endorsements: the same fifty states counted per band and per
+        // mode class. Rows with nothing on them are dropped — a WAS chaser
+        // wants the bands they are actually working, not fifteen zeroes.
+        let was_by_band = crate::bands::SELECTABLE_BANDS
+            .iter()
+            .map(|b| AwardBreakdown {
+                key: (*b).to_string(),
+                worked: self
+                    .by_state
+                    .values()
+                    .filter(|s| s.bands.contains(*b))
+                    .count(),
+                confirmed: self
+                    .by_state
+                    .values()
+                    .filter(|s| s.confirmed_bands.contains(*b))
+                    .count(),
+            })
+            .filter(|r| r.worked > 0)
+            .collect();
+        let was_by_mode = crate::modes::CLASSES
+            .iter()
+            .map(|m| AwardBreakdown {
+                key: (*m).to_string(),
+                worked: self
+                    .by_state
+                    .values()
+                    .filter(|s| s.modes.contains(*m))
+                    .count(),
+                confirmed: self
+                    .by_state
+                    .values()
+                    .filter(|s| s.confirmed_modes.contains(*m))
+                    .count(),
+            })
+            .collect();
         AwardStats {
             vucc,
             was_worked: self.by_state.len(),
             was_confirmed: self.by_state.values().filter(|s| s.is_confirmed()).count(),
             was_missing,
+            was_by_band,
+            was_by_mode,
+            triple_play: self.triple_play_count(),
+            triple_play_missing: self.triple_play_missing(),
             iota_worked: self.by_iota.len(),
             iota_confirmed: self.by_iota.values().filter(|s| s.is_confirmed()).count(),
         }
+    }
+
+    /// **ARRL Triple Play**: all fifty states confirmed in each of CW,
+    /// Phone and Digital — 150 confirmations, any band.
+    ///
+    /// The award requires the confirmations be **through LoTW**, which this
+    /// satisfies by construction rather than by checking: the only thing
+    /// that ever writes a confirmed state is `merge_lotw_confirmed`, since
+    /// ClubLog's export carries no `STATE` at all.
+    pub fn triple_play_count(&self) -> usize {
+        self.by_state
+            .values()
+            .filter(|s| {
+                crate::modes::CLASSES
+                    .iter()
+                    .all(|m| s.confirmed_modes.contains(*m))
+            })
+            .count()
+    }
+
+    /// What Triple Play still needs, as `(state, modes still missing)` —
+    /// the actual worklist, which a bare "39 of 50" cannot give.
+    pub fn triple_play_missing(&self) -> Vec<TriplePlayGap> {
+        let mut gaps: Vec<TriplePlayGap> = crate::awards::US_STATES
+            .iter()
+            .map(|st| {
+                let have = self.by_state.get(*st);
+                TriplePlayGap {
+                    state: (*st).to_string(),
+                    needed: crate::modes::CLASSES
+                        .iter()
+                        .filter(|m| !have.is_some_and(|s| s.confirmed_modes.contains(**m)))
+                        .map(|m| (*m).to_string())
+                        .collect(),
+                }
+            })
+            .filter(|g| !g.needed.is_empty())
+            .collect();
+        gaps.sort_by(|a, b| {
+            a.needed
+                .len()
+                .cmp(&b.needed.len())
+                .then(a.state.cmp(&b.state))
+        });
+        gaps
     }
 
     /// [`stats`](Self::stats) with `skip` entities left out — the ARRL
@@ -549,6 +691,21 @@ pub struct MatrixStats {
     pub challenge_confirmed: usize,
 }
 
+/// A per-band or per-mode count of states — a WAS endorsement row.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AwardBreakdown {
+    pub key: String,
+    pub worked: usize,
+    pub confirmed: usize,
+}
+
+/// One state that Triple Play still wants, and in which modes.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TriplePlayGap {
+    pub state: String,
+    pub needed: Vec<String>,
+}
+
 /// One VUCC band's grid counts.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VuccBandCount {
@@ -566,6 +723,13 @@ pub struct AwardStats {
     pub was_confirmed: usize,
     /// States never worked, alphabetical — the chase list.
     pub was_missing: Vec<String>,
+    /// WAS counted per band, and per mode class — the endorsements.
+    pub was_by_band: Vec<AwardBreakdown>,
+    pub was_by_mode: Vec<AwardBreakdown>,
+    /// States confirmed in all three modes (ARRL Triple Play), and the
+    /// worklist for the rest.
+    pub triple_play: usize,
+    pub triple_play_missing: Vec<TriplePlayGap>,
     pub iota_worked: usize,
     pub iota_confirmed: usize,
 }
@@ -578,21 +742,24 @@ mod tests {
     fn award_axes_record_and_count() {
         let mut m = LogMatrix::default();
         // VUCC: 6M scores, 20M never does, RR73 is not a grid.
-        assert!(m.record_grid("MK83va", "6M", false));
+        assert!(m.record_grid("MK83va", "6M", Some("DATA"), false));
         assert!(
-            m.record_grid("MK83", "6M", true),
+            m.record_grid("MK83", "6M", Some("DATA"), true),
             "same square, now confirmed"
         );
-        assert!(m.record_grid("FN20", "2M", false));
-        assert!(!m.record_grid("MK83", "20M", false), "HF never scores VUCC");
-        assert!(!m.record_grid("RR73", "6M", false));
+        assert!(m.record_grid("FN20", "2M", Some("DATA"), false));
+        assert!(
+            !m.record_grid("MK83", "20M", Some("DATA"), false),
+            "HF never scores VUCC"
+        );
+        assert!(!m.record_grid("RR73", "6M", Some("DATA"), false));
         // WAS: DC folds to MD, PR is not a state.
-        assert!(m.record_state("OH", "20M", true));
-        assert!(m.record_state("dc", "40M", false));
-        assert!(!m.record_state("PR", "20M", true));
+        assert!(m.record_state("OH", "20M", Some("DATA"), true));
+        assert!(m.record_state("dc", "40M", Some("DATA"), false));
+        assert!(!m.record_state("PR", "20M", Some("DATA"), true));
         // IOTA normalizes.
-        assert!(m.record_iota("as-3", "15M", false));
-        assert!(!m.record_iota("XX-1", "15M", false));
+        assert!(m.record_iota("as-3", "15M", Some("DATA"), false));
+        assert!(!m.record_iota("XX-1", "15M", Some("DATA"), false));
 
         let a = m.award_stats();
         assert_eq!(
@@ -625,10 +792,11 @@ mod tests {
     #[test]
     fn lotw_merge_is_additive_and_confirmed() {
         let mut m = LogMatrix::default();
-        m.record_state("OH", "20M", false); // worked via ClubLog, unconfirmed
-        let report = "<CALL:4>W8AA<BAND:3>20M<STATE:2>OH<eor>\
-                      <CALL:4>K6BB<BAND:2>6M<GRIDSQUARE:6>DM04QD<eor>\
-                      <CALL:5>VK9CC<BAND:3>15M<IOTA:6>OC-003<eor>\
+        m.record_state("OH", "20M", Some("DATA"), false); // worked via ClubLog, unconfirmed
+        let report = "<CALL:4>W8AA<BAND:3>20M<MODE:2>CW<STATE:2>OH<DXCC:3>291<eor>\
+                      <CALL:4>K6BB<BAND:2>6M<MODE:3>FT8<GRIDSQUARE:6>DM04QD<DXCC:3>291<eor>\
+                      <CALL:5>VK9CC<BAND:3>15M<MODE:3>SSB<IOTA:6>OC-003<eor>\
+                      <CALL:4>BY1X<BAND:3>20M<MODE:2>CW<STATE:2>SD<DXCC:3>318<eor>\
                       <CALL:4>NOAW<BAND:3>40M<eor>"; // no award fact
         assert_eq!(m.merge_lotw_confirmed(report), 3);
         assert!(m.by_state["OH"].is_confirmed(), "LoTW confirmed the state");
@@ -636,6 +804,20 @@ mod tests {
         assert!(m.by_iota["OC-003"].is_confirmed());
         assert!(m.by_dxcc.is_empty(), "DXCC stays ClubLog's");
         assert!(m.worked_calls.is_empty(), "worked calls stay ClubLog's");
+
+        // The collision that reached production: LoTW's STATE is a
+        // worldwide subdivision code, and China's Shandong is `SD`. Only
+        // the DXCC entity can tell it from South Dakota, and one such QSL
+        // put a 49th state in a real log.
+        assert!(
+            !m.by_state.contains_key("SD"),
+            "Shandong is not South Dakota"
+        );
+
+        // The mode rides along, which is what WAS endorsements and Triple
+        // Play are counted from.
+        assert!(m.by_state["OH"].confirmed_modes.contains("CW"));
+        assert!(m.by_iota["OC-003"].confirmed_modes.contains("PHONE"));
     }
 
     #[test]
@@ -651,9 +833,16 @@ mod tests {
         assert!(m.by_grid["KN10"].confirmed_bands.contains("6M"));
         assert!(!m.by_grid.contains_key("KN20"), "HF grid scores nothing");
         // STATE/IOTA never actually appear in ClubLog exports, but the build
-        // path must take them when present — an uploaded ADIF might.
-        assert!(m.by_state.contains_key("OH"));
+        // path must take them when present — an uploaded ADIF might. The
+        // state here is attached to a GREEK contact, so it must be refused:
+        // a subdivision code only means a US state on a US entity.
+        assert!(!m.by_state.contains_key("OH"), "Greece cannot carry Ohio");
         assert!(m.by_iota.contains_key("EU-001"));
+
+        // The same field on a US contact is taken.
+        let us = "<CALL:4>W8AA<BAND:3>20M<MODE:2>CW<DXCC:3>291<STATE:2>OH<eor>";
+        let (m2, _) = LogMatrix::build_from_adif(us, &resolver_with(vec![]));
+        assert!(m2.by_state.contains_key("OH"));
     }
 
     #[test]
@@ -748,6 +937,9 @@ mod tests {
                     (180, entity(180, "MOUNT ATHOS", "SV/A")),
                     (236, entity(236, "GREECE", "SV")),
                     (48, entity(48, "EASTERN KIRIBATI", "T32")),
+                    // Needed by the WAS tests: a state only counts on a
+                    // WAS-countable entity, so one has to exist here.
+                    (291, entity(291, "UNITED STATES", "K")),
                 ]),
                 prefix_rules: vec![crate::cty::PrefixRule {
                     call: "SV".into(),
