@@ -44,6 +44,11 @@ Two new admin downloads under Reference data (IOTA directory ~290 KB
 auto-monthly; FCC ~200 MB → 7.9 MB distilled, **manual first pull
 required** before its schedule arms). Stats grows an IOTA · WAS · VUCC
 card with the missing-states chase list. Full map in the Open-items entry.
+**Deployed to noderedpi4 2026-09-01, same trial as the gate/TCI/embed**
+(bundle `index-Ds4hAciS.js`, all nine nodes back). The reference files
+were pre-seeded from the build session — 1,178 IOTA groups and the
+816,973-call FCC table load at startup — so all three awards work the
+moment their level pairs are ticked, no 200 MB pull needed on the Pi.
 
 **MERGED, NOT RELEASED — a fourth Destinations tab: TCI (ExpertSDR3
 panorama).** `vu2cpl/dxca` PR #1 from VU3ESV, merged to `main` on 2026-09-01.
