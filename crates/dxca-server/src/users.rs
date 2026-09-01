@@ -338,7 +338,7 @@ impl UserService {
             // not whether Telegram does.
             let wants_telegram = notify.telegram_enabled;
             let wants_flex = notify.flex_enabled && !notify.flex_host.is_empty();
-            let wants_tci = notify.tci_enabled && !notify.tci_host.is_empty();
+            let wants_tci = notify.tci_enabled && !notify.tci_targets(tci::DEFAULT_PORT).is_empty();
             if !wants_telegram && !wants_flex && !wants_tci {
                 continue;
             }
@@ -562,18 +562,35 @@ impl UserService {
     /// [`Self::push_flex`] does — see that method for the reasoning, which
     /// is identical.
     fn push_tci(&self, notify: &NotifyUserConfig, c: &Classification, call: &str, spot: &Spot) {
-        let port = if notify.tci_port == 0 {
-            tci::DEFAULT_PORT
-        } else {
-            notify.tci_port
-        };
-        let key = (notify.tci_host.clone(), port);
-        let client = {
-            let mut map = self.tci.lock().unwrap();
-            map.entry(key)
-                .or_insert_with(|| Arc::new(tci::TciClient::connect(&notify.tci_host, port)))
-                .clone()
-        };
+        // One radio or five, the work per radio is the same queue push, so
+        // this is a loop and not a special case. `tci_targets` has already
+        // dropped the disabled, the blank and the duplicates, so every
+        // address here is one this account genuinely wants a mark on.
+        for (host, port) in notify.tci_targets(tci::DEFAULT_PORT) {
+            let client = {
+                let mut map = self.tci.lock().unwrap();
+                map.entry((host.clone(), port))
+                    .or_insert_with(|| Arc::new(tci::TciClient::connect(&host, port)))
+                    .clone()
+            };
+            self.push_tci_one(&client, notify, c, call, spot);
+        }
+    }
+
+    /// The body of [`Self::push_tci`] for one radio.
+    ///
+    /// Split out so the per-radio spot is built once per address rather than
+    /// once and then cloned: `TciSpot` owns its strings, and every field but
+    /// the callsign is the same for every radio, so building it here keeps
+    /// the loop above about *which* radios and this about *what* is sent.
+    fn push_tci_one(
+        &self,
+        client: &Arc<tci::TciClient>,
+        notify: &NotifyUserConfig,
+        c: &Classification,
+        call: &str,
+        spot: &Spot,
+    ) {
         client.spot(&tci::TciSpot {
             callsign: call.to_string(),
             // TCI wants whole hertz. `frequency_mhz` is the parsed kHz over
