@@ -180,9 +180,14 @@
     // The classifier's own order, so this list reads like every other mode
     // list in the app rather than however the states happened to arrive.
     const ORDER = ['CW', 'PHONE', 'DATA'];
-    return [...byMode]
+    const modes = [...byMode]
       .map(([mode, states]) => ({ mode, states }))
       .sort((a, b) => ORDER.indexOf(a.mode) - ORDER.indexOf(b.mode));
+    // Mixed leads: it is the same question — which states do I still want —
+    // asked without a mode, and it belongs beside its own endorsements
+    // rather than stranded as a line in the summary card.
+    const mixed = station?.award_stats?.was_missing ?? [];
+    return (mixed.length ? [{ mode: 'Mixed', states: mixed }] : []).concat(modes);
   });
 </script>
 
@@ -268,12 +273,7 @@
             </div>
           {/if}
         </dl>
-        {#if isChased('was') && station.award_stats.was_missing.length && station.award_stats.was_missing.length < 50}
-          <p class="hint">
-            Missing states:
-            <span class="mono">{station.award_stats.was_missing.join(' ')}</span>
-          </p>
-        {/if}
+
       </div>
 
       {#if isChased('was')}
@@ -316,7 +316,10 @@
                 {/each}
               </dl>
             {:else}
-              <p class="hint">Triple Play complete — all fifty states in all three modes.</p>
+              <p class="hint">
+                Nothing outstanding — all fifty states, mixed and in all
+                three modes.
+              </p>
             {/if}
           {:else}
             <!-- The mode axis arrived in 2.18.0 and is filled by a rebuild.

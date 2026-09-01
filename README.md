@@ -25,6 +25,12 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.19.3** (2026-09-01): **"Still needed" covers mixed WAS too.** The
+per-mode lists were there but the mixed one was stranded as a line in the
+summary card, so the section that answers "which states do I still want"
+did not actually answer it for basic WAS. Mixed now leads that list, and
+the summary stops repeating it.
+
 **v2.19.2** (2026-09-01): **the Awards tab reads as sections.** Its
 subheadings were bold body text wedged against the numbers above them, so
 three groups ran together as one block; they now wear the card heading

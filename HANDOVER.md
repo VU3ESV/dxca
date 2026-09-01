@@ -2,6 +2,14 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-09-01 · **Status:**
+**v2.19.3 — "Still needed" covers mixed WAS too** (Manoj: *"also lacks
+mixed was still needed data"*). The per-mode gaps were listed but the
+mixed list sat in the summary card as "Missing states: …", so the one
+section that answers *which states do I still want* did not answer it for
+basic WAS. Mixed is now the first row of that list and the summary no
+longer repeats it — the same one-place rule the duplicated Triple Play
+score got in 2.19.1.
+
 **v2.19.2 — the Awards tab reads as sections** (Manoj, on the second look:
 *"still bad"*). The real fault was not spacing but **vocabulary**: `.sub`
 was bold body text at 0.95rem, so "Still needed" and "States per band"
