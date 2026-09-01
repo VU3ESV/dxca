@@ -2,6 +2,20 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-09-01 · **Status:**
+**v2.20.2 — one type scale on the Awards tab** (Manoj: *"each portion has
+different font sizes"*). He was right, and the first fix was wrong: I
+added a `--fs-value` token, when `app.css` states its four-role scale is
+declared once **"so a screen cannot invent a fifth size"**. Data now takes
+the existing `--fs-item`, and the section headings are the plain `<h2>`
+the app already uses for a second heading inside a card — my `.sub` class
+had been re-implementing that badly at a magic 0.62rem. Two dead rules
+(`.sub`, `.tally*`) went with it.
+
+WAZ by-band and by-mode also carry **both** numbers now: unlike WAS, where
+worked and confirmed cannot differ (only LoTW writes states), zones come
+from the ClubLog log and do — his 60M is 26 worked / 24 confirmed, 10M is
+39 / 38, and that gap is the chase.
+
 **v2.20.1 — WAZ gains a mode split and an honest confirmed count.** Manoj:
 *"waz doesnt have modewise split ... and it doesnt show mixed waz numbers,
 just says all worked, is it confirmed?"* — three faults, and the third was

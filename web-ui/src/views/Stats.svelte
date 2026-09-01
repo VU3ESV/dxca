@@ -310,7 +310,7 @@
           </h2>
 
           {#if wasModeData}
-            <h3 class="sub">By mode</h3>
+            <h2>By mode</h2>
             <dl class="stats">
               {#each station.award_stats.was_by_mode as r (r.key)}
                 <div><dt>{r.key}</dt><dd class="num">{r.confirmed} / 50</dd></div>
@@ -321,7 +321,7 @@
               <!-- BY MODE, not by state. Fifty state chips each listing three
                    modes is a wall you cannot read; three lines you can scan
                    for the mode you are actually operating is the same fact. -->
-              <h3 class="sub">Still needed</h3>
+              <h2>Still needed</h2>
               <dl class="needlist">
                 {#each tpNeeded as n (n.mode)}
                   <dt>{n.mode}</dt>
@@ -346,7 +346,7 @@
           {/if}
 
           {#if station.award_stats.was_by_band.length}
-            <h3 class="sub">By band</h3>
+            <h2>By band</h2>
             <dl class="stats">
               {#each station.award_stats.was_by_band as r (r.key)}
                 <div><dt>{r.key}</dt><dd class="num">{r.confirmed}</dd></div>
@@ -374,14 +374,22 @@
               </span>
             </HelpTip>
           </h2>
-          <h3 class="sub">By mode</h3>
+          <!-- Worked AND confirmed, because for zones the two genuinely
+               differ: they come from the ClubLog log, where a QSO can be
+               made and never QSLed. (The WAS card shows one number for the
+               opposite reason — a state only ever arrives already
+               confirmed.) The gap between them is the chase. -->
+          <h2>By mode <span class="subnote">worked / confirmed</span></h2>
           <dl class="stats">
             {#each station.award_stats.waz_by_mode as r (r.key)}
-              <div><dt>{r.key}</dt><dd class="num">{r.confirmed} / 40</dd></div>
+              <div>
+                <dt>{r.key}</dt>
+                <dd class="num">{r.worked} / <span class="ok-num">{r.confirmed}</span></dd>
+              </div>
             {/each}
           </dl>
 
-          <h3 class="sub">Still needed</h3>
+          <h2>Still needed</h2>
           {#if wazNeeded.length}
             <!-- Confirmed-wise, like the counts above it: an award is
                  claimed on confirmations, so a worked-but-unconfirmed zone
@@ -400,10 +408,13 @@
           {/if}
 
           {#if station.award_stats.waz_by_band.length}
-            <h3 class="sub">By band</h3>
+            <h2>By band <span class="subnote">worked / confirmed</span></h2>
             <dl class="stats">
               {#each station.award_stats.waz_by_band as r (r.key)}
-                <div><dt>{r.key}</dt><dd class="num">{r.confirmed}</dd></div>
+                <div>
+                  <dt>{r.key}</dt>
+                  <dd class="num">{r.worked} / <span class="ok-num">{r.confirmed}</span></dd>
+                </div>
               {/each}
             </dl>
           {/if}
@@ -882,37 +893,21 @@
     color: var(--muted);
   }
 
+  /* --- One scale, not one per section ---------------------------------
+     Counts sat at 1.05rem, the mono lists at the body's 1rem and table
+     cells at whatever they inherited, so reading down the tab each block
+     looked like a different document. Everything that is DATA now takes
+     `--fs-item`, the size app.css already defines for exactly that, and
+     every section heading is the plain `<h2>` the rest of the app uses
+     for a second heading inside a card. No new sizes: the stylesheet
+     declares four roles and says a screen must not invent a fifth. */
   .stats dd {
     margin: 0.1rem 0 0;
-    font-size: 1.05rem;
+    font-size: var(--fs-item);
   }
 
   .stats dd.num {
     font-variant-numeric: tabular-nums;
-  }
-
-  /* The card's own heading vocabulary — uppercase, letterspaced, muted, the
-     same as `.rail-head` and the card titles. It was bold body text at
-     0.95rem, which read as a sentence in the middle of the numbers rather
-     than as a divider between sections. The rule and the space above it are
-     what actually separate the three groups. */
-  .sub {
-    margin: 1.3rem 0 0.5rem;
-    padding-top: 0.9rem;
-    border-top: 1px solid var(--border);
-    font-size: 0.62rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.11em;
-    color: var(--muted);
-  }
-
-  /* The first section in a card needs the space but not the rule — there is
-     nothing above it to divide from. */
-  .sub:first-of-type {
-    border-top: none;
-    padding-top: 0;
-    margin-top: 0.9rem;
   }
 
   /* One row per mode: the label in the gutter, the states wrapping beside
@@ -936,12 +931,14 @@
 
   .needlist dd {
     margin: 0;
+    font-size: var(--fs-item);
     line-height: 1.6;
     word-spacing: 0.15em;
   }
 
   .slices {
     width: auto;
+    font-size: var(--fs-item);
     font-variant-numeric: tabular-nums;
   }
 
@@ -1044,14 +1041,6 @@
      matching frame is never touched. */
   .embed iframe.flip {
     filter: invert(1) hue-rotate(180deg);
-  }
-
-  /* Sits between the card title and what it describes, so it takes the gap
-     rather than adding one. */
-  .sub {
-    margin: -0.35rem 0 0.7rem;
-    line-height: 1.45;
-    max-width: 34rem;
   }
 
   p {

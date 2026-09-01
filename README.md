@@ -25,6 +25,15 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.20.2** (2026-09-01): **one type scale on the Awards tab, and WAZ shows
+worked / confirmed everywhere.** Each section had grown its own size — counts
+at 1.05rem, mono lists at the body size, table cells at whatever they
+inherited — so the page read as several documents. Everything that is data
+now takes `--fs-item`, the size the stylesheet already defines for it, and
+every section heading is the plain `<h2>` the rest of the app uses inside a
+card. The WAZ by-band and by-mode rows carry **both** numbers, because for
+zones they genuinely differ.
+
 **v2.20.1** (2026-09-01): **WAZ gains a mode split, and says whether it is
 confirmed.** A third scope — **Per mode** — chases each zone in CW, Phone
 and Digital, the WAZ counterpart of Triple Play. The card now shows zones
