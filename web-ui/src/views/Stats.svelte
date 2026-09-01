@@ -276,9 +276,8 @@
             <span class="para">
               The awards ticked under <b>Settings › My station › Awards</b>
               — only those show here. Worked comes from your ClubLog log;
-              <b>confirmed needs the LoTW credentials</b> on the ClubLog
-              account page, because ClubLog's export carries no state, island
-              or QSL detail.
+              <b>confirmed needs the login on LoTW account</b>, because
+              ClubLog's export carries no state, island or QSL detail.
             </span>
             <span class="para">
               <b>VUCC</b> counts 4-character grid squares per band, 50 MHz

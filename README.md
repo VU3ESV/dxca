@@ -25,6 +25,10 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.17.1** (2026-09-01): **ClubLog and LoTW are separate settings pages** —
+two accounts at two organisations, and the LoTW login was easy to miss as a
+footnote under the ClubLog form.
+
 **v2.17.0** (2026-09-01): **awards beyond DXCC, and a settings page to pick
 them.** **IOTA**, **WAS** and **VUCC** each get a New/`?` level pair, switched
 on under **Settings › My station › Awards** — and an award you have not ticked
@@ -691,10 +695,11 @@ What each level runs on, spot side:
 Log side, **worked** comes from your ClubLog download: grids ride its
 `GRIDSQUARE` field; states and islands appear only if your uploads carried
 them. **Confirmed** is where LoTW comes in: ClubLog's export carries no
-state, island or QSL detail at all, so the ClubLog account page takes an
-optional **LoTW username and password** — your LoTW QSL report is then
-merged at every log refresh (downloaded weekly, cached in `data/`), and it
-is the authoritative source for confirmed states, grids and islands.
+state, island or QSL detail at all, so **Settings › My station › LoTW
+account** takes an optional **LoTW website login** — your LoTW QSL report
+is then merged at every log refresh (downloaded weekly, cached in
+`data/`), and it is the authoritative source for confirmed states, grids
+and islands.
 Totals live on **Stats › My ClubLog** — an Awards card showing only what
 you chase: IOTA and WAS counts with the missing-states chase list, and
 grids per VUCC band.

@@ -2,6 +2,13 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-09-01 · **Status:**
+**v2.17.1 — ClubLog and LoTW are separate settings pages** (Manoj, same
+day: *"my clublog and my lotw to be different tabs"*). Two accounts at two
+organisations; the LoTW login was a footnote under the ClubLog form and
+easy to miss. **UI split only** — both pages still edit the one
+`clublog_json` row and both write it back whole, so a partial PUT cannot
+blank the other's credentials. No schema change, deliberately.
+
 **v2.17.0 — awards beyond DXCC, and a settings page to pick them.** IOTA,
 WAS and VUCC each get a New/`?` level pair, switched on under **Settings ›
 My station › Awards**; an award left unticked adds no control anywhere, so

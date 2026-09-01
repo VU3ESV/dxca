@@ -1,6 +1,11 @@
 <script lang="ts">
   // Settings › My station › ClubLog account — the credentials that fetch
-  // this account's log, ClubLog and LoTW both.
+  // this account's log.
+  //
+  // The LoTW login moved to its own page on 2026-09-01 (Manoj: "my clublog
+  // and my lotw to be different tabs") — two accounts at two organisations.
+  // Both pages still edit ONE stored row, so both load the whole object and
+  // write it back whole; see the note on LotwAccount.svelte.
   //
   // The alert ladder lived on this page from 2026-08-29 to 2026-09-01 (the
   // classifier gate reads the log these credentials fetch, so the pairing
@@ -108,32 +113,14 @@
         <option value={hours}>{label}</option>
       {/each}
     </select>
-    <span class="label">
-      LoTW username
-      <HelpTip label="LoTW username">
-        <span class="para">
-          Optional, for the awards on <b>Settings › My station › Awards</b>:
-          your LoTW QSL report is the one source that says which state, grid
-          and island your confirmations came from — ClubLog's export cannot
-          carry those fields.
-        </span>
-        <span class="para">
-          Your LoTW <b>website</b> login, sent only to lotw.arrl.org, stored
-          like the ClubLog credentials above (README §Secrets). Leave both
-          blank and the chased awards track worked-only.
-        </span>
-      </HelpTip>
-    </span>
-    <input bind:value={cfg.lotw_login} autocapitalize="characters" />
-    <span class="label">LoTW password</span>
-    <input type="password" bind:value={cfg.lotw_password} />
   </div>
 
   <!-- The alert ladder is on Settings › Awards; a one-line pointer beats a
        page of checkboxes here. -->
   <p class="hint">
     What this log is allowed to flag — the alert ladder and the awards you
-    chase — lives under <b>Awards</b> in this rail.
+    chase — lives under <b>Awards</b> in this rail. Your <b>LoTW</b> login
+    is its own page there too.
   </p>
 
   <div class="actions">

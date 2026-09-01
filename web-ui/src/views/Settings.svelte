@@ -11,6 +11,7 @@
   // has: is this mine, is this the server's, or is this about who may log in.
   import Users from './Users.svelte';
   import ClubLogAccount from './settings/ClubLogAccount.svelte';
+  import LotwAccount from './settings/LotwAccount.svelte';
   import AwardSettings from './settings/AwardSettings.svelte';
   import Station from './settings/Station.svelte';
   import Telegram from './settings/Telegram.svelte';
@@ -32,7 +33,10 @@
       admin: false,
       items: [
         { key: 'clublog', label: 'ClubLog account',
-          find: 'clublog credentials email app password callsign log download refresh auto-refresh api lotw username' },
+          find: 'clublog credentials email app password callsign log download refresh auto-refresh api matrix' },
+        { key: 'lotw', label: 'LoTW account',
+          find: 'lotw logbook of the world arrl login username password qsl report confirmed confirmation '
+              + 'state grid island award was vucc iota credentials' },
         // The whole alert ladder lives here — DXCC's classic eight and the
         // chaseable awards — so every level word finds this page.
         { key: 'awards', label: 'Awards',
@@ -142,6 +146,8 @@
   <div class="page narrow settings-content">
     {#if tab === 'clublog'}
       <ClubLogAccount />
+    {:else if tab === 'lotw'}
+      <LotwAccount />
     {:else if tab === 'awards'}
       <AwardSettings />
     {:else if tab === 'station'}

@@ -146,9 +146,9 @@
         </span>
         <span class="para">
           <b>Worked</b> comes from your ClubLog log. <b>Confirmed</b> needs
-          the LoTW username and password on <b>ClubLog account</b> —
-          ClubLog's export carries no state, island or QSL detail, and your
-          LoTW QSL report is what does.
+          the login on <b>LoTW account</b> — ClubLog's export carries no
+          state, island or QSL detail, and your LoTW QSL report is what
+          does.
         </span>
       </HelpTip>
     </h2>
