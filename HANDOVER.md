@@ -44,8 +44,8 @@ My station › Awards**; an award left unticked adds no control anywhere, so
 the Spots and Alerts screens of a non-chaser are unchanged. Also in the
 release: the confirmation-path gate on the `?` levels, the TCI (ExpertSDR3)
 destination with its reconnect defect fixed, and the ClubLog embed
-following the app's appearance. **v2.17.0, v2.17.1 and v2.17.2 all released 2026-09-01** (tag + GitHub
-release + Windows zip each), and **the whole fleet is on v2.17.2** —
+following the app's appearance. **v2.17.0 through v2.17.3 all released 2026-09-01** (tag + GitHub release
++ Windows zip each), and **the whole fleet is on v2.17.3** —
 deployed and verified the same day, every host answering with its nodes
 live:
 
