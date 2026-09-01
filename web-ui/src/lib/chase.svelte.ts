@@ -32,6 +32,8 @@ export function loadChase(): Promise<void> {
         vucc: !!(c.alert_new_grid || c.alert_unconf_grid),
         was: !!(c.alert_new_state || c.alert_unconf_state),
         iota: !!(c.alert_new_iota || c.alert_unconf_iota),
+        waz: !!(c.alert_new_zone || c.alert_unconf_zone),
+        marathon: !!c.alert_marathon,
       };
     }
     state.loaded = true;

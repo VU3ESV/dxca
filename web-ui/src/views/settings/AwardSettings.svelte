@@ -44,6 +44,11 @@
   };
 
   // The chaseable awards: their level pair, and what each runs on.
+  const WAZ_SCOPES: [string, string, string][] = [
+    ['mixed', 'Mixed', 'Any band — basic WAZ. A zone you have worked is done.'],
+    ['band', 'Per band', 'Each zone on each band (5-band WAZ). A worked zone still alerts on a band you are missing.'],
+  ];
+
   const AWARDS = [
     {
       id: 'iota', name: 'IOTA', newField: 'alert_new_iota', unconfField: 'alert_unconf_iota',
@@ -59,11 +64,27 @@
           + 'The FCC knows the licence address, so a W6 living in Ohio reads as California.',
     },
     {
+      id: 'waz', name: 'WAZ', newField: 'alert_new_zone', unconfField: 'alert_unconf_zone',
+      newKey: 'newZone', unconfKey: 'unconfZone', newLabel: 'New Zone', unconfLabel: '? Zone',
+      what: 'The forty CQ zones. Zones come from your log’s own CQZ field, which ClubLog does '
+          + 'export — so unlike WAS and IOTA this one needs no LoTW report. For US calls the zone '
+          + 'is derived from the FCC state, because cty.xml answers 5 for the whole country.',
+    },
+    {
       id: 'vucc', name: 'VUCC', newField: 'alert_new_grid', unconfField: 'alert_unconf_grid',
       newKey: 'newGrid', unconfKey: 'unconfGrid', newLabel: 'New Grid', unconfLabel: '? Grid',
       what: '4-character grid squares, per band, 50 MHz and up only — the ARRL rule. The grid '
           + 'comes from the cluster comment or an FT8 CQ; RR73 is always a sign-off, never a square.',
     },
+  ];
+
+  // What "a new state" means — the WAS you are actually chasing. Not a
+  // display preference: it changes what ALERTS. Chasing Triple Play has to
+  // wake you for Ohio on phone even though Ohio is long worked on CW.
+  const WAS_SCOPES: [string, string, string][] = [
+    ['mixed', 'Mixed', 'Any band, any mode — basic WAS. A state you have worked is done.'],
+    ['triple', 'Triple Play', 'Each state in CW, Phone and Digital. A worked state still alerts in a mode you are missing.'],
+    ['band', 'Per band', 'Each state on each band. A worked state still alerts on a band you are missing.'],
   ];
 
   let cfg = $state<any>(null);
@@ -99,6 +120,7 @@
       message = 'Saved.';
       // Every open rail re-filters immediately — no reload.
       for (const a of AWARDS) setChase(a.id, !!chasing(a));
+      setChase('marathon', !!cfg.alert_marathon);
     } else error = r.json?.error ?? `HTTP ${r.status}`;
   }
 
@@ -176,6 +198,48 @@
               <span class="hint">worked, not confirmed</span>
             </label>
           </div>
+          {#if a.id === 'was'}
+            <!-- The scope sits inside the WAS block because it is only ever
+                 a WAS question, and only while WAS is being chased. -->
+            <div class="scope">
+              <span class="hint scopelabel">Chasing</span>
+              <div class="segmented" role="group" aria-label="Which WAS">
+                {#each WAS_SCOPES as [key, label, why] (key)}
+                  <button
+                    class:active={(cfg.was_scope ?? 'mixed') === key}
+                    title={why}
+                    onclick={() => (cfg.was_scope = key)}>{label}</button
+                  >
+                {/each}
+              </div>
+              <p class="hint why">
+                {WAS_SCOPES.find(([k]) => k === (cfg.was_scope ?? 'mixed'))?.[2]}
+              </p>
+            </div>
+          {/if}
+          {#if a.id === 'waz'}
+            <div class="scope">
+              <span class="hint scopelabel">Chasing</span>
+              <div class="segmented" role="group" aria-label="Which WAZ">
+                {#each WAZ_SCOPES as [key, label, why] (key)}
+                  <button
+                    class:active={(cfg.waz_scope ?? 'mixed') === key}
+                    title={why}
+                    onclick={() => (cfg.waz_scope = key)}>{label}</button
+                  >
+                {/each}
+              </div>
+              <p class="hint why">
+                {WAZ_SCOPES.find(([k]) => k === (cfg.waz_scope ?? 'mixed'))?.[2]}
+              </p>
+            </div>
+          {/if}
+          {#if a.id === 'waz' && s && !s.fcc_calls}
+            <p class="hint">
+              Without the FCC table (Server › Reference data) US stations all
+              resolve to zone 5 — zones 3 and 4 will never be flagged.
+            </p>
+          {/if}
           {#if a.id === 'was' && s && !s.fcc_calls}
             <p class="warn">
               The FCC call→state table is not on this server yet — State
@@ -193,6 +257,27 @@
         {/if}
       </div>
     {/each}
+
+    <!-- The Marathon is not a New/? pair: it is one question asked of the
+         calendar, so it gets one switch and no scope. -->
+    <div class="award">
+      <label class="chase">
+        <input type="checkbox" bind:checked={cfg.alert_marathon} />
+        <b>DX Marathon</b>
+      </label>
+      <HelpTip label="DX Marathon">
+        <span class="para">
+          Entities and CQ zones worked in the <b>current calendar year</b> —
+          one point each, and it resets every January. No bands, no modes,
+          and no confirmation: the Marathon scores what you worked.
+        </span>
+        <span class="para">
+          That is why it earns its own alert. An entity you worked in 2019
+          is a Marathon point again today, and every other level on the
+          ladder would stay silent on it.
+        </span>
+      </HelpTip>
+    </div>
 
     <div class="actions">
       <button class="primary" onclick={save} disabled={busy}>Save</button>
@@ -244,6 +329,23 @@
 
   .pair .hint {
     margin-left: 0.35rem;
+  }
+
+  /* Indented under the award's own pair, so it reads as a property of WAS
+     rather than a fourth award. */
+  .scope {
+    margin: 0.5rem 0 0 1.55rem;
+  }
+
+  .scopelabel {
+    display: block;
+    margin-bottom: 0.25rem;
+  }
+
+  .scope .why {
+    margin: 0.3rem 0 0;
+    max-width: 34rem;
+    line-height: 1.45;
   }
 
   .warn {

@@ -102,8 +102,21 @@ pub struct AlertConfigOpt {
     pub alert_unconf_grid: bool,
     pub alert_new_state: bool,
     pub alert_unconf_state: bool,
+    /// Which WAS the State levels hunt: mixed, Triple Play, or per band.
+    /// Serde-defaults to mixed, so an account saved before the choice
+    /// existed keeps behaving exactly as it did.
+    #[serde(default)]
+    pub was_scope: dxca_core::classify::WasScope,
     pub alert_new_iota: bool,
     pub alert_unconf_iota: bool,
+    #[serde(default)]
+    pub alert_new_zone: bool,
+    #[serde(default)]
+    pub alert_unconf_zone: bool,
+    #[serde(default)]
+    pub waz_scope: dxca_core::classify::WazScope,
+    #[serde(default)]
+    pub alert_marathon: bool,
 }
 
 impl Default for AlertConfigOpt {
@@ -122,8 +135,13 @@ impl Default for AlertConfigOpt {
             alert_unconf_grid: d.alert_unconf_grid,
             alert_new_state: d.alert_new_state,
             alert_unconf_state: d.alert_unconf_state,
+            was_scope: d.was_scope,
             alert_new_iota: d.alert_new_iota,
             alert_unconf_iota: d.alert_unconf_iota,
+            alert_new_zone: d.alert_new_zone,
+            alert_unconf_zone: d.alert_unconf_zone,
+            waz_scope: d.waz_scope,
+            alert_marathon: d.alert_marathon,
         }
     }
 }
@@ -143,8 +161,13 @@ impl From<&AlertConfigOpt> for AlertConfig {
             alert_unconf_grid: o.alert_unconf_grid,
             alert_new_state: o.alert_new_state,
             alert_unconf_state: o.alert_unconf_state,
+            was_scope: o.was_scope,
             alert_new_iota: o.alert_new_iota,
             alert_unconf_iota: o.alert_unconf_iota,
+            alert_new_zone: o.alert_new_zone,
+            alert_unconf_zone: o.alert_unconf_zone,
+            waz_scope: o.waz_scope,
+            alert_marathon: o.alert_marathon,
         }
     }
 }
@@ -270,6 +293,12 @@ pub struct NotifyUserConfig {
     pub notify_new_iota: bool,
     #[serde(default = "default_true")]
     pub notify_unconf_iota: bool,
+    #[serde(default = "default_true")]
+    pub notify_new_zone: bool,
+    #[serde(default = "default_true")]
+    pub notify_unconf_zone: bool,
+    #[serde(default = "default_true")]
+    pub notify_marathon: bool,
     // docs/AWARDS.md phase 1: the confirmation-path gate on the four `?`
     // levels. An unconfirmed entity otherwise pings for every spot —
     // including the very station that never QSLed the first QSO. Some
@@ -447,6 +476,9 @@ impl Default for NotifyUserConfig {
             notify_unconf_state: true,
             notify_new_iota: true,
             notify_unconf_iota: true,
+            notify_new_zone: true,
+            notify_unconf_zone: true,
+            notify_marathon: true,
             notify_unconf_skip_worked: false,
             notify_unconf_lotw_only: false,
             notify_bands: Vec::new(),
@@ -556,6 +588,9 @@ impl NotifyUserConfig {
             AlertLevel::UnconfState => self.notify_unconf_state,
             AlertLevel::NewIota => self.notify_new_iota,
             AlertLevel::UnconfIota => self.notify_unconf_iota,
+            AlertLevel::NewZone => self.notify_new_zone,
+            AlertLevel::UnconfZone => self.notify_unconf_zone,
+            AlertLevel::Marathon => self.notify_marathon,
             AlertLevel::Worked | AlertLevel::None => false,
         }
     }

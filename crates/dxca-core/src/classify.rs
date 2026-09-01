@@ -55,6 +55,15 @@ pub enum AlertLevel {
     UnconfState,
     #[serde(rename = "unconfIOTA")]
     UnconfIota,
+    #[serde(rename = "newZone")]
+    NewZone,
+    #[serde(rename = "unconfZone")]
+    UnconfZone,
+    /// DX Marathon: an entity or zone not yet worked **this calendar
+    /// year**. No `?` twin — the Marathon scores what you worked, so
+    /// there is no confirmation gap for it to chase.
+    #[serde(rename = "marathon")]
+    Marathon,
 }
 
 impl AlertLevel {
@@ -65,16 +74,19 @@ impl AlertLevel {
     /// New DXCC that is also a New Grid flags as New DXCC): the award axes
     /// rank above the generic band/mode rungs because they are named gaps
     /// in a named award, and below the entity itself.
-    pub const FLAGGABLE: [AlertLevel; 14] = [
+    pub const FLAGGABLE: [AlertLevel; 17] = [
         AlertLevel::NewDxcc,
         AlertLevel::NewIota,
+        AlertLevel::NewZone,
         AlertLevel::NewState,
         AlertLevel::NewGrid,
+        AlertLevel::Marathon,
         AlertLevel::NewBand,
         AlertLevel::NewMode,
         AlertLevel::NewSlot,
         AlertLevel::UnconfDxcc,
         AlertLevel::UnconfIota,
+        AlertLevel::UnconfZone,
         AlertLevel::UnconfState,
         AlertLevel::UnconfGrid,
         AlertLevel::UnconfBand,
@@ -105,6 +117,7 @@ impl AlertLevel {
                 | AlertLevel::UnconfGrid
                 | AlertLevel::UnconfState
                 | AlertLevel::UnconfIota
+                | AlertLevel::UnconfZone
         )
     }
 
@@ -117,6 +130,8 @@ impl AlertLevel {
             AlertLevel::NewGrid | AlertLevel::UnconfGrid => Some("vucc"),
             AlertLevel::NewState | AlertLevel::UnconfState => Some("was"),
             AlertLevel::NewIota | AlertLevel::UnconfIota => Some("iota"),
+            AlertLevel::NewZone | AlertLevel::UnconfZone => Some("waz"),
+            AlertLevel::Marathon => Some("marathon"),
             _ => None,
         }
     }
@@ -140,6 +155,9 @@ impl AlertLevel {
             AlertLevel::UnconfGrid => "unconfGrid",
             AlertLevel::UnconfState => "unconfState",
             AlertLevel::UnconfIota => "unconfIOTA",
+            AlertLevel::NewZone => "newZone",
+            AlertLevel::UnconfZone => "unconfZone",
+            AlertLevel::Marathon => "marathon",
         }
     }
 
@@ -162,6 +180,42 @@ impl AlertLevel {
             AlertLevel::UnconfGrid => "? Grid",
             AlertLevel::UnconfState => "? State",
             AlertLevel::UnconfIota => "? IOTA",
+            AlertLevel::NewZone => "New Zone",
+            AlertLevel::UnconfZone => "? Zone",
+            AlertLevel::Marathon => "Marathon",
+        }
+    }
+}
+
+/// **What counts as a new state** — the WAS award you are actually chasing.
+///
+/// The same New/? levels serve all three; what changes is the question they
+/// ask, so picking a scope adds no rows to any ladder or chip group.
+///
+/// This is a *chasing* setting, not a reporting one. An operator after
+/// Triple Play needs to be told about Ohio on phone even though Ohio is
+/// long since worked on CW — under `Mixed` that spot is silent, which is
+/// correct for basic WAS and useless for the award they are chasing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum WasScope {
+    /// Basic WAS: the state on any band, in any mode.
+    #[serde(rename = "mixed")]
+    #[default]
+    Mixed,
+    /// **Triple Play**: the state in each of CW, Phone and Digital.
+    #[serde(rename = "triple")]
+    TriplePlay,
+    /// Band endorsements: the state on each band.
+    #[serde(rename = "band")]
+    PerBand,
+}
+
+impl WasScope {
+    pub fn key(self) -> &'static str {
+        match self {
+            WasScope::Mixed => "mixed",
+            WasScope::TriplePlay => "triple",
+            WasScope::PerBand => "band",
         }
     }
 }
@@ -189,8 +243,31 @@ pub struct AlertConfig {
     pub alert_unconf_grid: bool,
     pub alert_new_state: bool,
     pub alert_unconf_state: bool,
+    /// Which WAS the State levels are hunting — see [`WasScope`].
+    #[serde(default)]
+    pub was_scope: WasScope,
     pub alert_new_iota: bool,
     pub alert_unconf_iota: bool,
+    pub alert_new_zone: bool,
+    pub alert_unconf_zone: bool,
+    /// Which WAZ the Zone levels hunt: mixed, or per band (5-band WAZ).
+    /// The mode scope WAS has does not apply — WAZ has no mode award.
+    #[serde(default)]
+    pub waz_scope: WazScope,
+    /// The DX Marathon: an entity or zone not yet worked this year.
+    pub alert_marathon: bool,
+}
+
+/// **What counts as a new zone** — the WAZ variant being chased.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum WazScope {
+    /// Basic WAZ: the zone on any band.
+    #[serde(rename = "mixed")]
+    #[default]
+    Mixed,
+    /// Five-band WAZ and its kin: the zone on each band.
+    #[serde(rename = "band")]
+    PerBand,
 }
 
 impl Default for AlertConfig {
@@ -208,8 +285,13 @@ impl Default for AlertConfig {
             alert_unconf_grid: false,
             alert_new_state: false,
             alert_unconf_state: false,
+            was_scope: WasScope::Mixed,
             alert_new_iota: false,
             alert_unconf_iota: false,
+            alert_new_zone: false,
+            alert_unconf_zone: false,
+            waz_scope: WazScope::Mixed,
+            alert_marathon: false,
         }
     }
 }
@@ -225,6 +307,12 @@ pub struct AwardRefs<'a> {
     pub iota: Option<&'a str>,
     /// Two-letter state from the FCC table, already normalized.
     pub state: Option<&'a str>,
+    /// The CQ zone the spot resolves to — WAZ and the Marathon.
+    pub zone: Option<i32>,
+    /// The DXCC entity, for the Marathon's entity half. Supplied even
+    /// though `classify_spot` resolves one itself, because the Marathon
+    /// needs it beside the zone and the year in one place.
+    pub year: Option<i32>,
 }
 
 impl AwardRefs<'static> {
@@ -232,6 +320,8 @@ impl AwardRefs<'static> {
         grid: None,
         iota: None,
         state: None,
+        zone: None,
+        year: None,
     };
 }
 
@@ -321,7 +411,7 @@ impl AlertClassifier<'_> {
 
         // Award candidates need only a band, not an entity — a call the
         // resolver cannot place can still hand you a grid square.
-        let award = band.and_then(|b| self.best_award(refs, b, dxcc_id));
+        let award = band.and_then(|b| self.best_award(refs, b, normalized_mode, dxcc_id));
 
         let (Some(dxcc), Some(bnd)) = (dxcc_id, band) else {
             let (level, award_ref) = match award {
@@ -361,6 +451,7 @@ impl AlertClassifier<'_> {
         &self,
         refs: &AwardRefs,
         band: &str,
+        mode: Option<&str>,
         dxcc_id: Option<i32>,
     ) -> Option<(AlertLevel, String)> {
         let mut cands: Vec<(AlertLevel, String)> = Vec::new();
@@ -396,13 +487,90 @@ impl AlertClassifier<'_> {
             .filter(|_| dxcc_id.is_some_and(crate::awards::counts_for_was))
             .and_then(crate::awards::normalize_state)
         {
-            let raw = match self.matrix.by_state.get(st) {
-                Some(s) if s.is_confirmed() => AlertLevel::Worked,
-                Some(_) => AlertLevel::UnconfState,
-                None => AlertLevel::NewState,
+            let have = self.matrix.by_state.get(st);
+            // The scope decides what "new" means. Triple Play and the band
+            // endorsements need the state ON THIS SLICE, so a state long
+            // since worked is still a catch in a mode or on a band it is
+            // missing from — which is the entire reason to chase them.
+            let raw = match self.config.was_scope {
+                WasScope::Mixed => match have {
+                    Some(s) if s.is_confirmed() => AlertLevel::Worked,
+                    Some(_) => AlertLevel::UnconfState,
+                    None => AlertLevel::NewState,
+                },
+                // No mode means no honest answer for Triple Play — a spot
+                // whose mode we had to guess must not claim a slot in an
+                // award counted in modes. Same rule the DXCC ladder follows.
+                WasScope::TriplePlay => match mode {
+                    None => AlertLevel::Worked,
+                    Some(m) => match have {
+                        Some(s) if s.confirmed_modes.contains(m) => AlertLevel::Worked,
+                        Some(s) if s.modes.contains(m) => AlertLevel::UnconfState,
+                        _ => AlertLevel::NewState,
+                    },
+                },
+                WasScope::PerBand => match have {
+                    Some(s) if s.confirmed_bands.contains(band) => AlertLevel::Worked,
+                    Some(s) if s.bands.contains(band) => AlertLevel::UnconfState,
+                    _ => AlertLevel::NewState,
+                },
             };
-            cands.push((raw, st.to_string()));
+            // The key names the slice, so the alert says WHY: "OH CW" for a
+            // Triple Play gap reads very differently from a bare "OH".
+            let key = match (self.config.was_scope, mode) {
+                (WasScope::TriplePlay, Some(m)) => format!("{st} {m}"),
+                (WasScope::PerBand, _) => format!("{st} {band}"),
+                _ => st.to_string(),
+            };
+            cands.push((raw, key));
         }
+        // WAZ. The zone axis rides ClubLog's own `CQZ`, so unlike states
+        // and islands it is populated for anyone with a log — no
+        // empty-axis guard is needed or wanted here.
+        if let Some(z) = refs.zone.filter(|z| (1..=40).contains(z)) {
+            let have = self.matrix.by_zone.get(&z);
+            let raw = match self.config.waz_scope {
+                WazScope::Mixed => match have {
+                    Some(s) if s.is_confirmed() => AlertLevel::Worked,
+                    Some(_) => AlertLevel::UnconfZone,
+                    None => AlertLevel::NewZone,
+                },
+                WazScope::PerBand => match have {
+                    Some(s) if s.confirmed_bands.contains(band) => AlertLevel::Worked,
+                    Some(s) if s.bands.contains(band) => AlertLevel::UnconfZone,
+                    _ => AlertLevel::NewZone,
+                },
+            };
+            let key = match self.config.waz_scope {
+                WazScope::PerBand => format!("Zone {z} {band}"),
+                WazScope::Mixed => format!("Zone {z}"),
+            };
+            cands.push((raw, key));
+        }
+
+        // DX Marathon: is this entity or zone missing from THIS year? A
+        // lifetime-worked entity is still a Marathon point every January,
+        // which is exactly what makes the award worth its own level.
+        if let Some(year) = refs.year {
+            let this_year = self.matrix.by_year.get(&year);
+            let entity_new =
+                dxcc_id.is_some_and(|d| !this_year.is_some_and(|y| y.entities.contains(&d)));
+            let zone_new = refs
+                .zone
+                .filter(|z| (1..=40).contains(z))
+                .is_some_and(|z| !this_year.is_some_and(|y| y.zones.contains(&z)));
+            if entity_new || zone_new {
+                // Name the half that is actually missing — "Zone 22" and
+                // "INDIA" send you to the radio for different reasons.
+                let key = match (entity_new, zone_new, refs.zone) {
+                    (true, true, Some(z)) => format!("entity + zone {z}"),
+                    (false, true, Some(z)) => format!("zone {z}"),
+                    _ => "entity".to_string(),
+                };
+                cands.push((AlertLevel::Marathon, key));
+            }
+        }
+
         if let Some(r) = refs
             .iota
             .filter(|_| !self.matrix.by_iota.is_empty())
@@ -505,6 +673,9 @@ impl AlertClassifier<'_> {
             AlertLevel::UnconfState => self.config.alert_unconf_state,
             AlertLevel::NewIota => self.config.alert_new_iota,
             AlertLevel::UnconfIota => self.config.alert_unconf_iota,
+            AlertLevel::NewZone => self.config.alert_new_zone,
+            AlertLevel::UnconfZone => self.config.alert_unconf_zone,
+            AlertLevel::Marathon => self.config.alert_marathon,
             AlertLevel::Worked | AlertLevel::None => return level,
         };
         if keep { level } else { AlertLevel::Worked }
@@ -550,6 +721,7 @@ mod tests {
                 is_exact: false,
                 start_unix: None,
                 end_unix: None,
+                cq_zone: None,
             },
             PrefixRule {
                 call: "K".into(),
@@ -557,6 +729,7 @@ mod tests {
                 is_exact: false,
                 start_unix: None,
                 end_unix: None,
+                cq_zone: None,
             },
         ];
         let mut r = DxccResolver::default();
@@ -743,6 +916,142 @@ mod tests {
     /// With no state data at all — no LoTW report, or one that came back
     /// empty — every state on the air would flag as new. Silence is the
     /// honest answer; the award starts working the moment the log does.
+    /// WAZ counts the zone, and the Marathon counts the same contact again
+    /// for the calendar year — the two awards this pair of levels serves.
+    #[test]
+    fn waz_counts_zones_and_the_marathon_counts_this_year() {
+        let mut cfg = awards_config();
+        cfg.alert_new_zone = true;
+        cfg.alert_unconf_zone = true;
+        cfg.alert_marathon = true;
+
+        let mut m = matrix();
+        // Zone 22 confirmed on 20M; nothing at all in zone 25.
+        m.record_zone(22, "20M", Some("DATA"), true);
+        // India worked this year, but the zone was not.
+        m.record_marathon(2026, Some(324), None);
+
+        let at = |cfg: &AlertConfig, call: &str, zone: i32, year: Option<i32>| {
+            let r = resolver();
+            AlertClassifier {
+                matrix: &m,
+                resolver: &r,
+                config: cfg,
+            }
+            .classify_spot(
+                call,
+                14.074,
+                "FT8",
+                &AwardRefs {
+                    zone: Some(zone),
+                    year,
+                    ..AwardRefs::NONE
+                },
+            )
+        };
+
+        // A zone never worked is a New Zone.
+        assert_eq!(at(&cfg, "JA1ABC", 25, None).level, AlertLevel::NewZone);
+        // Zone 22 is confirmed, so WAZ is quiet — but the MARATHON still
+        // wants it, because zone 22 is missing from this year.
+        let c = at(&cfg, "VU2XYZ", 22, Some(2026));
+        assert_eq!(c.level, AlertLevel::Marathon);
+        assert_eq!(c.award_ref.as_deref(), Some("zone 22"));
+        // Same spot with the Marathon switched off falls silent.
+        let mut no_marathon = cfg.clone();
+        no_marathon.alert_marathon = false;
+        assert_ne!(
+            at(&no_marathon, "VU2XYZ", 22, Some(2026)).level,
+            AlertLevel::Marathon
+        );
+        // A different YEAR has nothing recorded, so the entity counts too.
+        assert_eq!(
+            at(&cfg, "VU2XYZ", 22, Some(2027)).award_ref.as_deref(),
+            Some("entity + zone 22")
+        );
+
+        // Per-band WAZ: zone 22 is held on 20M and missing on 40M.
+        let mut per_band = cfg.clone();
+        per_band.waz_scope = WazScope::PerBand;
+        per_band.alert_marathon = false;
+        let r = resolver();
+        let on_40 = AlertClassifier {
+            matrix: &m,
+            resolver: &r,
+            config: &per_band,
+        }
+        .classify_spot(
+            "VU2XYZ",
+            7.074,
+            "FT8",
+            &AwardRefs {
+                zone: Some(22),
+                ..AwardRefs::NONE
+            },
+        );
+        assert_eq!(on_40.level, AlertLevel::NewZone, "40M is missing");
+        assert_eq!(on_40.award_ref.as_deref(), Some("Zone 22 40M"));
+    }
+
+    /// The scope is a CHASING setting: it changes what counts as new, so a
+    /// state long since worked is still a catch in a mode or on a band it
+    /// is missing from. That is the whole reason to pick one.
+    #[test]
+    fn the_was_scope_decides_what_a_new_state_means() {
+        let mut m = matrix();
+        m.record(291, "20M", "DATA", "K9XX", true);
+        // Ohio: confirmed on 20M in DATA, and nowhere else.
+        m.record_state("OH", "20M", Some("DATA"), true);
+
+        let refs = AwardRefs {
+            state: Some("OH"),
+            ..AwardRefs::NONE
+        };
+        // The mode is passed explicitly: `classify_refs` hardcodes FT8, and
+        // the whole point here is that the mode decides the answer.
+        let at = |cfg: &AlertConfig, mhz: f64, mode: &str| {
+            let r = resolver();
+            AlertClassifier {
+                matrix: &m,
+                resolver: &r,
+                config: cfg,
+            }
+            .classify_spot("K1ABC", mhz, mode, &refs)
+            .level
+        };
+
+        // Mixed: worked is worked, whatever the band or mode.
+        let mut mixed = awards_config();
+        mixed.was_scope = WasScope::Mixed;
+        assert_ne!(at(&mixed, 14.074, "FT8"), AlertLevel::NewState);
+        assert_ne!(at(&mixed, 7.020, "CW"), AlertLevel::NewState, "still done");
+
+        // Triple Play: the same state in a mode it lacks IS new.
+        let mut triple = awards_config();
+        triple.was_scope = WasScope::TriplePlay;
+        assert_ne!(
+            at(&triple, 14.074, "FT8"),
+            AlertLevel::NewState,
+            "DATA held"
+        );
+        assert_eq!(
+            at(&triple, 14.020, "CW"),
+            AlertLevel::NewState,
+            "CW missing"
+        );
+        assert_eq!(
+            at(&triple, 14.200, "SSB"),
+            AlertLevel::NewState,
+            "phone missing"
+        );
+
+        // Per band: the same state on a band it lacks is new.
+        let mut band = awards_config();
+        band.was_scope = WasScope::PerBand;
+        assert_ne!(at(&band, 14.074, "FT8"), AlertLevel::NewState, "20M held");
+        assert_eq!(at(&band, 7.074, "FT8"), AlertLevel::NewState, "40M missing");
+    }
+
     #[test]
     fn an_empty_axis_claims_nothing_is_new() {
         let cfg = awards_config();

@@ -82,6 +82,31 @@ pub struct LogMatrix {
     /// IOTA: normalized reference (`AS-003`) → per-band state.
     #[serde(default, rename = "byIota")]
     pub by_iota: HashMap<String, AwardStatus>,
+    /// WAZ: CQ zone 1–40 → per-band/mode state. Fed from the ADIF `CQZ`
+    /// field, which ClubLog's export does carry — so unlike WAS and IOTA
+    /// this axis works without a LoTW report.
+    #[serde(default, rename = "byZone")]
+    pub by_zone: HashMap<i32, AwardStatus>,
+    /// **DX Marathon**: calendar year → the entities and zones worked in
+    /// it. The one axis with a time dimension, because the award resets
+    /// every January — a score, not a lifetime total.
+    #[serde(default, rename = "byYear")]
+    pub by_year: HashMap<i32, MarathonYear>,
+}
+
+/// One calendar year of DX Marathon: entities and zones, no bands, no
+/// modes, and no confirmation — the award scores what you worked.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct MarathonYear {
+    pub entities: HashSet<i32>,
+    pub zones: HashSet<i32>,
+}
+
+impl MarathonYear {
+    /// The Marathon score: one point per entity plus one per zone.
+    pub fn score(&self) -> usize {
+        self.entities.len() + self.zones.len()
+    }
 }
 
 impl LogMatrix {
@@ -209,6 +234,17 @@ impl LogMatrix {
             if let Some(i) = r.iota() {
                 matrix.record_iota(&i, &band, Some(mode_class), confirmed);
             }
+            // WAZ and the Marathon both ride the ADIF `CQZ`, falling back
+            // to what the resolver can say about the call. The Marathon
+            // also needs the YEAR, which is the only axis in this matrix
+            // that has ever cared what date a contact was made.
+            let zone = r.cqz().or_else(|| resolver.zone(&call));
+            if let Some(z) = zone {
+                matrix.record_zone(z, &band, Some(mode_class), confirmed);
+            }
+            if let Some(year) = r.qso_year() {
+                matrix.record_marathon(year, Some(d), zone);
+            }
         }
         (matrix, count, uncredited)
     }
@@ -289,6 +325,38 @@ impl LogMatrix {
             .or_default()
             .record(band, mode, confirmed);
         true
+    }
+
+    /// Record a CQ-zone credit (WAZ). Zones outside 1–40 are refused.
+    pub fn record_zone(
+        &mut self,
+        zone: i32,
+        band: &str,
+        mode: Option<&str>,
+        confirmed: bool,
+    ) -> bool {
+        if !(1..=40).contains(&zone) {
+            return false;
+        }
+        self.by_zone
+            .entry(zone)
+            .or_default()
+            .record(band, mode, confirmed);
+        true
+    }
+
+    /// Record a DX Marathon credit for the year a contact was made.
+    pub fn record_marathon(&mut self, year: i32, dxcc: Option<i32>, zone: Option<i32>) {
+        if dxcc.is_none() && zone.is_none() {
+            return;
+        }
+        let y = self.by_year.entry(year).or_default();
+        if let Some(d) = dxcc {
+            y.entities.insert(d);
+        }
+        if let Some(z) = zone.filter(|z| (1..=40).contains(z)) {
+            y.zones.insert(z);
+        }
     }
 
     /// Record an IOTA credit under the normalized reference.
@@ -426,8 +494,35 @@ impl LogMatrix {
                     .count(),
             })
             .collect();
+        // WAZ: forty zones, and which are missing — the same shape WAS
+        // gets, because it is the same kind of chase.
+        let mut waz_missing: Vec<i32> =
+            (1..=40).filter(|z| !self.by_zone.contains_key(z)).collect();
+        waz_missing.sort_unstable();
+        let waz_by_band = crate::bands::SELECTABLE_BANDS
+            .iter()
+            .map(|b| AwardBreakdown {
+                key: (*b).to_string(),
+                worked: self
+                    .by_zone
+                    .values()
+                    .filter(|s| s.bands.contains(*b))
+                    .count(),
+                confirmed: self
+                    .by_zone
+                    .values()
+                    .filter(|s| s.confirmed_bands.contains(*b))
+                    .count(),
+            })
+            .filter(|r| r.worked > 0)
+            .collect();
         AwardStats {
             vucc,
+            waz_worked: self.by_zone.len(),
+            waz_confirmed: self.by_zone.values().filter(|s| s.is_confirmed()).count(),
+            waz_missing,
+            waz_by_band,
+            marathon: self.marathon_years(),
             was_worked: self.by_state.len(),
             was_confirmed: self.by_state.values().filter(|s| s.is_confirmed()).count(),
             was_missing,
@@ -438,6 +533,24 @@ impl LogMatrix {
             iota_worked: self.by_iota.len(),
             iota_confirmed: self.by_iota.values().filter(|s| s.is_confirmed()).count(),
         }
+    }
+
+    /// Every year the log has Marathon points in, newest first. The award
+    /// runs on the calendar year, so the current one is the live score and
+    /// the rest are history worth keeping in view.
+    pub fn marathon_years(&self) -> Vec<MarathonScore> {
+        let mut out: Vec<MarathonScore> = self
+            .by_year
+            .iter()
+            .map(|(y, m)| MarathonScore {
+                year: *y,
+                entities: m.entities.len(),
+                zones: m.zones.len(),
+                score: m.score(),
+            })
+            .collect();
+        out.sort_by_key(|m| std::cmp::Reverse(m.year));
+        out
     }
 
     /// **ARRL Triple Play**: all fifty states confirmed in each of CW,
@@ -732,6 +845,22 @@ pub struct AwardStats {
     pub triple_play_missing: Vec<TriplePlayGap>,
     pub iota_worked: usize,
     pub iota_confirmed: usize,
+    /// WAZ: forty CQ zones, the missing list, and the per-band breakdown.
+    pub waz_worked: usize,
+    pub waz_confirmed: usize,
+    pub waz_missing: Vec<i32>,
+    pub waz_by_band: Vec<AwardBreakdown>,
+    /// DX Marathon, newest year first.
+    pub marathon: Vec<MarathonScore>,
+}
+
+/// One year's DX Marathon score.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MarathonScore {
+    pub year: i32,
+    pub entities: usize,
+    pub zones: usize,
+    pub score: usize,
 }
 
 #[cfg(test)]
@@ -947,6 +1076,7 @@ mod tests {
                     is_exact: false,
                     start_unix: None,
                     end_unix: None,
+                    cq_zone: None,
                 }],
                 invalid_operations: ops,
             },
@@ -1040,6 +1170,7 @@ mod tests {
             is_exact,
             start_unix: None,
             end_unix: None,
+            cq_zone: None,
         };
         let mut r = crate::dxcc::DxccResolver::default();
         r.load(
@@ -1164,6 +1295,7 @@ mod tests {
             is_exact: false,
             start_unix: None,
             end_unix: None,
+            cq_zone: None,
         };
         let mut r = crate::dxcc::DxccResolver::default();
         r.load(

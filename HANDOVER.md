@@ -2,6 +2,36 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-09-01 · **Status:**
+**v2.19.0 — WAZ, the DX Marathon, and a WAS scope you pick.** Manoj:
+*"awards on stats is not what i want ... i need in settings to select
+whether to chase a WAS triple play or as per band"*, then *"lets roll waz
+and dx marathon"*.
+
+**The correction that matters:** an award variant is a **chasing** setting,
+not a reporting one. `WasScope` (mixed / triple / band) and `WazScope`
+(mixed / band) change what the classifier calls *new*, so a state long
+since worked still alerts in a mode or on a band it is missing from. Same
+levels, same ladder — only the question changes, so no new rows anywhere.
+
+**The zone foundation, which both new awards stand on.** `PrefixRule` was
+parsing cty.xml's `<cqz>` and throwing it away, so zones could only ever
+be entity-level. `DxccResolver::zone()` now walks the same
+exception → prefix → entity ladder `resolve` does: VE7 → 3, VE3 → 4,
+UA9 → 17, UA3 → 16, all verified against the live cty.xml.
+
+**But cty.xml has NO US call-area records** — every US call resolves to the
+entity zone, 5. For a zone award that is fatal: zones 3 and 4 would be
+uncreditable. So `awards::us_zone()` maps state → zone (3 west, 4 middle,
+5 seaboard, AK 1, HI 31) and the server prefers it for US calls, reusing
+the FCC table already loaded for WAS. Without that table, a warning now
+says so on the Awards page rather than letting the award quietly under-report.
+
+**Marathon** is the first axis with a **time dimension** (`by_year`), since
+it resets every January, and the year comes from the *spot's* timestamp
+rather than the clock so a spot processed either side of midnight on 31
+December scores in its own year. It is one level, not a New/? pair: the
+award scores what you worked, so there is no confirmation gap to chase.
+
 **v2.18.0 — WAS endorsements, Triple Play, and Awards as its own Stats
 tab** (Manoj: *"add band wise and mode wise WAS as a new award tab —
 triple play?"*, then *"triple play is WAS in all 3 modes, not band"*).

@@ -25,6 +25,11 @@ pub struct DxccResolver {
     /// active *now*, and a whitelist is a historical record: ZL8X counted in
     /// November 2010 and counts still, even though the rule expired in 2010.
     whitelist: HashMap<i32, Vec<PrefixRule>>,
+    /// Exact-call and prefix CQ-zone overrides, mirroring `exact`/`prefix`.
+    /// Only rules that actually carry a `<cqz>` land here, so a miss falls
+    /// through to the entity's own zone rather than to a wrong number.
+    exact_zone: HashMap<String, i32>,
+    prefix_zone: HashMap<String, i32>,
 }
 
 impl DxccResolver {
@@ -47,6 +52,8 @@ impl DxccResolver {
         self.entities = data.entities;
         self.exact.clear();
         self.prefix.clear();
+        self.exact_zone.clear();
+        self.prefix_zone.clear();
         self.invalid.clear();
         self.whitelist.clear();
         for op in data.invalid_operations {
@@ -66,9 +73,15 @@ impl DxccResolver {
         for rule in data.prefix_rules.iter().filter(|r| r.is_active(now_unix)) {
             if rule.is_exact {
                 self.exact.insert(rule.call.clone(), rule.adif);
+                if let Some(z) = rule.cq_zone {
+                    self.exact_zone.insert(rule.call.clone(), z);
+                }
             } else {
                 // First seen wins on duplicates, like the Swift load.
                 self.prefix.entry(rule.call.clone()).or_insert(rule.adif);
+                if let Some(z) = rule.cq_zone {
+                    self.prefix_zone.entry(rule.call.clone()).or_insert(z);
+                }
             }
         }
         self.sorted_prefixes = self.prefix.keys().cloned().collect();
@@ -78,6 +91,36 @@ impl DxccResolver {
 
     /// Resolve to a DXCC entity id; None when unloaded, unmatched, or the
     /// call is a ClubLog non-DX operation (exact rule with adif 0).
+    /// The **CQ zone** for a callsign — what WAZ and the DX Marathon count.
+    ///
+    /// Walks the same specificity ladder `resolve` does, because the answer
+    /// has to change with it: an exact-call exception first, then the
+    /// longest matching prefix, then the entity's own zone as the fallback.
+    /// That order is the whole feature — `W6` and `W1` are one entity and
+    /// two zones, and only the prefix rule knows which.
+    ///
+    /// `None` when nothing gives a zone, or when the value is outside 1–40:
+    /// a zone we cannot place is not a zone to award.
+    pub fn zone(&self, callsign: &str) -> Option<i32> {
+        let clean = normalize_call(&callsign.to_uppercase());
+        let z = self
+            .exact_zone
+            .get(&clean)
+            .copied()
+            .or_else(|| {
+                self.sorted_prefixes
+                    .iter()
+                    .find(|p| clean.starts_with(p.as_str()))
+                    .and_then(|p| self.prefix_zone.get(p).copied())
+            })
+            .or_else(|| {
+                self.resolve(callsign)
+                    .and_then(|adif| self.entity(adif))
+                    .map(|e| e.cq_zone)
+            })?;
+        (1..=40).contains(&z).then_some(z)
+    }
+
     pub fn resolve(&self, callsign: &str) -> Option<i32> {
         let clean = normalize_call(&callsign.to_uppercase());
         if let Some(&adif) = self.exact.get(&clean) {
@@ -250,6 +293,7 @@ mod tests {
             is_exact: exact,
             start_unix: None,
             end_unix: None,
+            cq_zone: None,
         }
     }
 
@@ -434,6 +478,7 @@ mod tests {
                         is_exact: true,
                         start_unix: *s,
                         end_unix: *e,
+                        cq_zone: None,
                     })
                     .collect(),
                 ..Default::default()
@@ -482,6 +527,7 @@ mod tests {
                     is_exact: true,
                     start_unix: Some(100),
                     end_unix: Some(200),
+                    cq_zone: None,
                 }],
                 ..Default::default()
             },

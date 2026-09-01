@@ -48,6 +48,18 @@ impl Record {
         self.upper("STATE")
     }
 
+    /// The contacted station's CQ zone (`CQZ`) — what WAZ and the DX
+    /// Marathon count. ClubLog's export carries it on 99% of records, so
+    /// unlike STATE and IOTA this axis needs no LoTW report.
+    pub fn cqz(&self) -> Option<i32> {
+        self.fields
+            .get("CQZ")?
+            .trim()
+            .parse()
+            .ok()
+            .filter(|z| (1..=40).contains(z))
+    }
+
     /// The contacted station's IOTA reference (`IOTA`) — same provenance
     /// story as [`state`](Self::state).
     pub fn iota(&self) -> Option<String> {
@@ -60,6 +72,12 @@ impl Record {
 
     pub fn time_on(&self) -> Option<&str> {
         self.fields.get("TIME_ON").map(String::as_str)
+    }
+
+    /// The calendar year of `QSO_DATE` — the DX Marathon's only axis.
+    pub fn qso_year(&self) -> Option<i32> {
+        let d = self.qso_date()?;
+        (d.len() == 8).then(|| d.get(0..4)?.parse().ok()).flatten()
     }
 
     /// `QSO_DATE` + `TIME_ON` as unix seconds (UTC — ADIF times always are).

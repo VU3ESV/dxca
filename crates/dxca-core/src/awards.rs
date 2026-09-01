@@ -41,6 +41,35 @@ pub fn counts_for_was(dxcc: i32) -> bool {
 /// makes their licence address the wrong answer.
 const PLAIN_MODIFIERS: [&str; 3] = ["P", "M", "QRP"];
 
+/// The CQ zone a US state sits in — 3 in the west, 4 through the middle,
+/// 5 on the eastern seaboard, with Alaska 1 and Hawaii 31.
+///
+/// **This exists because cty.xml cannot answer it.** ClubLog's prefix
+/// records carry a `<cqz>` for Canada (VE7 is 3, VE3 is 4) and for Russia,
+/// but there are **no US call-area records at all**, so the resolver has
+/// only the entity's own zone and answers 5 for the entire country. For a
+/// zone award that is not a rounding error: zones 3 and 4 would never be
+/// credited, and a third of the map would be unreachable.
+///
+/// The FCC table DXCA already loads gives the state, and the state gives
+/// the zone exactly. Same caveat as WAS: it is the *licence* address.
+pub fn us_zone(state: &str) -> Option<i32> {
+    const Z3: [&str; 9] = ["AZ", "CA", "ID", "MT", "NV", "OR", "UT", "WA", "WY"];
+    const Z4: [&str; 22] = [
+        "AL", "AR", "CO", "IA", "IL", "IN", "KS", "KY", "LA", "MI", "MN", "MO", "MS", "ND", "NE",
+        "NM", "OH", "OK", "SD", "TN", "TX", "WI",
+    ];
+    let st = normalize_state(state)?;
+    match st {
+        "AK" => Some(1),
+        "HI" => Some(31),
+        s if Z3.contains(&s) => Some(3),
+        s if Z4.contains(&s) => Some(4),
+        // The remaining seventeen are the eastern seaboard.
+        _ => Some(5),
+    }
+}
+
 /// A WAS-countable state code from a raw two-letter value: uppercased,
 /// DC folded into MD (WAS rule 6), everything else validated against
 /// [`US_STATES`]. `None` for territories (PR, GU, VI…) and noise.
@@ -174,6 +203,31 @@ fn line_call(data: &str, off: u32) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_state_lands_in_a_real_cq_zone() {
+        // The three continental zones plus the two that are their own.
+        assert_eq!(us_zone("CA"), Some(3));
+        assert_eq!(us_zone("WA"), Some(3));
+        assert_eq!(us_zone("WY"), Some(3), "Wyoming is west, not middle");
+        assert_eq!(us_zone("TX"), Some(4));
+        assert_eq!(us_zone("OH"), Some(4), "Ohio is 4, not the seaboard");
+        assert_eq!(us_zone("MI"), Some(4));
+        assert_eq!(us_zone("NY"), Some(5));
+        assert_eq!(us_zone("FL"), Some(5));
+        assert_eq!(us_zone("GA"), Some(5), "Georgia is 5, unlike Alabama");
+        assert_eq!(us_zone("AL"), Some(4));
+        assert_eq!(us_zone("AK"), Some(1));
+        assert_eq!(us_zone("HI"), Some(31));
+        assert_eq!(us_zone("DC"), Some(5), "folds to MD first");
+        assert_eq!(us_zone("PR"), None, "not a WAS state, not a US zone here");
+
+        // Every one of the fifty must land somewhere, or a state would be
+        // silently unreachable for WAZ.
+        for st in US_STATES {
+            assert!(us_zone(st).is_some(), "{st} has no zone");
+        }
+    }
 
     #[test]
     fn state_normalization() {

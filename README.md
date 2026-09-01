@@ -25,6 +25,26 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.19.0** (2026-09-01): **WAZ, the DX Marathon, and a WAS you choose.**
+
+**Which WAS you are chasing is now a setting**, not an assumption: *Mixed*,
+*Triple Play* or *Per band*, under Settings › My station › Awards. It
+changes what **alerts**, which is the point — chasing Triple Play means Ohio
+on phone must wake you even though Ohio has been worked on CW for years.
+
+**WAZ** — the forty CQ zones, mixed or per band. Zones come from your log's
+own `CQZ`, which ClubLog *does* export, so this award needs no LoTW report.
+**DX Marathon** — entities plus zones worked in the current calendar year,
+one point each, reset every January; it earns its own alert because an
+entity worked in 2019 is a fresh point today and every other level stays
+silent on it.
+
+Underneath both: **cty.xml's per-prefix CQ zones are now read** (they were
+parsed and dropped), so VE7 resolves to zone 3 and VE3 to zone 4. cty.xml
+has **no US call-area records at all** and answers 5 for the whole country,
+so for US calls the zone is derived from the FCC state instead — without
+which zones 3 and 4 could never be credited.
+
 **v2.18.0** (2026-09-01): **WAS endorsements, Triple Play, and Awards as its
 own tab.** WAS is now counted **per band and per mode class** as well as
 overall, and **ARRL Triple Play** — all fifty states confirmed in CW, Phone

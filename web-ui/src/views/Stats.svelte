@@ -150,6 +150,35 @@
   /// closing anyway: falling back would frame SOMEONE ELSE's public dashboard
   /// under a heading that says "My ClubLog". Better to show nothing.
   let logCall = $derived((station?.log_callsign ?? '').trim().toLowerCase());
+
+  /// Has a log refresh built the mode axis yet? Three zeroes means "not
+  /// rebuilt since 2.18.0", not "you have worked nothing" — and the
+  /// difference is worth saying out loud rather than rendering as data.
+  /// This calendar year's Marathon row, which is the only one that is
+  /// still being played for.
+  let thisYear = $derived(
+    (station?.award_stats?.marathon ?? []).find(
+      (m: any) => m.year === new Date().getUTCFullYear(),
+    ),
+  );
+
+  let wasModeData = $derived(
+    (station?.award_stats?.was_by_mode ?? []).some((r: any) => r.confirmed > 0),
+  );
+
+  /// The Triple Play worklist inverted: which states each MODE still wants.
+  /// The server sends it per state because that is the honest shape of the
+  /// gap; this is the readable shape of the same thing.
+  let tpNeeded = $derived.by(() => {
+    const byMode = new Map<string, string[]>();
+    for (const g of station?.award_stats?.triple_play_missing ?? []) {
+      for (const m of g.needed) {
+        if (!byMode.has(m)) byMode.set(m, []);
+        byMode.get(m)!.push(g.state);
+      }
+    }
+    return [...byMode].map(([mode, states]) => ({ mode, states }));
+  });
 </script>
 
 <div class="page statspage">
@@ -213,6 +242,15 @@
               <dd class="num ok-num">{station.award_stats.iota_confirmed}</dd>
             </div>
           {/if}
+          {#if isChased('waz')}
+            <div><dt>Zones</dt><dd class="num ok-num">{station.award_stats.waz_worked} / 40</dd></div>
+          {/if}
+          {#if isChased('marathon') && thisYear}
+            <div>
+              <dt>Marathon {thisYear.year}</dt>
+              <dd class="num ok-num">{thisYear.score}</dd>
+            </div>
+          {/if}
           {#if isChased('was')}
             <div><dt>States worked</dt><dd class="num">{station.award_stats.was_worked}</dd></div>
             <div>
@@ -239,69 +277,132 @@
             WAS endorsements
             <HelpTip label="WAS endorsements">
               <span class="para">
-                The same fifty states counted <b>per band</b> and <b>per
-                mode</b> — the endorsements ARRL issues on top of basic WAS.
-                Bands you have no states on are left out.
+                The same fifty states counted <b>per mode</b> and <b>per
+                band</b> — the endorsements ARRL issues on top of basic WAS.
+                <b>Triple Play</b> is all fifty in CW, Phone and Digital:
+                150 confirmations, any band, LoTW only.
               </span>
               <span class="para">
-                <b>Triple Play</b> is the mode table's headline: all fifty
-                states confirmed in <b>CW, Phone and Digital</b> — 150
-                confirmations, any band, and <b>LoTW only</b>. DXCA meets
-                that last rule by construction: your LoTW QSL report is the
-                only thing that ever confirms a state here.
+                One number per slice, not worked-and-confirmed: a state only
+                ever enters this table through your LoTW QSL report, so
+                every one of them is confirmed by definition. There is no
+                worked-but-unconfirmed state for DXCA to know about.
               </span>
             </HelpTip>
           </h2>
-          <div class="wasgrid">
-            <div>
-              <table class="slices">
-                <thead><tr><th>Mode</th><th>Worked</th><th>Confirmed</th></tr></thead>
-                <tbody>
-                  {#each station.award_stats.was_by_mode as r (r.key)}
-                    <tr>
-                      <td>{r.key}</td>
-                      <td class="num" class:zero={!r.worked}>{r.worked}</td>
-                      <td class="num ok-num" class:zero={!r.confirmed}>{r.confirmed}</td>
-                    </tr>
-                  {/each}
-                </tbody>
-              </table>
-            </div>
-            <div>
-              {#if station.award_stats.was_by_band.length}
-                <table class="slices">
-                  <thead><tr><th>Band</th><th>Worked</th><th>Confirmed</th></tr></thead>
-                  <tbody>
-                    {#each station.award_stats.was_by_band as r (r.key)}
-                      <tr>
-                        <td>{r.key}</td>
-                        <td class="num" class:zero={!r.worked}>{r.worked}</td>
-                        <td class="num ok-num" class:zero={!r.confirmed}>{r.confirmed}</td>
-                      </tr>
-                    {/each}
-                  </tbody>
-                </table>
-              {:else}
-                <p class="hint">No states on any band yet.</p>
-              {/if}
-            </div>
-          </div>
 
-          {#if station.award_stats.triple_play_missing.length}
-            <h3 class="sub">Triple Play — what is still needed</h3>
-            <!-- The worklist, not just the score: "39 of 50" cannot tell you
-                 that Wyoming needs all three while Ohio needs only phone. -->
-            <div class="tpgaps">
-              {#each station.award_stats.triple_play_missing as g (g.state)}
-                <span class="tpgap">
-                  <b class="mono">{g.state}</b>
-                  <span class="hint">{g.needed.join(' ')}</span>
-                </span>
+          {#if wasModeData}
+            <dl class="stats">
+              <div>
+                <dt>Triple Play</dt>
+                <dd class="num ok-num">{station.award_stats.triple_play} / 50</dd>
+              </div>
+              {#each station.award_stats.was_by_mode as r (r.key)}
+                <div><dt>{r.key}</dt><dd class="num">{r.confirmed} / 50</dd></div>
+              {/each}
+            </dl>
+
+            {#if tpNeeded.length}
+              <!-- BY MODE, not by state. Fifty state chips each listing three
+                   modes is a wall you cannot read; three lines you can scan
+                   for the mode you are actually operating is the same fact. -->
+              <h3 class="sub">Triple Play still needs</h3>
+              <dl class="needlist">
+                {#each tpNeeded as n (n.mode)}
+                  <div>
+                    <dt>{n.mode}</dt>
+                    <dd class="mono">{n.states.join(' ')}</dd>
+                  </div>
+                {/each}
+              </dl>
+            {:else}
+              <p class="hint">Triple Play complete — all fifty states in all three modes.</p>
+            {/if}
+          {:else}
+            <!-- The mode axis arrived in 2.18.0 and is filled by a rebuild.
+                 Saying so beats printing three zeroes and a fifty-state
+                 worklist that only means "no data". -->
+            <p class="hint">
+              No mode data yet. The mode axis is built during a log refresh —
+              run <b>Settings › My station › ClubLog › Refresh log now</b> once
+              and Triple Play appears here.
+            </p>
+          {/if}
+
+          {#if station.award_stats.was_by_band.length}
+            <h3 class="sub">States per band</h3>
+            <div class="tally">
+              {#each station.award_stats.was_by_band as r (r.key)}
+                <span class="tallyitem"><b>{r.key}</b> {r.confirmed}</span>
               {/each}
             </div>
-          {:else}
-            <p class="hint">Triple Play complete — all fifty states in all three modes.</p>
           {/if}
+        </div>
+      {/if}
+
+      {#if isChased('waz')}
+        <div class="card">
+          <h2>
+            WAZ
+            <HelpTip label="WAZ">
+              <span class="para">
+                The forty CQ zones. Zones come from your log's own
+                <code>CQZ</code> field, which ClubLog does export — so this
+                award works without a LoTW report, unlike WAS and IOTA.
+              </span>
+              <span class="para">
+                For <b>US</b> calls the zone is taken from the FCC state
+                instead: cty.xml has no US call-area records and answers 5
+                for the whole country, which would make zones 3 and 4
+                unreachable.
+              </span>
+            </HelpTip>
+          </h2>
+          {#if station.award_stats.waz_missing.length}
+            <p class="hint">
+              Missing zones:
+              <span class="mono">{station.award_stats.waz_missing.join(' ')}</span>
+            </p>
+          {:else}
+            <p class="hint">All forty zones worked.</p>
+          {/if}
+          {#if station.award_stats.waz_by_band.length}
+            <h3 class="sub">Zones per band</h3>
+            <div class="tally">
+              {#each station.award_stats.waz_by_band as r (r.key)}
+                <span class="tallyitem"><b>{r.key}</b> {r.confirmed}</span>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
+
+      {#if isChased('marathon') && station.award_stats.marathon.length}
+        <div class="card">
+          <h2>
+            DX Marathon
+            <HelpTip label="DX Marathon">
+              Entities plus CQ zones worked in a calendar year — one point
+              each, reset every January. No bands, no modes, no
+              confirmation. The current year is the live score; the years
+              below it are what the log remembers.
+            </HelpTip>
+          </h2>
+          <table class="slices">
+            <thead>
+              <tr><th>Year</th><th>Entities</th><th>Zones</th><th>Score</th></tr>
+            </thead>
+            <tbody>
+              {#each station.award_stats.marathon.slice(0, 8) as y (y.year)}
+                <tr>
+                  <td class="mono">{y.year}</td>
+                  <td class="num">{y.entities}</td>
+                  <td class="num">{y.zones}</td>
+                  <td class="num ok-num">{y.score}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
         </div>
       {/if}
 
@@ -757,30 +858,43 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* Mode beside band where there is room, stacked when there is not. */
-  .wasgrid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0 3rem;
-  }
-
   .sub {
     margin: 1.1rem 0 0.4rem;
     font-size: 0.95rem;
   }
 
-  /* One state per chip, with the modes it still owes. Denser than a table
-     and it wraps, which matters when the list starts at fifty. */
-  .tpgaps {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.3rem 0.9rem;
+  /* One row per mode: the label in the gutter, the states wrapping beside
+     it. Three readable lines instead of fifty chips. */
+  .needlist {
+    margin: 0;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.35rem 0.9rem;
   }
 
-  .tpgap {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 0.3rem;
+  .needlist dt {
+    color: var(--muted);
+    font-size: var(--fs-hint);
+  }
+
+  .needlist dd {
+    margin: 0;
+    line-height: 1.6;
+    word-spacing: 0.15em;
+  }
+
+  /* Band tallies read as a run of small facts, not a three-column table
+     whose second column would repeat the third. */
+  .tally {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 1.1rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tallyitem b {
+    color: var(--muted);
+    font-weight: 500;
   }
 
   .slices {

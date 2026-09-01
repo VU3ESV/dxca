@@ -673,6 +673,13 @@ async fn reference() -> Response {
         "bands": dxca_core::bands::SELECTABLE_BANDS,
         "modes": dxca_core::modes::CLASSES,
         "levels": levels,
+        // The WAS scopes, served like every other vocabulary so the picker
+        // cannot drift from what the classifier understands.
+        "was_scopes": [
+            { "key": "mixed", "label": "Mixed" },
+            { "key": "triple", "label": "Triple Play" },
+            { "key": "band", "label": "Per band" },
+        ],
     }))
     .into_response()
 }

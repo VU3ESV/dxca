@@ -62,6 +62,15 @@ pub struct PrefixRule {
     pub is_exact: bool,
     pub start_unix: Option<i64>,
     pub end_unix: Option<i64>,
+    /// The CQ zone this rule overrides the entity's with, when cty.xml
+    /// gives one.
+    ///
+    /// **This is what makes WAZ possible at all.** An entity-level zone is
+    /// a single number, and the big entities span several: the USA covers
+    /// zones 3, 4 and 5, Russia nine. ClubLog puts a `<cqz>` on the prefix
+    /// and exception records precisely so `W6` and `W1` resolve
+    /// differently, and it was being parsed and dropped until 2.19.
+    pub cq_zone: Option<i32>,
 }
 
 impl PrefixRule {
@@ -186,6 +195,7 @@ pub fn parse(content: &str) -> Option<CtyData> {
                                 is_exact: false,
                                 start_unix: tmp.start,
                                 end_unix: tmp.end,
+                                cq_zone: tmp.cqz,
                             });
                         }
                     }
@@ -225,6 +235,7 @@ pub fn parse(content: &str) -> Option<CtyData> {
                                     is_exact: has_digit && letters >= 3,
                                     start_unix: tmp.start,
                                     end_unix: tmp.end,
+                                    cq_zone: tmp.cqz,
                                 });
                             }
                         }
@@ -251,6 +262,7 @@ pub fn parse(content: &str) -> Option<CtyData> {
                                 is_exact: true,
                                 start_unix: tmp.start,
                                 end_unix: tmp.end,
+                                cq_zone: tmp.cqz,
                             });
                         }
                     }

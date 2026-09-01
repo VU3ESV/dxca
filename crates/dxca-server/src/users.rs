@@ -58,6 +58,22 @@ pub struct UserService {
     tci: Mutex<HashMap<(String, u16), Arc<tci::TciClient>>>,
 }
 
+/// The UTC calendar year of a unix timestamp — the DX Marathon's axis.
+/// Civil-date arithmetic rather than a date crate, matching `cty.rs`.
+fn year_of(unix: i64) -> i32 {
+    let days = unix.div_euclid(86_400);
+    // Howard Hinnant's civil_from_days, the inverse of `days_from_civil`.
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    (if m <= 2 { y + 1 } else { y }) as i32
+}
+
 fn now_unix() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -504,10 +520,28 @@ impl UserService {
                 .as_ref()
                 .is_none_or(|d| d.is_valid(r))
         });
+        // The zone: for a US call the FCC state gives it exactly, because
+        // cty.xml has no US call-area records and would answer 5 for the
+        // whole country. Everywhere else the resolver's prefix rules are
+        // the better source.
+        let want_zone = config.alert_new_zone || config.alert_unconf_zone || config.alert_marathon;
+        let zone = want_zone
+            .then(|| {
+                self.state_of(&call)
+                    .as_deref()
+                    .and_then(dxca_core::awards::us_zone)
+                    .or_else(|| resolver.zone(&call))
+            })
+            .flatten();
         let refs = AwardRefs {
             grid: spot.grid.as_deref(),
             iota,
             state: state.as_deref(),
+            zone,
+            // The Marathon runs on the calendar year, so it needs one —
+            // taken from the spot, not from the clock, so a spot processed
+            // either side of midnight on 31 December scores in its own year.
+            year: config.alert_marathon.then(|| year_of(spot.time_unix)),
         };
         Some(
             AlertClassifier {
@@ -689,6 +723,9 @@ impl UserService {
             AlertLevel::UnconfIota => 0xFF99_7CCA,
             AlertLevel::UnconfState => 0xFFBA_7399,
             AlertLevel::UnconfGrid => 0xFF5C_ADB3,
+            AlertLevel::NewZone => 0xFF3F_B950,
+            AlertLevel::UnconfZone => 0xFF6F_A87A,
+            AlertLevel::Marathon => 0xFFE3_B341,
             _ => 0xFF8C_8C8C,
         }
     }
@@ -906,6 +943,9 @@ fn alert_html(c: &Classification, call: &str, spot: &Spot, is_lotw: bool) -> Str
         AlertLevel::UnconfIota => "🟪 ? IOTA (unconfirmed)",
         AlertLevel::UnconfState => "🟫 ? State (unconfirmed)",
         AlertLevel::UnconfGrid => "🟩 ? Grid (unconfirmed)",
+        AlertLevel::NewZone => "🟩 New Zone",
+        AlertLevel::UnconfZone => "🟢 ? Zone (unconfirmed)",
+        AlertLevel::Marathon => "🏅 Marathon",
         _ => "Alert",
     };
     let dxcc = c.dxcc_name.clone().unwrap_or_default();
