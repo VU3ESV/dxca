@@ -252,7 +252,23 @@ My station › Awards**; an award left unticked adds no control anywhere, so
 the Spots and Alerts screens of a non-chaser are unchanged. Also in the
 release: the confirmation-path gate on the `?` levels, the TCI (ExpertSDR3)
 destination with its reconnect defect fixed, and the ClubLog embed
-following the app's appearance. **v2.17.0 through v2.17.7 all released 2026-09-01** (tag + GitHub release
+following the app's appearance. **Fleet at v2.20.0 (2026-09-01), with one host missed.** noderedpi4,
+Windows, adersh and vu2oy are all on it; **`vu2wj@192.168.1.201` is still
+on v2.17.5** — its deploy failed at `ssh: connect ... Operation timed out`,
+*before* anything was transferred, so that host is untouched rather than
+half-upgraded. Its `/32` route was in the table the whole time and it
+answers neither ping nor ssh, which is the **stale-handshake signature**
+documented from 2026-08-30, not proof the box is off. Bouncing that one
+tunnel is the first thing to try (`sudo wg-quick down Shaji_vu2wj` then
+`up`), and it needs Manoj's password. The other two tunnels worked in the
+same pass, so WireGuard itself is fine.
+
+**The Windows box downloaded the IOTA directory by itself** (1178 groups)
+on the scheduler's first tick, while `fcc_calls` stayed 0 — which is
+exactly the intended asymmetry: the 290 KB directory is automatic, the
+~200 MB FCC dump is manual-first.
+
+**v2.17.0 through v2.17.7 all released 2026-09-01** (tag + GitHub release
 + Windows zip each). **noderedpi4 runs v2.17.7**; the other four are on
 **v2.17.5** — 2.17.6 (LoTW timeout + carry-forward) and 2.17.7 (chip
 layout) are inert on hosts with no LoTW credentials, and re-restarting
