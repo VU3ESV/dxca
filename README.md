@@ -25,11 +25,27 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
-**Unreleased** (merged 2026-09-01, not yet tagged): **Destinations gained a
-fourth tab, TCI** — the same alerts on an **ExpertSDR3 panorama** (SunSDR and
-anything else ExpertSDR3 drives), over WebSocket **40001**. Independent of the
-FlexRadio tab and of Telegram: a station can run one, the other, both, or
-neither. See [ExpertSDR3 panorama (TCI)](#expertsdr3-panorama-tci).
+**v2.17.0** (2026-09-01): **awards beyond DXCC, and a settings page to pick
+them.** **IOTA**, **WAS** and **VUCC** each get a New/`?` level pair, switched
+on under **Settings › My station › Awards** — and an award you have not ticked
+adds nothing anywhere, so the Spots and Alerts screens of anyone who ignores
+this are unchanged. Islands come from cluster comments (validated against the
+IOTA directory), states from the FCC licence database, grid squares from the
+comment or an FT8 CQ (50 MHz and up, per the ARRL rule). Worked comes from
+your ClubLog log; **confirmed** comes from a new optional LoTW QSL-report
+download, because ClubLog's export carries no state, island or QSL detail.
+See [IOTA, WAS and VUCC](#iota-was-and-vucc-optional-off-by-default).
+
+Also in this release: a **confirmation-path gate** — the `?` levels can be
+held to calls new to your log and/or on LoTW, so an unconfirmed entity stops
+pinging for the station that never QSLed the first time
+([Confirmation-path gate](#confirmation-path-gate-optional-off-by-default));
+**Destinations gained a fourth tab, TCI**, putting the same alerts on an
+**ExpertSDR3 panorama** (SunSDR and anything else ExpertSDR3 drives) over
+WebSocket **40001**, independent of the FlexRadio tab and of Telegram
+([ExpertSDR3 panorama (TCI)](#expertsdr3-panorama-tci)); and the embedded
+ClubLog DX Dashboard now follows this app's light/dark appearance instead of
+picking one by the clock.
 
 **v2.16.0** (2026-08-30): the Settings rail is down to seven entries.
 Everywhere a spot arrives from is one **Sources** page (UDP decoders, cluster
@@ -953,8 +969,10 @@ Four things differ from the Flex path, and each shaped the implementation:
 - **There is no lifetime field.** `SPOT` has five arguments and that is all of
   them. A spot stays on the panorama until something removes it, so **DXCA
   holds each deadline itself** and sends `SPOT_DELETE:<call>;` when it passes.
-  The consequence worth knowing: if DXCA restarts in between, whatever is on
-  the panorama stays until you clear it in ExpertSDR3.
+  The consequence worth knowing: if DXCA **restarts** in between, whatever is
+  on the panorama stays until you clear it in ExpertSDR3. A dropped *link* is
+  different — the deadlines survive a reconnect and the deletions go out when
+  it comes back, because the spots are the radio's state, not the link's.
 - **`:` `,` and `;` are reserved** (§3.1) and one of them inside a value
   truncates the command, exactly as a space does in SmartSDR's. They are
   replaced with spaces. **Spaces themselves are fine** here, which is the

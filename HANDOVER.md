@@ -2,66 +2,21 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-09-01 · **Status:**
-**v2.16.0 — Settings is two pages: Sources and Destinations**, each with
-tabs. Five rail entries became two, mirroring the two ends of the pipeline,
-and the FlexRadio panadapter settings moved into Destinations from their own
-entry. The multi-station per-account feeds work was **withdrawn** — see the
-entries under Open items.
+**v2.17.0 — awards beyond DXCC, and a settings page to pick them.** IOTA,
+WAS and VUCC each get a New/`?` level pair, switched on under **Settings ›
+My station › Awards**; an award left unticked adds no control anywhere, so
+the Spots and Alerts screens of a non-chaser are unchanged. Also in the
+release: the confirmation-path gate on the `?` levels, the TCI (ExpertSDR3)
+destination with its reconnect defect fixed, and the ClubLog embed
+following the app's appearance. Released and deployed to noderedpi4;
+**the other four installs are still on v2.16.0** (see Open items).
 
-**ON MAIN, NOT RELEASED — the confirmation-path gate on the `?` levels**
-(2026-09-01, `docs/AWARDS.md` phase 1): two per-account ticks on Alerts that
-hold `Unconf*` pings for calls already in the log and/or not on LoTW — only
-a station that can be worked *and* will confirm is worth waking for. No
-version bump; it rides the same release pass as TCI below. **Deployed to
-noderedpi4 on 2026-09-01 for the trial Manoj asked for — the gate and TCI
-together, ahead of any tag.** The other four installs still run released
-v2.16.0. Caution for fleet sweeps: the trial build **also reports 2.16.0**
-(`/api/status` cannot tell them apart); noderedpi4's build is identified by
-its asset hash and the *For the ? levels* group on Alerts. **Also in the
-trial build (2026-09-01): the ClubLog DX Dashboard embed follows the app's
-appearance.** ClubLog's page picks light/dark **by the browser's clock**
-(07:00–19:59 light, else dark; `dxd-theme` cookie override — unreachable
-inside an iframe, and no URL parameter exists), so it went dark at 8 pm
-whatever the screen was set to. DXCA now predicts the frame's clock pick at
-iframe load and counter-flips with CSS `invert(1) hue-rotate(180deg)` when
-it disagrees with `currentTheme()` — `Stats.svelte`, comment block has the
-full reasoning. If ClubLog ever honours `prefers-color-scheme` or grows a
-theme parameter, delete the flip and use that.
+The trial that preceded it ran on noderedpi4 through 2026-09-01 with the
+awards UI reshaped mid-flight after Manoj rejected the first cut — the
+entries below record both the shape and the four first-run fixes.
 
-**ON MAIN, NOT RELEASED — the IOTA / WAS / VUCC award axes** (2026-09-01,
-`docs/AWARDS.md` phases 2–4, built on Manoj's "complete the 2-4"): the
-ladder is now **fourteen levels** — New/`?` pairs for Grid, State and IOTA
-after the classic eight — with ticking a pair on the ClubLog-account page
-acting as the award selector (all default off; nothing classifies
-differently until an operator opts in). Spot side: cluster-comment grids
-finally survive `synthetic_spot`, FT8 CQ grids are parsed from message
-text (`RR73` refused), IOTA refs are read from comments, states come from
-a new FCC call→state table. Log side: ClubLog's `GRIDSQUARE` (verified
-exported, 98% of records) plus an optional per-user **LoTW QSL report**
-(new credentials on the ClubLog page; weekly-cached in `data/`) for
-confirmed states/grids/islands — ClubLog's export carries none of those.
-Two new admin downloads under Reference data (IOTA directory ~290 KB
-auto-monthly; FCC ~200 MB → 7.9 MB distilled, **manual first pull
-required** before its schedule arms). Stats grows an IOTA · WAS · VUCC
-card with the missing-states chase list. Full map in the Open-items entry.
-**Deployed to noderedpi4 2026-09-01, same trial as the gate/TCI/embed**,
-redeployed the same day with the Awards-page restructure (bundle
-`index-C6ffAKZZ.js`, all nine nodes back; `/api/reference` there now
-serves 14 levels, 6 of them award-tagged). The reference files were
-pre-seeded from the build session — 1,178 IOTA groups and the
-816,973-call FCC table load at startup — so all three awards work the
-moment they are chased on Settings › Awards, no 200 MB pull needed on
-the Pi.
-
-**MERGED, NOT RELEASED — a fourth Destinations tab: TCI (ExpertSDR3
-panorama).** `vu2cpl/dxca` PR #1 from VU3ESV, merged to `main` on 2026-09-01.
-**No tag, no release** — the merge carried no version bump. Running
-unreleased on **noderedpi4 only** (the 2026-09-01 trial deploy above); the
-other four installs run released v2.16.0. It merged with one real defect known and
-**deliberately left for the release pass** (Manoj, 2026-09-01). Both entries
-are at the top of Open items.
-
-**All five hosts run it as of 2026-08-30.** `adersh@192.168.1.151` was the
+**All five hosts ran v2.16.0 as of 2026-08-30**, and four still do —
+noderedpi4 is the only one on v2.17.0 so far. `adersh@192.168.1.151` was the
 last one — it had missed the deploy pass with `ssh: connect to host
 192.168.1.151 port 22: Operation timed out`, which read as the third-party
 power-state case but was **not**: the Pi was up and its `192.168.1.151/32`
@@ -962,37 +917,49 @@ last *published* release, because tags can outrun releases.
 
 ## Open items → next session
 
-### NEXT: fix the TCI reconnect before tagging it (Manoj, 2026-09-01)
+### DONE in v2.17.0: the TCI reconnect defect, fixed before the tag
 
-**Decided: the TCI destination merged as it is, and its one real defect is
-fixed in the pass that releases it** — not before. Nothing is running it: no
-tag, no release, no host, so no operator is exposed to this today. The fix
-belongs in the release pass rather than a separate round trip with VU3ESV.
+The deferral held: the defect was fixed in the release pass, as decided,
+and the release went out with it.
 
-What has to happen in that pass, in this order:
+**What was wrong.** `worker` called `pending.clear()` on both the failure
+path and a successful re-dial, on the premise that a reconnect means the
+server lost the spots we placed. **That premise is wrong for TCI**: a spot
+is the panorama's state, not the link's, and outlives the client that
+placed it. So any transient drop stranded every mark DXCA had put up —
+permanently, and only clearable by hand in ExpertSDR3 — which is the exact
+silting-up the per-level lifetimes exist to prevent.
 
-1. **Stop `pending.clear()` throwing the owed deletions away on a reconnect.**
-   `crates/dxca-connect/src/tci.rs`, in `worker`: both the failure path and a
-   successful re-dial clear the list of spots owed a `SPOT_DELETE`, on the
-   premise that the server lost them. For TCI that premise looks wrong — spots
-   are server-side state that outlives a client disconnect — so a transient
-   drop with the radio still up strands DXCA's marks on the panorama for good,
-   which is exactly the silting-up the module was written to prevent. The full
-   write-up, including the counter-risk it was trading against — re-deleting a
-   call some other logger had just re-spotted — is in the entry below.
+**What it took, beyond deleting two lines.** Keeping `pending` across a
+reconnect has two second-order costs the naive fix would have shipped:
 
-2. **Then make the docs match whatever the code ends up doing.** The README
-   section and the TCI tab's HelpTip both warn that a DXCA *restart* leaves
-   spots on the panorama, and say nothing about a reconnect doing the same.
-   Fix 1 and that wording is right as it stands. Decide against 1 and the
-   wording is what has to move instead — one of the two must give.
+* **A busy-spin.** The wait is "the soonest deadline", and after an outage
+  every held deadline is already overdue → a zero-length `recv_timeout` →
+  a thread spinning at full tilt on the always-on Pi. While disconnected
+  the worker now waits for the next *dial* instead, since nothing can be
+  sent before then anyway.
+* **Dialling a dark radio forever.** A non-empty `pending` is what keeps
+  the worker reconnecting, so a radio switched off for a week would be
+  dialled every 30s for a week. `PENDING_GRACE` (30 min past due) lets
+  those go — by then ExpertSDR3 has almost certainly been restarted and
+  the mark is moot — and the worker falls back to blocking on the channel.
 
-3. **Then tag and release**, per the standing convention below: a tag is not a
-   release, and the Windows zip ships with it.
+**The counter-risk was weighed, not dodged:** if another client re-spotted
+the same call during our outage, the delete takes their mark down too.
+That is one spot, recoverable by re-spotting, against a panorama that
+silts up permanently. Documented in the code at the decision point.
 
-Follow-ups 2 and 3 in the entry below — the idle-drain comment overclaiming,
-and the direct `tungstenite` pin — are comment-and-`Cargo.toml` scale. Worth
-taking in the same pass while it is open; neither blocks a tag on its own.
+**Tested for real.** `a_reconnect_still_owes_the_deletions_it_could_not_send`
+drives a fake TCI server that accepts, takes the spot, drops the link, then
+accepts again, and asserts the `SPOT_DELETE` arrives on the new session. It
+was **verified to fail** with `pending.clear()` restored (timeout) and pass
+without it — a regression test that was never watched fail is not one.
+`RECONNECT_AFTER` is `#[cfg(test)]`-shortened to 200 ms, which is what makes
+the reconnect path testable inside the gate at all.
+
+Follow-ups 2 and 3 from the original entry (the idle-drain comment
+overclaiming, the direct `tungstenite` pin) are **still open** — neither
+blocks anything, both are comment/`Cargo.toml` scale.
 
 ### DONE (on main, unreleased): four fixes from the first real awards run (2026-09-01)
 
