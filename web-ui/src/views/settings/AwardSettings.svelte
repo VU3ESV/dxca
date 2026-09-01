@@ -169,10 +169,12 @@
           the app stays exactly as compact as before.
         </span>
         <span class="para">
-          <b>Worked</b> comes from your ClubLog log. <b>Confirmed</b> needs
-          the login on <b>LoTW account</b> — ClubLog's export carries no
-          state, island or QSL detail, and your LoTW QSL report is what
-          does.
+          <b>Worked</b> comes from your ClubLog log. <b>Confirmed</b>
+          depends on the award: <b>WAZ</b> reads the QSL flags the ClubLog
+          export already carries — LoTW, eQSL or paper — while <b>IOTA,
+          WAS and VUCC</b> need the login on <b>LoTW account</b>, because
+          that export carries no state or island detail and your LoTW QSL
+          report is what does.
         </span>
       </HelpTip>
     </h2>

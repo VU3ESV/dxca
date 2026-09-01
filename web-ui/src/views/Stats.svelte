@@ -242,9 +242,11 @@
           <HelpTip label="Awards">
             <span class="para">
               Only the awards ticked under <b>Settings › My station ›
-              Awards</b> appear here. Worked comes from your ClubLog log;
-              <b>confirmed needs the login on LoTW account</b>, because
-              ClubLog's export carries no state, island or QSL detail.
+              Awards</b> appear here. Worked comes from your ClubLog log.
+              Confirmed depends on the award: <b>zones</b> carry their own
+              QSL flags in the ClubLog export — LoTW, eQSL or paper — while
+              <b>states and islands need the login on LoTW account</b>,
+              because ClubLog's export carries no state or island detail.
             </span>
             <span class="para">
               <b>VUCC</b> counts 4-character grid squares per band, 50 MHz

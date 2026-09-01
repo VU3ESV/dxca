@@ -175,7 +175,9 @@ this are unchanged. Islands come from cluster comments (validated against the
 IOTA directory), states from the FCC licence database, grid squares from the
 comment or an FT8 CQ (50 MHz and up, per the ARRL rule). Worked comes from
 your ClubLog log; **confirmed** comes from a new optional LoTW QSL-report
-download, because ClubLog's export carries no state, island or QSL detail.
+download, because ClubLog's export carries no state or island detail. (WAZ,
+added in 2.19.0, is the exception — zones score off the QSL flags the
+ClubLog export does carry.)
 See [IOTA, WAS and VUCC](#iota-was-and-vucc-optional-off-by-default).
 
 Also in this release: a **confirmation-path gate** — the `?` levels can be

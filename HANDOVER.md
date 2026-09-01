@@ -16,6 +16,17 @@ worked and confirmed cannot differ (only LoTW writes states), zones come
 from the ClubLog log and do — his 60M is 26 worked / 24 confirmed, 10M is
 39 / 38, and that gap is the chase.
 
+**On main, unreleased — the Awards help tips claimed confirmed always means
+LoTW, which is false for WAZ** (Manoj: *"why 2 zones worked and
+confirmed"*). Both zone numbers come from the ClubLog export and nowhere
+else: worked is any credited QSO carrying a `CQZ`, confirmed is one whose
+record has a QSL flag — `LOTW_QSL_RCVD`, `QSL_RCVD`, `EQSL_QSL_RCVD` or
+`APP_CLUBLOG_QSO_QSL` (`adif.rs::is_confirmed`). `merge_lotw_confirmed`
+writes grids, states and islands only, never zones, so WAZ scores fully
+without a LoTW login — which the WAZ card's own tip already said, while the
+tip two cards above it and the Awards settings tip said the opposite. Both
+now split the rule per award. Text only; the counts were always right.
+
 **v2.20.1 — WAZ gains a mode split and an honest confirmed count.** Manoj:
 *"waz doesnt have modewise split ... and it doesnt show mixed waz numbers,
 just says all worked, is it confirmed?"* — three faults, and the third was
