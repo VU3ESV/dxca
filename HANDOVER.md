@@ -2,6 +2,15 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-09-01 · **Status:**
+**v2.19.1 — the Awards tab is tidied** (Manoj: *"needs uncluttering
+only"*). The "still needed" list was a `display: grid` with
+`grid-template-columns: auto 1fr` being fed **wrapper `<div>`s**, so each
+mode was one cell: two modes landed per row and the third was orphaned
+below them. `dt`/`dd` are the grid's own children now, one mode per row,
+ordered CW/Phone/Data like every other mode list. Triple Play's score was
+also printed twice — summary card and endorsements card — and is now only
+in the summary.
+
 **v2.19.0 — WAZ, the DX Marathon, and a WAS scope you pick.** Manoj:
 *"awards on stats is not what i want ... i need in settings to select
 whether to chase a WAS triple play or as per band"*, then *"lets roll waz

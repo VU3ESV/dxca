@@ -177,7 +177,12 @@
         byMode.get(m)!.push(g.state);
       }
     }
-    return [...byMode].map(([mode, states]) => ({ mode, states }));
+    // The classifier's own order, so this list reads like every other mode
+    // list in the app rather than however the states happened to arrive.
+    const ORDER = ['CW', 'PHONE', 'DATA'];
+    return [...byMode]
+      .map(([mode, states]) => ({ mode, states }))
+      .sort((a, b) => ORDER.indexOf(a.mode) - ORDER.indexOf(b.mode));
   });
 </script>
 
@@ -293,10 +298,6 @@
 
           {#if wasModeData}
             <dl class="stats">
-              <div>
-                <dt>Triple Play</dt>
-                <dd class="num ok-num">{station.award_stats.triple_play} / 50</dd>
-              </div>
               {#each station.award_stats.was_by_mode as r (r.key)}
                 <div><dt>{r.key}</dt><dd class="num">{r.confirmed} / 50</dd></div>
               {/each}
@@ -306,13 +307,11 @@
               <!-- BY MODE, not by state. Fifty state chips each listing three
                    modes is a wall you cannot read; three lines you can scan
                    for the mode you are actually operating is the same fact. -->
-              <h3 class="sub">Triple Play still needs</h3>
+              <h3 class="sub">Still needed</h3>
               <dl class="needlist">
                 {#each tpNeeded as n (n.mode)}
-                  <div>
-                    <dt>{n.mode}</dt>
-                    <dd class="mono">{n.states.join(' ')}</dd>
-                  </div>
+                  <dt>{n.mode}</dt>
+                  <dd class="mono">{n.states.join(' ')}</dd>
                 {/each}
               </dl>
             {:else}
@@ -865,11 +864,16 @@
 
   /* One row per mode: the label in the gutter, the states wrapping beside
      it. Three readable lines instead of fifty chips. */
+  /* `max-content` on the gutter keeps the three labels aligned without
+     stretching, and dt/dd are the grid's OWN children — wrapping them in a
+     div made each mode a single cell, so two landed per row and the third
+     was orphaned underneath. */
   .needlist {
     margin: 0;
     display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 0.35rem 0.9rem;
+    grid-template-columns: max-content 1fr;
+    gap: 0.3rem 0.9rem;
+    align-items: baseline;
   }
 
   .needlist dt {

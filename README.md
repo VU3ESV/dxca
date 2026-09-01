@@ -25,6 +25,12 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.19.1** (2026-09-01): **the Awards tab is tidied.** "Triple Play still
+needs" was laid out in a two-column grid that put two modes on one row and
+orphaned the third; each mode now gets its own row, in the CW/Phone/Data
+order the rest of the app uses. Triple Play's score was printed twice, in
+the summary card and again below it — once is enough.
+
 **v2.19.0** (2026-09-01): **WAZ, the DX Marathon, and a WAS you choose.**
 
 **Which WAS you are chasing is now a setting**, not an assumption: *Mixed*,
