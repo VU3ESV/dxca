@@ -27,6 +27,13 @@ without a LoTW login — which the WAZ card's own tip already said, while the
 tip two cards above it and the Awards settings tip said the opposite. Both
 now split the rule per award. Text only; the counts were always right.
 
+**Deployed to noderedpi4 on 2026-09-01** (`deploy/pi-deploy.sh`, seeded
+form, service back clean with all nine cluster nodes Live and the telnet
+client reconnected; bundle `index-LDTEEEYk.js` serves the corrected tip and
+no longer carries the old sentence). Local Pi first, ahead of any tag — and
+`/api/status` there still reads **2.20.2**, because nothing but text
+changed. The other four hosts are on released 2.20.2 and were left alone.
+
 **v2.20.1 — WAZ gains a mode split and an honest confirmed count.** Manoj:
 *"waz doesnt have modewise split ... and it doesnt show mixed waz numbers,
 just says all worked, is it confirmed?"* — three faults, and the third was
