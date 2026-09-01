@@ -18,6 +18,29 @@ pub const US_STATES: [&str; 50] = [
     "SD", "TN", "TX", "UT", "VA", "VT", "WA", "WI", "WV", "WY",
 ];
 
+/// The DXCC entities whose contacts can carry a WAS state: the lower 48
+/// (291), **Alaska** (6) and **Hawaii** (110). All three are separate DXCC
+/// entities but all three are WAS states, so a `KL7`/`KH6` contact counts
+/// here even though it is not "the USA" to DXCC.
+///
+/// This list is what stops a US licensee operating abroad being credited
+/// with their home state: `DV2/K7AZQ` resolves to the Philippines, so no
+/// state is looked up at all — see [`counts_for_was`].
+pub const WAS_DXCC: [i32; 3] = [291, 6, 110];
+
+/// Can a contact with this DXCC entity carry a WAS state?
+pub fn counts_for_was(dxcc: i32) -> bool {
+    WAS_DXCC.contains(&dxcc)
+}
+
+/// Suffixes that say "same licensee, still somewhere in their own country"
+/// — the only ones [`StateTable::lookup`] will look past.
+///
+/// A **numeric** suffix is deliberately excluded: `W1AW/7` is a Connecticut
+/// licensee announcing they are in call area 7, which is the one thing that
+/// makes their licence address the wrong answer.
+const PLAIN_MODIFIERS: [&str; 3] = ["P", "M", "QRP"];
+
 /// A WAS-countable state code from a raw two-letter value: uppercased,
 /// DC folded into MD (WAS rule 6), everything else validated against
 /// [`US_STATES`]. `None` for territories (PR, GU, VI…) and noise.
@@ -104,17 +127,30 @@ impl StateTable {
         self.lines.is_empty()
     }
 
-    /// The state for a call — exact, then bare-before-slash, then
-    /// after-slash, the same ladder `lotw::is_user` and
-    /// `LogMatrix::has_worked_call` walk.
+    /// The state for a call.
+    ///
+    /// **Deliberately NOT the slash ladder `lotw::is_user` and
+    /// `LogMatrix::has_worked_call` walk**, and the difference is the whole
+    /// point: those answer *who* a call belongs to, where finding `K7AZQ`
+    /// inside `DV2/K7AZQ` is exactly right. This answers *where the
+    /// operator is*, where it is exactly wrong — `DV2/K7AZQ` is an Arizonan
+    /// transmitting from the Philippines, and crediting Arizona put a false
+    /// New State on the screen (reported 2026-09-01).
+    ///
+    /// So: an exact match, or a base call carrying nothing but a plain
+    /// operating modifier ([`PLAIN_MODIFIERS`]). Anything else with a slash
+    /// — a prefix override, a suffix override, a call-area digit — means the
+    /// licence address is not where they are, and the honest answer is none.
     pub fn lookup(&self, callsign: &str) -> Option<&str> {
         let upper = callsign.trim().to_ascii_uppercase();
         if let Some(st) = self.lookup_exact(&upper) {
             return Some(st);
         }
-        let (bare, suffix) = upper.split_once('/')?;
-        self.lookup_exact(bare)
-            .or_else(|| self.lookup_exact(suffix))
+        let (base, suffix) = upper.split_once('/')?;
+        if !PLAIN_MODIFIERS.contains(&suffix) {
+            return None;
+        }
+        self.lookup_exact(base)
     }
 
     fn lookup_exact(&self, call: &str) -> Option<&str> {
@@ -177,15 +213,41 @@ mod tests {
         assert_eq!(find_iota_ref("25 WPM CQ"), None);
     }
 
+    /// A licence address answers "where is this station" only while the
+    /// station is at it. Every case below is one where it is not — and the
+    /// `KH6/` line is the one this test used to assert BACKWARDS, which is
+    /// how `DV2/K7AZQ` reached the screen as a New State.
     #[test]
-    fn state_table_lookup_walks_the_slash_ladder() {
+    fn a_call_operating_away_from_its_licence_has_no_state() {
         // Deliberately unsorted input — parse must sort its own index.
-        let t = StateTable::parse("W1AW CT\nK6XYZ CA\nAA0A SD\n".into());
-        assert_eq!(t.len(), 3);
+        let t = StateTable::parse("W1AW CT\nK6XYZ CA\nK7AZQ AZ\nAA0A SD\n".into());
+        assert_eq!(t.len(), 4);
         assert_eq!(t.lookup("w1aw"), Some("CT"));
-        assert_eq!(t.lookup("W1AW/M"), Some("CT"), "suffix stripped");
-        assert_eq!(t.lookup("KH6/K6XYZ"), Some("CA"), "prefix override");
+        assert_eq!(t.lookup("K7AZQ"), Some("AZ"));
+
+        // Plain operating modifiers: same licensee, still home.
+        assert_eq!(t.lookup("W1AW/M"), Some("CT"));
+        assert_eq!(t.lookup("K7AZQ/P"), Some("AZ"));
+        assert_eq!(t.lookup("K7AZQ/QRP"), Some("AZ"));
+
+        // The reported case: an Arizonan transmitting from the Philippines.
+        assert_eq!(t.lookup("DV2/K7AZQ"), None, "prefix override is a PLACE");
+        // Same shape, US territory in front — still not the home state.
+        assert_eq!(t.lookup("KH6/K6XYZ"), None);
+        // Suffix override, and a call-area digit: both say "not at home".
+        assert_eq!(t.lookup("K6XYZ/DU2"), None);
+        assert_eq!(t.lookup("W1AW/7"), None, "call area 7 is not Connecticut");
+
         assert_eq!(t.lookup("G4ABC"), None);
         assert!(StateTable::parse(String::new()).is_empty());
+    }
+
+    #[test]
+    fn was_counts_the_fifty_states_across_three_dxcc_entities() {
+        assert!(counts_for_was(291), "lower 48");
+        assert!(counts_for_was(6), "Alaska is a WAS state");
+        assert!(counts_for_was(110), "Hawaii is a WAS state");
+        assert!(!counts_for_was(375), "Philippines");
+        assert!(!counts_for_was(103), "Guam is not a WAS state");
     }
 }

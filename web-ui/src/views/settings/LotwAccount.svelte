@@ -57,8 +57,8 @@
 
 <div class="card">
   <h2>
-    LoTW account
-    <HelpTip label="LoTW account">
+    LoTW
+    <HelpTip label="LoTW">
       <span class="para">
         Your <b>Logbook of the World</b> website login — the same one you use
         at lotw.arrl.org, not a TQSL certificate and not your ClubLog

@@ -2,6 +2,24 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-09-01 · **Status:**
+**v2.17.3 — a US call operating abroad is no longer a New State.** Manoj
+spotted `DV2/K7AZQ` flagged as one: an Arizona licensee transmitting from
+the Philippines. **The cause is the part worth remembering** —
+`StateTable::lookup` reused the exact / before-slash / after-slash ladder
+that `lotw::is_user` and `has_worked_call` walk. That ladder answers *who
+does this call belong to*, where finding `K7AZQ` inside `DV2/K7AZQ` is
+exactly right; it was being asked *where is this operator*, where it is
+exactly wrong. **A test asserted the broken behaviour** (`KH6/K6XYZ` →
+`CA`, labelled "prefix override"), which is how it shipped — a test can
+only protect a rule someone stated correctly.
+
+Two guards now, deliberately redundant: `best_award` requires the spot's
+resolved entity to be WAS-countable (291 / 6 / 110 — Alaska and Hawaii are
+WAS states though separate DXCC entities), and `lookup` itself takes only
+an exact match or a plain `/P`, `/M`, `/QRP`. A call-area digit (`W1AW/7`)
+is refused too: that suffix is the operator *saying* they are not home.
+Also in 2.17.3: the settings pages are just **ClubLog** and **LoTW**.
+
 **v2.17.2 — explanatory prose lives on the `?` hovers** (Manoj: *"move all
 explanatory texts to on hover"*), continuing the rule `HelpTip.svelte`'s own
 header states: read-once paragraphs were pushing the daily controls down the

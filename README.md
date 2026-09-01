@@ -25,6 +25,14 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.17.3** (2026-09-01): **a US call operating abroad is no longer a New
+State.** `DV2/K7AZQ` — an Arizona licensee in the Philippines — was credited
+with Arizona, because the state lookup reused the callsign ladder that
+answers *who a call belongs to* for a question about *where the operator
+is*. Two independent guards now: the spot's DXCC entity has to be one WAS
+counts, and the lookup itself takes nothing but a plain `/P`, `/M` or
+`/QRP`. Also: the two settings pages are just **ClubLog** and **LoTW**.
+
 **v2.17.2** (2026-09-01): **explanatory prose moved onto the `?` hovers.**
 Settings pages carry their controls; the paragraphs explaining them are one
 hover away. Conditional warnings — "the FCC table is not on this server yet",
@@ -688,10 +696,13 @@ What each level runs on, spot side:
 - **WAS (state)** — which US state the call is licensed in, looked up in
   the FCC amateur database. An admin downloads that once under **Settings
   › Server › Reference data** (~200 MB, distilled to ~8 MB on the spot);
-  until then the State levels stay quiet. Honesty note: the FCC knows the
-  *license* address, so a W6 living in Ohio spots as California — every
-  logger that offers WAS spotting shares this. DC counts as Maryland, per
-  the WAS rules.
+  until then the State levels stay quiet. **A station operating away from
+  its licence earns no state**: `DV2/K7AZQ` is an Arizona licensee
+  transmitting from the Philippines, and a suffix override or a call-area
+  digit (`W1AW/7`) is refused for the same reason. The caveat that remains
+  is the one no logger escapes — the FCC knows the *licence* address, so a
+  plain `W6` call held by someone who has moved to Ohio still reads as
+  California. DC counts as Maryland, per the WAS rules.
 - **IOTA (island)** — the reference a cluster spot's comment announces
   (`AS-153`), validated against the IOTA directory, which downloads from
   iota-world.org on the same Reference data page (their terms are personal

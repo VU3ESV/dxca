@@ -32,9 +32,9 @@
       head: 'My station',
       admin: false,
       items: [
-        { key: 'clublog', label: 'ClubLog account',
+        { key: 'clublog', label: 'ClubLog',
           find: 'clublog credentials email app password callsign log download refresh auto-refresh api matrix' },
-        { key: 'lotw', label: 'LoTW account',
+        { key: 'lotw', label: 'LoTW',
           find: 'lotw logbook of the world arrl login username password qsl report confirmed confirmation '
               + 'state grid island award was vucc iota credentials' },
         // The whole alert ladder lives here — DXCC's classic eight and the

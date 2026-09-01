@@ -81,8 +81,8 @@
 
 <div class="card">
   <h2>
-    ClubLog account
-    <HelpTip label="ClubLog account">
+    ClubLog
+    <HelpTip label="ClubLog">
       <span class="para">
         Your log drives the New / ? highlighting — only for your account.
         These credentials download <em>your</em> log.

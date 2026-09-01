@@ -321,7 +321,7 @@ impl AlertClassifier<'_> {
 
         // Award candidates need only a band, not an entity — a call the
         // resolver cannot place can still hand you a grid square.
-        let award = band.and_then(|b| self.best_award(refs, b));
+        let award = band.and_then(|b| self.best_award(refs, b, dxcc_id));
 
         let (Some(dxcc), Some(bnd)) = (dxcc_id, band) else {
             let (level, award_ref) = match award {
@@ -357,7 +357,12 @@ impl AlertClassifier<'_> {
     /// fills it. Grid is per band (VUCC scores each band separately, and
     /// only 50 MHz+); state and IOTA are key-level — worked at all, then
     /// confirmed on any band.
-    fn best_award(&self, refs: &AwardRefs, band: &str) -> Option<(AlertLevel, String)> {
+    fn best_award(
+        &self,
+        refs: &AwardRefs,
+        band: &str,
+        dxcc_id: Option<i32>,
+    ) -> Option<(AlertLevel, String)> {
         let mut cands: Vec<(AlertLevel, String)> = Vec::new();
 
         if bands::is_vucc_band(band)
@@ -370,7 +375,17 @@ impl AlertClassifier<'_> {
             };
             cands.push((raw, g4));
         }
-        if let Some(st) = refs.state.and_then(crate::awards::normalize_state) {
+        // A state means nothing unless the station is IN the US: a call
+        // like `DV2/K7AZQ` is an Arizona licensee transmitting from the
+        // Philippines, and its licence address is not a WAS credit. The
+        // entity the resolver already worked out is the reliable test —
+        // `StateTable::lookup` refuses the same call independently, and
+        // both guards earn their place (2026-09-01).
+        if let Some(st) = refs
+            .state
+            .filter(|_| dxcc_id.is_some_and(crate::awards::counts_for_was))
+            .and_then(crate::awards::normalize_state)
+        {
             let raw = match self.matrix.by_state.get(st) {
                 Some(s) if s.is_confirmed() => AlertLevel::Worked,
                 Some(_) => AlertLevel::UnconfState,
@@ -706,6 +721,45 @@ mod tests {
             },
         );
         assert_eq!(unconf_iota.level, AlertLevel::UnconfIota);
+    }
+
+    /// The reported bug: `DV2/K7AZQ` is a US licensee operating from the
+    /// Philippines. The FCC table knows the call, so a state ref can still
+    /// arrive — the entity is what has to refuse it.
+    #[test]
+    fn a_us_call_operating_abroad_is_not_a_new_state() {
+        let cfg = awards_config();
+        let m = matrix();
+        // India stands in for "somewhere that is not the US" — the resolver
+        // in these tests knows VU and K, and VU is not a WAS entity.
+        let abroad = classify_refs(
+            &m,
+            "VU2XYZ",
+            14.074,
+            &cfg,
+            AwardRefs {
+                state: Some("AZ"),
+                ..AwardRefs::NONE
+            },
+        );
+        assert_ne!(abroad.level, AlertLevel::NewState);
+        assert_ne!(abroad.level, AlertLevel::UnconfState);
+
+        // The same ref on a call the resolver places in the US still works,
+        // or the guard would have switched WAS off altogether.
+        let mut home = matrix();
+        home.record(291, "20M", "DATA", "K9XX", true);
+        let at_home = classify_refs(
+            &home,
+            "K1ABC",
+            14.074,
+            &cfg,
+            AwardRefs {
+                state: Some("AZ"),
+                ..AwardRefs::NONE
+            },
+        );
+        assert_eq!(at_home.level, AlertLevel::NewState);
     }
 
     #[test]
