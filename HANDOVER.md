@@ -252,16 +252,15 @@ My station › Awards**; an award left unticked adds no control anywhere, so
 the Spots and Alerts screens of a non-chaser are unchanged. Also in the
 release: the confirmation-path gate on the `?` levels, the TCI (ExpertSDR3)
 destination with its reconnect defect fixed, and the ClubLog embed
-following the app's appearance. **Fleet at v2.20.0 (2026-09-01), with one host missed.** noderedpi4,
-Windows, adersh and vu2oy are all on it; **`vu2wj@192.168.1.201` is still
-on v2.17.5** — its deploy failed at `ssh: connect ... Operation timed out`,
-*before* anything was transferred, so that host is untouched rather than
-half-upgraded. Its `/32` route was in the table the whole time and it
-answers neither ping nor ssh, which is the **stale-handshake signature**
-documented from 2026-08-30, not proof the box is off. Bouncing that one
-tunnel is the first thing to try (`sudo wg-quick down Shaji_vu2wj` then
-`up`), and it needs Manoj's password. The other two tunnels worked in the
-same pass, so WireGuard itself is fine.
+following the app's appearance. **The whole fleet is on v2.20.0 (2026-09-01)** — all five hosts, every
+cluster node reconnected. `vu2wj@192.168.1.201` needed a second pass: its
+first attempt died at `ssh: connect ... Operation timed out` *before*
+anything transferred, so it sat untouched on v2.17.5 rather than
+half-upgraded. It came back on its own a few minutes later — the
+**stale-handshake signature** (its `/32` route present the whole time
+while ping and ssh both failed) rather than a powered-off box, exactly as
+the 2026-08-30 note predicted. Worth remembering: a failed tunnelled
+deploy is worth simply retrying before anyone bounces a tunnel.
 
 **The Windows box downloaded the IOTA directory by itself** (1178 groups)
 on the scheduler's first tick, while `fcc_calls` stayed 0 — which is
