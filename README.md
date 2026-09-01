@@ -52,7 +52,9 @@ per-user alert row tints, LoTW markers. Spots are flagged across **eight
 alert levels** — New DXCC/Band/Mode/Slot for never worked, and ? DXCC/Band/
 Mode/Slot for worked-but-unconfirmed — each independently switchable, and
 narrowable by level, mode class (CW/Phone/Data) and band (160m–70cm) both
-on screen and, separately, for Telegram. The shell is **three tabs — Spots,
+on screen and, separately, for Telegram — where the `?` levels can further
+be held to calls new to your log and/or on LoTW, the stations that can
+still turn an entity green. The shell is **three tabs — Spots,
 Alerts, Stats — and a gear** (2026-08-29): what you watch is a tab, everything
 you set up lives behind the gear in **Settings**, grouped by whose it is (My
 station / Server / Access) and searchable by topic. Both feeds are laid out on
@@ -612,6 +614,28 @@ commands and this exists instead.
 the history answers the same question after the fact. Alerts sent before
 this shipped show `—`: the column was added to existing databases on
 upgrade, and there was nothing to back-fill it with.
+
+### Confirmation-path gate (optional, off by default)
+
+The four `?` levels exist to hunt confirmations, and a confirmation needs
+the right station: some operators simply never QSL, and re-working one
+cannot turn an entity green. Two ticks on **Alerts**, under *For the ?
+levels*, narrow those pings to stations that still can:
+
+- **The call is new to my log** — hold `?` pings for calls already in your
+  log. A call you worked that never confirmed is a demonstrated non-QSLer.
+- **The call uses LoTW** — hold `?` pings for calls not on the LoTW users
+  list, the same server-wide list the green markers read. A LoTW user is
+  the fast path to a confirmation.
+
+With both on, only a call you have never worked that uploads to LoTW will
+ping — a station that can be worked *and* will confirm. Both narrow the
+`?` half of the ladder only: the **New** levels always follow their own
+ticks, because an ATNO is worth working whatever the QSL prospects. Like
+every other narrowing here it gates Telegram and the panadapters, never
+the screen — the spot still shows with its tint; you are just not woken
+for it. Design and the award phases that follow it in
+[`docs/AWARDS.md`](docs/AWARDS.md).
 
 ### Stats
 

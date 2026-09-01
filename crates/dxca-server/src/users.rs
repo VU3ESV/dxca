@@ -323,6 +323,17 @@ impl UserService {
         )
     }
 
+    /// Is this call already in the user's log? `false` when the user has
+    /// no matrix — no log means nothing to skip, and like every other
+    /// narrowing in the fan-out the gate fails open.
+    fn has_worked_call(&self, user_id: i64, call: &str) -> bool {
+        self.matrices
+            .read()
+            .unwrap()
+            .get(&user_id)
+            .is_some_and(|m| m.has_worked_call(call))
+    }
+
     /// Alert fan-out for one spot: every user with a matrix classifies it;
     /// matching levels go to their Telegram with per-callsign cooldown
     /// (1.x `maybeNotify`, minus macOS notifications and display filters).
@@ -345,7 +356,21 @@ impl UserService {
             let Some(c) = self.classify(user_id, spot) else {
                 continue;
             };
+            let Some(call) = spot.dx_callsign() else {
+                continue;
+            };
             if !notify.wants_level(c.level) {
+                continue;
+            }
+            // The confirmation-path gate (docs/AWARDS.md, phase 1). Sits
+            // right after the level check so its two lookups only run for
+            // levels this account actually wants — and before the band/mode
+            // narrowing because it is the cheapest place a `?` ping can die.
+            if !notify.passes_unconf_gate(
+                c.level,
+                self.has_worked_call(user_id, &call),
+                self.is_lotw_user(&call),
+            ) {
                 continue;
             }
             // Band / mode-class narrowing is Telegram's alone — the Spots
@@ -383,9 +408,6 @@ impl UserService {
                     continue;
                 }
             }
-            let Some(call) = spot.dx_callsign() else {
-                continue;
-            };
             if !self.cooldown_ok(user_id, &call, &notify) {
                 continue;
             }

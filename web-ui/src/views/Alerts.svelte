@@ -53,6 +53,7 @@
     notify_new_band: true, notify_new_mode: true,
     notify_unconf_dxcc: false, notify_unconf_slot: false,
     notify_unconf_band: false, notify_unconf_mode: false,
+    notify_unconf_skip_worked: false, notify_unconf_lotw_only: false,
     notify_bands: [], notify_modes: [],
     notify_manual_only: false,
     notify_spotter_kind: 'all',
@@ -110,6 +111,7 @@
   // once rather than eight times.
   let activeFilters = $derived(
     (levels().length && !levels().every((l) => cfg[FIELD[l.key]]) ? 1 : 0) +
+      (cfg.notify_unconf_skip_worked || cfg.notify_unconf_lotw_only ? 1 : 0) +
       (modeSel.size ? 1 : 0) +
       (bandSel.size ? 1 : 0) +
       (cfg.notify_spotter_kind !== 'all' ? 1 : 0) +
@@ -142,6 +144,42 @@
           </label>
         {/each}
       </div>
+    </div>
+
+    <div class="railgroup">
+      <span class="railhead">
+        For the ? levels
+        <HelpTip label="For the ? levels">
+          <span class="para">
+            The <b>?</b> levels exist to hunt confirmations, and a
+            confirmation needs the right station: some operators simply never
+            QSL, and re-working one cannot turn an entity green.
+          </span>
+          <span class="para">
+            Both ticks narrow only the four <b>?</b> levels. With both on,
+            only a call you have never worked that uploads to LoTW will ping
+            — a station that can be worked <b>and</b> will confirm.
+          </span>
+        </HelpTip>
+      </span>
+      <!-- docs/AWARDS.md phase 1. On the call, not the spot's provenance —
+           and only on the ? half of the ladder: an ATNO is worth working
+           whatever the QSL prospects. -->
+      <label
+        class="flabel"
+        title="Hold ? pings for calls already in your log. A call you worked that never confirmed is a demonstrated non-QSLer — re-working them cannot confirm the entity."
+      >
+        <input type="checkbox" bind:checked={cfg.notify_unconf_skip_worked} />The call is
+        new to my log
+      </label>
+      <label
+        class="flabel"
+        title="Hold ? pings for calls not on the LoTW users list — a LoTW user is the fast path to a confirmation."
+      >
+        <input type="checkbox" bind:checked={cfg.notify_unconf_lotw_only} />The call uses
+        LoTW
+      </label>
+      <span class="always">The New levels always ping their ticks.</span>
     </div>
 
     <ChipGroup stacked label="Modes" options={modes()} bind:selected={modeSel} />

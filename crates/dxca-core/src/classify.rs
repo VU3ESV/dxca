@@ -57,6 +57,18 @@ impl AlertLevel {
         AlertLevel::UnconfSlot,
     ];
 
+    /// The confirmation-hunting half of the ladder — the four `?` levels.
+    /// The `docs/AWARDS.md` phase-1 gate applies to exactly these.
+    pub fn is_unconfirmed(self) -> bool {
+        matches!(
+            self,
+            AlertLevel::UnconfDxcc
+                | AlertLevel::UnconfBand
+                | AlertLevel::UnconfMode
+                | AlertLevel::UnconfSlot
+        )
+    }
+
     /// Stable machine key — the same string serde emits.
     pub fn key(self) -> &'static str {
         match self {
@@ -361,6 +373,15 @@ mod tests {
             config,
         }
         .classify(call, mhz, mode)
+    }
+
+    #[test]
+    fn unconfirmed_is_exactly_the_question_half() {
+        for level in AlertLevel::FLAGGABLE {
+            assert_eq!(level.is_unconfirmed(), level.key().starts_with("unconf"));
+        }
+        assert!(!AlertLevel::Worked.is_unconfirmed());
+        assert!(!AlertLevel::None.is_unconfirmed());
     }
 
     #[test]

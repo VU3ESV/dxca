@@ -8,6 +8,14 @@ and the FlexRadio panadapter settings moved into Destinations from their own
 entry. The multi-station per-account feeds work was **withdrawn** — see the
 entries under Open items.
 
+**ON MAIN, NOT RELEASED — the confirmation-path gate on the `?` levels**
+(2026-09-01, `docs/AWARDS.md` phase 1): two per-account ticks on Alerts that
+hold `Unconf*` pings for calls already in the log and/or not on LoTW — only
+a station that can be worked *and* will confirm is worth waking for. No
+version bump; it rides the same release pass as TCI below, and Manoj wants
+**both tried on the local Pi first**. The wider award design (VUCC / IOTA /
+WAS) is drafted in `docs/AWARDS.md`, phases 2–4 unbuilt.
+
 **MERGED, NOT RELEASED — a fourth Destinations tab: TCI (ExpertSDR3
 panorama).** `vu2cpl/dxca` PR #1 from VU3ESV, merged to `main` on 2026-09-01.
 **No tag, no release, on no host** — the five installs still run v2.16.0, and
@@ -947,6 +955,34 @@ What has to happen in that pass, in this order:
 Follow-ups 2 and 3 in the entry below — the idle-drain comment overclaiming,
 and the direct `tungstenite` pin — are comment-and-`Cargo.toml` scale. Worth
 taking in the same pass while it is open; neither blocks a tag on its own.
+
+### DONE (on main, unreleased): the confirmation-path gate — docs/AWARDS.md phase 1
+
+Two per-account ticks on **Alerts › For the ? levels**, narrowing only the
+four `Unconf*` levels — the feature request of 2026-09-01: some operators
+simply refuse to QSL, so an unconfirmed entity should only ping for **a new
+call that uses LoTW**, a station that can be worked *and* will confirm.
+
+* **The call is new to my log** — `LogMatrix::has_worked_call`, the first
+  real consumer of `workedCalls` (1.x carried the field but never read it),
+  with the same exact / bare-before-slash / after-slash handling as
+  `lotw::is_user`.
+* **The call uses LoTW** — the server-wide users list the green markers
+  already read; this is the first place it *gates* anything.
+
+The gate is `NotifyUserConfig::passes_unconf_gate`, called from `fan_out`
+right after `wants_level`, so it holds Telegram, Flex and TCI alike and
+never touches the screen, the telnet feed or MQTT. Both ticks default off
+and ride `notify_json` with `#[serde(default)]` — **no migration**, and an
+account that has not opted in behaves exactly as before. The `New*` levels
+are exempt on purpose: an ATNO is worth working whatever the QSL prospects.
+Tests: the gate truth table (`db.rs`), the slash lookup (`matrix.rs`), the
+ladder half (`classify.rs`); `just gate` green.
+
+**Next, per Manoj (2026-09-01): try it on the local Pi together with the
+TCI destination before any tag** — the release pass above then covers both.
+Phases 2–4 (VUCC / IOTA / WAS) are designed but unbuilt — `docs/AWARDS.md`,
+including the three data checks to run before building anything.
 
 ### DONE (merged, unreleased): alerts on an ExpertSDR3 panorama (TCI) — PR #1
 

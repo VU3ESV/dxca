@@ -216,6 +216,21 @@ pub struct NotifyUserConfig {
     pub notify_unconf_slot: bool,
     pub notify_unconf_band: bool,
     pub notify_unconf_mode: bool,
+    // docs/AWARDS.md phase 1: the confirmation-path gate on the four `?`
+    // levels. An unconfirmed entity otherwise pings for every spot —
+    // including the very station that never QSLed the first QSO. Some
+    // operators simply refuse to QSL, and re-working one cannot turn the
+    // entity green; the ping is only worth the interruption for a station
+    // that can be worked AND will confirm. Both default off, so an account
+    // that has not opted in behaves exactly as before.
+    /// Hold `?` pings for calls already in the log — a call worked but
+    /// never confirmed is a demonstrated non-QSLer.
+    #[serde(default)]
+    pub notify_unconf_skip_worked: bool,
+    /// Hold `?` pings for calls not on the LoTW users list — a LoTW user
+    /// is the fast path to a confirmation.
+    #[serde(default)]
+    pub notify_unconf_lotw_only: bool,
     // DXCA 2.1: band / mode-class narrowing for Telegram only. **Empty means
     // ALL** — the same convention `broadcast_destinations.sources` uses, and
     // the reason a fresh account is not silent. Bands are resolver names
@@ -372,6 +387,8 @@ impl Default for NotifyUserConfig {
             notify_unconf_slot: false,
             notify_unconf_band: false,
             notify_unconf_mode: false,
+            notify_unconf_skip_worked: false,
+            notify_unconf_lotw_only: false,
             notify_bands: Vec::new(),
             notify_modes: Vec::new(),
             notify_manual_only: false,
@@ -435,6 +452,31 @@ impl NotifyUserConfig {
         let mode_ok =
             self.notify_modes.is_empty() || self.notify_modes.iter().any(|x| x == mode_class);
         band_ok && mode_ok
+    }
+
+    /// The confirmation-path gate (docs/AWARDS.md, phase 1), on the four
+    /// `?` levels only. Unlike the rest of this family it narrows on the
+    /// **call**, not the spot's provenance: a call already in the log is a
+    /// demonstrated non-QSLer, and a call not on LoTW has no fast path to
+    /// confirming, so either tick holds `?` pings for stations that cannot
+    /// turn the entity green. The `New*` levels pass untouched — an ATNO
+    /// is worth working whatever the QSL prospects.
+    pub fn passes_unconf_gate(
+        &self,
+        level: AlertLevel,
+        already_worked: bool,
+        is_lotw: bool,
+    ) -> bool {
+        if !level.is_unconfirmed() {
+            return true;
+        }
+        if self.notify_unconf_skip_worked && already_worked {
+            return false;
+        }
+        if self.notify_unconf_lotw_only && !is_lotw {
+            return false;
+        }
+        true
     }
 
     /// Whether this level is wanted, over all eight flaggable levels.
@@ -1429,6 +1471,38 @@ mod tests {
         let d = NotifyUserConfig::default();
         assert!(d.wants_level(AlertLevel::NewDxcc));
         assert!(!d.wants_level(AlertLevel::UnconfDxcc));
+    }
+
+    #[test]
+    fn unconf_gate_narrows_only_the_question_marks() {
+        let both = NotifyUserConfig {
+            notify_unconf_skip_worked: true,
+            notify_unconf_lotw_only: true,
+            ..Default::default()
+        };
+        // New levels are exempt however hopeless the call.
+        assert!(both.passes_unconf_gate(AlertLevel::NewDxcc, true, false));
+        // With both ticks, only a new call on LoTW survives.
+        assert!(both.passes_unconf_gate(AlertLevel::UnconfBand, false, true));
+        assert!(!both.passes_unconf_gate(AlertLevel::UnconfBand, true, true));
+        assert!(!both.passes_unconf_gate(AlertLevel::UnconfBand, false, false));
+        // Each tick narrows on its own axis only.
+        let skip = NotifyUserConfig {
+            notify_unconf_skip_worked: true,
+            ..Default::default()
+        };
+        assert!(!skip.passes_unconf_gate(AlertLevel::UnconfDxcc, true, false));
+        assert!(skip.passes_unconf_gate(AlertLevel::UnconfDxcc, false, false));
+        let lotw = NotifyUserConfig {
+            notify_unconf_lotw_only: true,
+            ..Default::default()
+        };
+        assert!(!lotw.passes_unconf_gate(AlertLevel::UnconfSlot, false, false));
+        assert!(lotw.passes_unconf_gate(AlertLevel::UnconfSlot, true, true));
+        // Default config: wide open — an account that has not opted in
+        // behaves exactly as before the gate existed.
+        let d = NotifyUserConfig::default();
+        assert!(d.passes_unconf_gate(AlertLevel::UnconfDxcc, true, false));
     }
 
     /// The migration is the risky half of adding a column: production

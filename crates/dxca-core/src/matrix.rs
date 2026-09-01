@@ -158,6 +158,26 @@ impl LogMatrix {
         self.by_dxcc.get(&dxcc)
     }
 
+    /// Is this call already in the log? Same slash handling as
+    /// `lotw::is_user` — exact, bare-before-slash, and after-slash (prefix
+    /// overrides like VP8/K1JT) — against the lowercased calls [`record`]
+    /// stores. The first real consumer of `worked_calls`: 1.x carried the
+    /// field but never read it.
+    ///
+    /// [`record`]: Self::record
+    pub fn has_worked_call(&self, callsign: &str) -> bool {
+        let lower = callsign.to_lowercase();
+        if self.worked_calls.contains(&lower) {
+            return true;
+        }
+        match lower.split_once('/') {
+            Some((bare, suffix)) => {
+                self.worked_calls.contains(bare) || self.worked_calls.contains(suffix)
+            }
+            None => false,
+        }
+    }
+
     pub fn total_dxcc_count(&self) -> usize {
         self.by_dxcc.len()
     }
@@ -378,6 +398,17 @@ pub struct MatrixStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn worked_call_lookup_handles_slashes() {
+        let mut m = LogMatrix::default();
+        m.record(324, "20M", "DATA", "VU2ABC", false);
+        assert!(m.has_worked_call("vu2abc"), "case-insensitive exact");
+        assert!(m.has_worked_call("VU2ABC/P"), "suffix stripped");
+        assert!(m.has_worked_call("VP8/VU2ABC"), "prefix override stripped");
+        assert!(!m.has_worked_call("VU2XYZ"));
+        assert!(!LogMatrix::default().has_worked_call("VU2ABC"), "empty log");
+    }
 
     /// The ARRL counts current entities; a deleted one is a real QSO that
     /// scores nothing. Excluding must drop it from every total at once —
