@@ -33,7 +33,11 @@ fixtures had empty axes, so they would have passed on the new guard rather
 than on the rule they were written for.
 
 **Operator step after upgrading: one Refresh log now**, or states stay
-empty until the daily refresh comes round.
+empty until the daily refresh comes round. **The poisoned 1,431-byte cache
+was deleted from noderedpi4** during the 2.17.5 deploy — without that the
+week-long cache would have re-merged the bad file and re-erased the states
+even on the fixed build. No other host had a cached report (no LoTW
+credentials set on them).
 
 **v2.17.4 — the Server card and the file-only line stop lying.** Three
 display defects Manoj found by reading the Reference-data page: the
@@ -94,8 +98,8 @@ My station › Awards**; an award left unticked adds no control anywhere, so
 the Spots and Alerts screens of a non-chaser are unchanged. Also in the
 release: the confirmation-path gate on the `?` levels, the TCI (ExpertSDR3)
 destination with its reconnect defect fixed, and the ClubLog embed
-following the app's appearance. **v2.17.0 through v2.17.3 all released 2026-09-01** (tag + GitHub release
-+ Windows zip each), and **the whole fleet is on v2.17.3** —
+following the app's appearance. **v2.17.0 through v2.17.5 all released 2026-09-01** (tag + GitHub release
++ Windows zip each), and **the whole fleet is on v2.17.5** —
 deployed and verified the same day, every host answering with its nodes
 live:
 
