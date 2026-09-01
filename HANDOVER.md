@@ -994,6 +994,36 @@ Follow-ups 2 and 3 in the entry below — the idle-drain comment overclaiming,
 and the direct `tungstenite` pin — are comment-and-`Cargo.toml` scale. Worth
 taking in the same pass while it is open; neither blocks a tag on its own.
 
+### DONE (on main, unreleased): four fixes from the first real awards run (2026-09-01)
+
+All four came out of Manoj using the new UI on the Pi, and all four are
+worth knowing about beyond the awards feature:
+
+1. **`data.fcc.gov` 403s on `Accept-Encoding: gzip`.** Not the UA, not
+   HTTP/2, not the Pi's network — ureq adds that header itself because the
+   `gzip` feature is on for ClubLog's gzipped endpoints. Verified against
+   the live host: `gzip` and `identity` are BOTH refused, while `*`,
+   `deflate`, `br`, `gzip;q=0`, an empty value and no header at all all
+   return 200/206. A WAF rule, not content negotiation. `fcc.rs` now sends
+   `identity;q=1, *;q=0` (accepted, and the honest ask for a zip), and the
+   Pi answers 206 to that exact request.
+2. **Help popovers were clipped by the filter rail.** `FilterRail` is a
+   scroll container (`overflow-y: auto`) and an absolutely-positioned
+   popover cannot escape one, so a tip opened in the rail was cut at 12rem.
+   `HelpTip` is **viewport-positioned** now (`position: fixed`, placed in
+   `reposition()` from the icon's rect, flipped above when there is no room
+   below, re-placed on any ancestor scroll via a capture-phase listener).
+   Fixes every tip in both rails and the Settings editors, not just the one
+   reported.
+3. **A stale award chip kept filtering the Spots feed invisibly.** The chip
+   selection persists in `localStorage`; deselecting an award removed the
+   chip from the rail but not from the stored set, so it kept narrowing the
+   feed — and would have emptied it if it was the only chip. `Dashboard`
+   now prunes the stored selection to the levels actually offered, guarded
+   on both vocabularies being loaded.
+4. **UDP destinations column order**: the wide Sources CSV field sat
+   mid-row and pushed Unf / On / ✕ off the right edge; Sources is last now.
+
 ### DONE (on main, unreleased): the Awards settings page + declutter (2026-09-01, same day)
 
 The first cut of phases 2–4 folded the award toggles into the ClubLog
