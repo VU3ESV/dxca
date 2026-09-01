@@ -1036,6 +1036,17 @@ buzzing is a perfectly good way to run.
 pushing every cluster spot plus DXCA pushing alerts means each alert lands
 twice.
 
+**More than one radio is allowed.** The tab holds a list rather than a single
+address: **Add radio** for each FlexRadio you want marked — a second rig on
+the bench, or another SmartSDR instance — and every alert goes to all of
+them. Each row carries its own port, so two instances on one machine can each
+take a row, and each row's **On** box keeps the address while stopping the
+sending. The same address entered twice is sent to once, a blank port and an
+explicit 4992 being the same radio. An account that configured its one radio
+before the list existed keeps it, adopted into the list on upgrade with
+nothing to re-enter. The ExpertSDR3 tab below works the same way, and the two
+lists are wholly independent.
+
 Three things worth knowing about the implementation:
 
 - **It is not a broadcast destination.** Those are UDP datagrams; 4992 is a
@@ -1067,6 +1078,22 @@ settings, the same "only alerts, never the whole feed", and the same warning
 about a second client already feeding the display. The two are independent in
 every direction — a station can run one, the other, both, or neither, and
 either without Telegram.
+
+**More than one radio is allowed.** The TCI tab holds a list rather than a
+single address: **Add radio** for each ExpertSDR3 you want marked — a second
+rig on the bench, or another ExpertSDR3 instance driving its own panorama —
+and every alert goes to all of them. Each row carries its own port, so two
+instances on one machine can each take a row, and each row's **On** box keeps
+the address while stopping the sending, which is how you silence one radio for
+an evening without retyping its IP.
+
+Nothing about the wire changes: each radio is its own WebSocket session and
+its own set of `SPOT_DELETE` deadlines, exactly as the single radio was. The
+same address entered twice is sent to once — a blank port and an explicit
+40001 are the same radio — because two entries for one radio would put two
+marks on it per alert and race two deletions to remove one of them. An account
+that configured its one radio before the list existed keeps it: the address is
+adopted into the list on upgrade, switched on, and nothing needs re-entering.
 
 Written against the published spec: *TCI Protocol*, Expert Group LLC, rev
 1.0.7 / TCI 2.0, 12 Jan 2024. One command carries a spot:

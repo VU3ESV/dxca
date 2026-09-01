@@ -46,6 +46,14 @@ use std::time::{Duration, Instant};
 /// Wait between reconnect attempts. Connections are only attempted when a
 /// spot needs sending, so this only matters when alerts arrive in a burst
 /// while the radio is off.
+/// SmartSDR's command port.
+///
+/// The `tci::DEFAULT_PORT` counterpart, named for the same reason: with more
+/// than one radio per account the default is applied per device, and a bare
+/// 4992 repeated at each of those sites is the kind of constant that gets
+/// changed in three places and missed in a fourth.
+pub const DEFAULT_PORT: u16 = 4992;
+
 const RECONNECT_AFTER: Duration = Duration::from_secs(30);
 
 /// Queue depth. Alerts are rare; anything approaching this means the radio
