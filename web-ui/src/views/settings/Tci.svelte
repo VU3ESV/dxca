@@ -199,7 +199,8 @@
       <br /><br />
       <b>TCI has no expiry of its own</b>, so DXCA removes each spot when its
       time is up. If DXCA restarts in between, whatever is on the panorama
-      stays until you clear it in ExpertSDR3.
+      stays until you clear it in ExpertSDR3 — a dropped connection is
+      different, and the pending deletions go out when it reconnects.
     </HelpTip>
   </h3>
 

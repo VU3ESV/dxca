@@ -12,6 +12,10 @@ import { api } from './api';
 export interface Option {
   key: string;
   label: string;
+  /// Levels only: which award this level belongs to ('vucc' | 'was' |
+  /// 'iota'), null/absent for the classic DXCC eight. What `lib/chase`
+  /// filters level lists on.
+  award?: string | null;
 }
 
 const state = $state<{

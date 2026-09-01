@@ -6,16 +6,25 @@
 use crate::db::{Db, NotifyUserConfig};
 use dxca_connect::clublog::{self, Endpoints};
 use dxca_connect::flex;
+use dxca_connect::iota::IotaDirectory;
 use dxca_connect::lotw;
 use dxca_connect::tci;
 use dxca_connect::telegram::{Telegram, escape_html};
-use dxca_core::classify::{AlertClassifier, AlertConfig, AlertLevel, Classification};
+use dxca_core::awards::StateTable;
+use dxca_core::classify::{AlertClassifier, AlertConfig, AlertLevel, AwardRefs, Classification};
 use dxca_core::dxcc::DxccResolver;
 use dxca_core::matrix::LogMatrix;
 use dxca_core::{Spot, cty};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
+
+/// How long a cached per-user LoTW QSL report stays good before
+/// `refresh_user` re-downloads it. The report must be merged on **every**
+/// matrix rebuild (the rebuild starts from scratch), but re-downloading on
+/// every daily ClubLog refresh would hammer ARRL for data that moves
+/// slowly — so the file is cached in `data/` and refreshed on this cadence.
+const LOTW_REPORT_MAX_AGE_DAYS: u64 = 7;
 
 pub struct UserService {
     pub db: Arc<Db>,
@@ -29,6 +38,17 @@ pub struct UserService {
     /// Known LoTW uploaders (global, M5 display marker).
     lotw_users: RwLock<Arc<HashSet<String>>>,
     lotw_path: PathBuf,
+    /// IOTA directory (docs/AWARDS.md phase 3) — shared, like the LoTW
+    /// list. `None` until the first download; spot refs pass unvalidated
+    /// then, because a missing directory must not switch the award off.
+    iota_dir: RwLock<Option<Arc<IotaDirectory>>>,
+    iota_path: PathBuf,
+    /// FCC call→state table (phase 4). `None` until the first download —
+    /// and that first download is always an admin's explicit act.
+    states: RwLock<Option<Arc<StateTable>>>,
+    fcc_path: PathBuf,
+    /// Where per-user LoTW QSL reports are cached (`data/`).
+    data_dir: PathBuf,
     /// Live SmartSDR sessions, keyed by address so several accounts aimed at
     /// one radio share a connection. Made on demand and kept for the life of
     /// the process — a radio that goes away is handled inside the client by
@@ -70,6 +90,15 @@ impl UserService {
         let lotw_users = std::fs::read_to_string(&lotw_path)
             .map(|text| lotw::parse_users(&text))
             .unwrap_or_default();
+        let iota_path = PathBuf::from(data_dir).join("iota-groups.json");
+        let iota_dir = std::fs::read_to_string(&iota_path)
+            .ok()
+            .and_then(|text| IotaDirectory::parse(&text).ok())
+            .map(Arc::new);
+        let fcc_path = PathBuf::from(data_dir).join("fcc-states.txt");
+        let states = std::fs::read_to_string(&fcc_path)
+            .ok()
+            .map(|text| Arc::new(StateTable::parse(text)));
         UserService {
             db,
             resolver: RwLock::new(Arc::new(resolver)),
@@ -80,6 +109,11 @@ impl UserService {
             cty_path,
             lotw_users: RwLock::new(Arc::new(lotw_users)),
             lotw_path,
+            iota_dir: RwLock::new(iota_dir),
+            iota_path,
+            states: RwLock::new(states),
+            fcc_path,
+            data_dir: PathBuf::from(data_dir),
             flex: Mutex::new(HashMap::new()),
             tci: Mutex::new(HashMap::new()),
         }
@@ -87,6 +121,63 @@ impl UserService {
 
     pub fn is_lotw_user(&self, callsign: &str) -> bool {
         lotw::is_user(&self.lotw_users.read().unwrap(), callsign)
+    }
+
+    /// Download and swap in the IOTA directory (blocking). Returns the
+    /// group count.
+    pub fn refresh_iota(&self) -> Result<usize, String> {
+        let text = dxca_connect::iota::download(dxca_connect::iota::DEFAULT_URL)?;
+        // Parse BEFORE saving, so an error page can never replace a good
+        // cached directory on disk — the refresh_lotw arrangement.
+        let dir = IotaDirectory::parse(&text)?;
+        let count = dir.len();
+        if let Some(parent) = self.iota_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        std::fs::write(&self.iota_path, &text).map_err(|e| format!("save IOTA: {e}"))?;
+        *self.iota_dir.write().unwrap() = Some(Arc::new(dir));
+        let _ = self.db.meta_set_now(crate::refresh::IOTA_OK_KEY);
+        Ok(count)
+    }
+
+    pub fn iota_count(&self) -> usize {
+        self.iota_dir
+            .read()
+            .unwrap()
+            .as_ref()
+            .map_or(0, |d| d.len())
+    }
+
+    /// Download the FCC amateur dump, distill it to the call→state table,
+    /// and swap it in (blocking — a ~200 MB download plus a minute of
+    /// distillation; always an explicit act or a configured cadence, never
+    /// a surprise).
+    pub fn refresh_fcc(&self) -> Result<usize, String> {
+        let tmp = self.fcc_path.with_extension("zip.part");
+        let (table, count) =
+            dxca_connect::fcc::download_and_distill(dxca_connect::fcc::DEFAULT_URL, &tmp)?;
+        if let Some(parent) = self.fcc_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        std::fs::write(&self.fcc_path, &table).map_err(|e| format!("save FCC table: {e}"))?;
+        *self.states.write().unwrap() = Some(Arc::new(StateTable::parse(table)));
+        let _ = self.db.meta_set_now(crate::refresh::FCC_OK_KEY);
+        Ok(count)
+    }
+
+    pub fn fcc_count(&self) -> usize {
+        self.states.read().unwrap().as_ref().map_or(0, |t| t.len())
+    }
+
+    /// The US state a call is licensed in, per the FCC table. `None` with
+    /// no table loaded — the WAS axis simply stays quiet until an admin
+    /// downloads one.
+    pub fn state_of(&self, callsign: &str) -> Option<String> {
+        let guard = self.states.read().unwrap();
+        guard
+            .as_ref()
+            .and_then(|t| t.lookup(callsign))
+            .map(str::to_string)
     }
 
     pub fn lotw_count(&self) -> usize {
@@ -201,9 +292,47 @@ impl UserService {
                     .into(),
             );
         }
-        let (matrix, qso_count, uncredited) =
+        let (mut matrix, qso_count, uncredited) =
             LogMatrix::build_from_adif_reporting(&content, &resolver);
         log_uncredited(user_id, &uncredited);
+        // The LoTW QSL report — the confirmed side of WAS/VUCC/IOTA
+        // (docs/AWARDS.md phase 3). Merged on every rebuild because the
+        // rebuild starts from scratch; failures never fail the refresh —
+        // the DXCC matrix is still worth having with the award axes a week
+        // stale.
+        if !cfg.lotw_login.is_empty() && !cfg.lotw_password.is_empty() {
+            match self.lotw_report_text(user_id, &cfg.lotw_login, &cfg.lotw_password) {
+                Ok(report) => {
+                    let n = matrix.merge_lotw_confirmed(&report);
+                    println!("dxca: user {user_id}: LoTW report merged, {n} award records");
+                }
+                Err(e) => {
+                    eprintln!("dxca: user {user_id}: LoTW report skipped: {e}");
+                    // **Carry the previous award axes forward.** The matrix
+                    // is rebuilt from scratch, so without this a single
+                    // failed download — a timeout, an ARRL outage — silently
+                    // republishes an EMPTY WAS and IOTA state, and every
+                    // state on the band starts alerting as new. That is the
+                    // erasure that produced the NK3L/CA report; the download
+                    // bug was only what triggered it.
+                    //
+                    // `by_grid` is NOT carried: it is rebuilt from the
+                    // ClubLog log we just parsed, so the fresh value is the
+                    // right one.
+                    if let Some(prev) = self.matrices.read().unwrap().get(&user_id) {
+                        matrix.by_state = prev.by_state.clone();
+                        matrix.by_iota = prev.by_iota.clone();
+                        if !matrix.by_state.is_empty() || !matrix.by_iota.is_empty() {
+                            println!(
+                                "dxca: user {user_id}: kept {} states and {} islands from the last good report",
+                                matrix.by_state.len(),
+                                matrix.by_iota.len()
+                            );
+                        }
+                    }
+                }
+            }
+        }
         let dxcc_count = matrix.total_dxcc_count();
         self.db.set_matrix(user_id, &matrix, qso_count)?;
         self.matrices
@@ -213,11 +342,57 @@ impl UserService {
         Ok((qso_count, dxcc_count))
     }
 
+    /// This user's LoTW QSL report: the cached `data/lotw-report-<id>.adi`
+    /// while it is fresh, a new download once it has aged past
+    /// [`LOTW_REPORT_MAX_AGE_DAYS`] or does not exist. A failed download
+    /// falls back to the stale cache rather than erroring — old
+    /// confirmations beat none.
+    fn lotw_report_text(
+        &self,
+        user_id: i64,
+        login: &str,
+        password: &str,
+    ) -> Result<String, String> {
+        let path = self.data_dir.join(format!("lotw-report-{user_id}.adi"));
+        let fresh = std::fs::metadata(&path)
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|age| age.as_secs() < LOTW_REPORT_MAX_AGE_DAYS * 86_400);
+        if fresh && let Ok(text) = std::fs::read_to_string(&path) {
+            return Ok(text);
+        }
+        match dxca_connect::lotwreport::download(
+            dxca_connect::lotwreport::DEFAULT_BASE,
+            login,
+            password,
+        ) {
+            Ok(text) => {
+                if let Err(e) = std::fs::write(&path, &text) {
+                    eprintln!("dxca: user {user_id}: LoTW report cache write: {e}");
+                }
+                Ok(text)
+            }
+            Err(e) => match std::fs::read_to_string(&path) {
+                Ok(stale) => {
+                    eprintln!("dxca: user {user_id}: LoTW report: {e} — using stale cache");
+                    Ok(stale)
+                }
+                Err(_) => Err(e),
+            },
+        }
+    }
+
     /// Award totals for one user's station card. `None` until they have a
     /// matrix — a user who has never refreshed ClubLog has nothing to count,
     /// which the card shows as "no log" rather than as four zeroes.
     pub fn stats(&self, user_id: i64) -> Option<dxca_core::matrix::MatrixStats> {
         Some(self.matrices.read().unwrap().get(&user_id)?.stats())
+    }
+
+    /// VUCC / WAS / IOTA totals, same `None`-until-a-matrix rule.
+    pub fn award_stats(&self, user_id: i64) -> Option<dxca_core::matrix::AwardStats> {
+        Some(self.matrices.read().unwrap().get(&user_id)?.award_stats())
     }
 
     /// The same totals counting **current entities only** — the ARRL
@@ -313,14 +488,46 @@ impl UserService {
         let resolver = self.resolver.read().unwrap().clone();
         let config: AlertConfig = (&self.db.clublog_config(user_id).ok()?.alerts).into();
         let call = spot.dx_callsign()?;
+        // The spot-side award facts (docs/AWARDS.md phases 2–4). Each is
+        // gathered only when this user's config could rank it — the FCC
+        // lookup and the directory check are cheap, but a fleet of users
+        // with the awards off should pay literally nothing.
+        let state = (config.alert_new_state || config.alert_unconf_state)
+            .then(|| self.state_of(&call))
+            .flatten();
+        let iota = spot.iota.as_deref().filter(|r| {
+            // Validated when a directory is loaded; passed through when
+            // not — a missing download must not switch the award off.
+            self.iota_dir
+                .read()
+                .unwrap()
+                .as_ref()
+                .is_none_or(|d| d.is_valid(r))
+        });
+        let refs = AwardRefs {
+            grid: spot.grid.as_deref(),
+            iota,
+            state: state.as_deref(),
+        };
         Some(
             AlertClassifier {
                 matrix: &matrix,
                 resolver: &resolver,
                 config: &config,
             }
-            .classify(&call, spot.frequency_mhz(), &spot.mode),
+            .classify_spot(&call, spot.frequency_mhz(), &spot.mode, &refs),
         )
+    }
+
+    /// Is this call already in the user's log? `false` when the user has
+    /// no matrix — no log means nothing to skip, and like every other
+    /// narrowing in the fan-out the gate fails open.
+    fn has_worked_call(&self, user_id: i64, call: &str) -> bool {
+        self.matrices
+            .read()
+            .unwrap()
+            .get(&user_id)
+            .is_some_and(|m| m.has_worked_call(call))
     }
 
     /// Alert fan-out for one spot: every user with a matrix classifies it;
@@ -345,7 +552,21 @@ impl UserService {
             let Some(c) = self.classify(user_id, spot) else {
                 continue;
             };
+            let Some(call) = spot.dx_callsign() else {
+                continue;
+            };
             if !notify.wants_level(c.level) {
+                continue;
+            }
+            // The confirmation-path gate (docs/AWARDS.md, phase 1). Sits
+            // right after the level check so its two lookups only run for
+            // levels this account actually wants — and before the band/mode
+            // narrowing because it is the cheapest place a `?` ping can die.
+            if !notify.passes_unconf_gate(
+                c.level,
+                self.has_worked_call(user_id, &call),
+                self.is_lotw_user(&call),
+            ) {
                 continue;
             }
             // Band / mode-class narrowing is Telegram's alone — the Spots
@@ -383,9 +604,6 @@ impl UserService {
                     continue;
                 }
             }
-            let Some(call) = spot.dx_callsign() else {
-                continue;
-            };
             if !self.cooldown_ok(user_id, &call, &notify) {
                 continue;
             }
@@ -421,6 +639,7 @@ impl UserService {
                 source: spot.source_name.clone(),
                 spotter: spot.spotter.clone().unwrap_or_default(),
                 snr_db: Some(spot.snr_db as i64),
+                award_ref: c.award_ref.clone().unwrap_or_default(),
                 delivered: true,
                 error: String::new(),
             };
@@ -462,6 +681,14 @@ impl UserService {
             AlertLevel::UnconfBand => 0xFF56_86CA,
             AlertLevel::UnconfMode => 0xFFCC_A249,
             AlertLevel::UnconfSlot => 0xFFC6_8A5F,
+            // The award axes — three new hues (--alert-iota/-state/-grid in
+            // app.css), same dim rule for their ? halves.
+            AlertLevel::NewIota => 0xFFA3_71F7,
+            AlertLevel::NewState => 0xFFDB_61A2,
+            AlertLevel::NewGrid => 0xFF39_C5CF,
+            AlertLevel::UnconfIota => 0xFF99_7CCA,
+            AlertLevel::UnconfState => 0xFFBA_7399,
+            AlertLevel::UnconfGrid => 0xFF5C_ADB3,
             _ => 0xFF8C_8C8C,
         }
     }
@@ -690,15 +917,31 @@ fn alert_html(c: &Classification, call: &str, spot: &Spot, is_lotw: bool) -> Str
         AlertLevel::UnconfSlot => "🟧 ? Slot (unconfirmed)",
         AlertLevel::UnconfBand => "🔷 ? Band (unconfirmed)",
         AlertLevel::UnconfMode => "🟨 ? Mode (unconfirmed)",
+        AlertLevel::NewIota => "🟣 New IOTA",
+        AlertLevel::NewState => "🟤 New State",
+        AlertLevel::NewGrid => "🟢 New Grid",
+        AlertLevel::UnconfIota => "🟪 ? IOTA (unconfirmed)",
+        AlertLevel::UnconfState => "🟫 ? State (unconfirmed)",
+        AlertLevel::UnconfGrid => "🟩 ? Grid (unconfirmed)",
         _ => "Alert",
     };
     let dxcc = c.dxcc_name.clone().unwrap_or_default();
     let freq = format!("{:.3} MHz", spot.frequency_mhz());
     let band = c.band.unwrap_or("");
+    // The award key rides in the title, where the level is — "New Grid
+    // MK83" answers the whole question before the body is read.
+    let key = c
+        .award_ref
+        .as_deref()
+        .map(|r| format!(" {r}"))
+        .unwrap_or_default();
     // The mark rides on the callsign, not the label, so it stays put whatever
     // the alert level is — and it goes through `escape_html` with the call
     // rather than being concatenated onto escaped output.
-    let title = format!("{label}: {call}{}", if is_lotw { LOTW_MARK } else { "" });
+    let title = format!(
+        "{label}{key}: {call}{}",
+        if is_lotw { LOTW_MARK } else { "" }
+    );
     let body = format!(
         "{}{freq}  {band}  {}  {} dB",
         if dxcc.is_empty() {
@@ -754,6 +997,8 @@ mod alert_message_tests {
             source_name: source.into(),
             spotter: spotter.map(str::to_string),
             is_skimmer: false,
+            grid: None,
+            iota: None,
         }
     }
 
@@ -764,6 +1009,7 @@ mod alert_message_tests {
             dxcc_name: Some("Bouvet".into()),
             band: Some("20M"),
             is_beacon: false,
+            award_ref: None,
         }
     }
 

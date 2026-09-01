@@ -311,6 +311,11 @@ async fn run_pipeline(
                     // "CQ " prefix is a real answer here — unlike a cluster
                     // spot, whose message is synthesised.
                     is_cq: dxca_core::message_is_cq(&decode.message),
+                    // The transmitter's locator, when the message carries
+                    // one (docs/AWARDS.md phase 2) — RR73 refused.
+                    grid: dxca_core::grid_from_message(&decode.message),
+                    // Nothing in an FT8 exchange names an island.
+                    iota: None,
                     message: decode.message,
                     comment: String::new(),
                     low_confidence: decode.low_confidence,

@@ -25,6 +25,83 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.17.6** (2026-09-01): **the LoTW download is given time to finish, and a
+failed one no longer erases what it cannot replace.** The full report that
+2.17.5 started asking for takes longer than the 10-minute timeout allowed, so
+it died mid-body and merged nothing — and because the matrix is rebuilt from
+scratch, that published an empty WAS and IOTA. Three changes: the timeout is
+**30 minutes**; a failed report now **carries the previous states and islands
+forward** instead of replacing them with nothing; and *Refresh log now* says
+it can take **10 minutes or more** rather than "a minute".
+
+**v2.17.5** (2026-09-01): **the LoTW report is actually fetched in full.**
+LoTW's QSL report is *incremental by default* — it answers "what is new
+since you last asked" — and DXCA never pinned a start date. So the first
+download brought your history and the next one brought a handful of
+records, which then replaced it; since the log matrix is rebuilt from
+scratch each refresh, every worked state and island vanished with it and
+every US state started alerting as new. On this station the request that
+should have returned **28,467 confirmations with 6,786 state fields** was
+returning **one record**. It now asks from 1945.
+
+Alongside it, a guard for the same class of failure: **an award axis with
+no data claims nothing is new.** States and islands come only from that
+optional report, so an empty map means "unknown", not "none worked" —
+DXCA stays quiet instead of flagging every state on the band. Grids are
+not guarded this way: they come from the ClubLog log itself, so empty
+there genuinely means no 50 MHz+ grids worked.
+
+**After upgrading, press Refresh log now** — the corrected report has to
+be downloaded once before your states appear.
+
+**v2.17.4** (2026-09-01): **the Server card and the file-only line tell the
+truth.** The "Milestone" row said `2.1` next to a version that said 2.17 — it
+was a hand-maintained string nothing updated, so it is gone. The file-only
+settings line now lists **every** setting `config/dxca.toml` owns: the IOTA
+and FCC refresh intervals added in 2.17.0 were missing from it, and
+**whether the telnet server accepts logins** (`telnet_interactive`) was not
+visible anywhere in the web UI at all.
+
+**v2.17.3** (2026-09-01): **a US call operating abroad is no longer a New
+State.** `DV2/K7AZQ` — an Arizona licensee in the Philippines — was credited
+with Arizona, because the state lookup reused the callsign ladder that
+answers *who a call belongs to* for a question about *where the operator
+is*. Two independent guards now: the spot's DXCC entity has to be one WAS
+counts, and the lookup itself takes nothing but a plain `/P`, `/M` or
+`/QRP`. Also: the two settings pages are just **ClubLog** and **LoTW**.
+
+**v2.17.2** (2026-09-01): **explanatory prose moved onto the `?` hovers.**
+Settings pages carry their controls; the paragraphs explaining them are one
+hover away. Conditional warnings — "the FCC table is not on this server yet",
+"not set, so no confirmed totals" — stay on the page, because those are state
+you need to see without going looking.
+
+**v2.17.1** (2026-09-01): **ClubLog and LoTW are separate settings pages** —
+two accounts at two organisations, and the LoTW login was easy to miss as a
+footnote under the ClubLog form.
+
+**v2.17.0** (2026-09-01): **awards beyond DXCC, and a settings page to pick
+them.** **IOTA**, **WAS** and **VUCC** each get a New/`?` level pair, switched
+on under **Settings › My station › Awards** — and an award you have not ticked
+adds nothing anywhere, so the Spots and Alerts screens of anyone who ignores
+this are unchanged. Islands come from cluster comments (validated against the
+IOTA directory), states from the FCC licence database, grid squares from the
+comment or an FT8 CQ (50 MHz and up, per the ARRL rule). Worked comes from
+your ClubLog log; **confirmed** comes from a new optional LoTW QSL-report
+download, because ClubLog's export carries no state, island or QSL detail.
+See [IOTA, WAS and VUCC](#iota-was-and-vucc-optional-off-by-default).
+
+Also in this release: a **confirmation-path gate** — the `?` levels can be
+held to calls new to your log and/or on LoTW, so an unconfirmed entity stops
+pinging for the station that never QSLed the first time
+([Confirmation-path gate](#confirmation-path-gate-optional-off-by-default));
+**Destinations gained a fourth tab, TCI**, putting the same alerts on an
+**ExpertSDR3 panorama** (SunSDR and anything else ExpertSDR3 drives) over
+WebSocket **40001**, independent of the FlexRadio tab and of Telegram
+([ExpertSDR3 panorama (TCI)](#expertsdr3-panorama-tci)); and the embedded
+ClubLog DX Dashboard now follows this app's light/dark appearance instead of
+picking one by the clock.
+
 **v2.16.0** (2026-08-30): the Settings rail is down to seven entries.
 Everywhere a spot arrives from is one **Sources** page (UDP decoders, cluster
 nodes), everywhere it leaves by is one **Destinations** page (UDP, MQTT,
@@ -42,11 +119,14 @@ honest-status graft) feed one pipeline into the telnet server, the RUMlog
 passthrough, and a WebSocket-streamed spots dashboard — station card with
 worked/confirmed DXCC, DXCC Challenge and slot totals, status pills,
 live sortable table,
-per-user alert row tints, LoTW markers. Spots are flagged across **eight
-alert levels** — New DXCC/Band/Mode/Slot for never worked, and ? DXCC/Band/
-Mode/Slot for worked-but-unconfirmed — each independently switchable, and
-narrowable by level, mode class (CW/Phone/Data) and band (160m–70cm) both
-on screen and, separately, for Telegram. The shell is **three tabs — Spots,
+per-user alert row tints, LoTW markers. Spots are flagged across **fourteen
+alert levels** — New and `?` (worked-but-unconfirmed) pairs for
+DXCC/Band/Mode/Slot, plus opt-in pairs for the **IOTA, WAS and VUCC**
+awards (island reference, US state, grid square — see the awards section) —
+each independently switchable, and narrowable by level, mode class
+(CW/Phone/Data) and band (160m–70cm) both on screen and, separately, for
+Telegram — where the `?` levels can further be held to calls new to your
+log and/or on LoTW, the stations that can still turn an entity green. The shell is **three tabs — Spots,
 Alerts, Stats — and a gear** (2026-08-29): what you watch is a tab, everything
 you set up lives behind the gear in **Settings**, grouped by whose it is (My
 station / Server / Access) and searchable by topic. Both feeds are laid out on
@@ -60,7 +140,9 @@ toggle pins one. SQLite-backed accounts (argon2 + session
 cookies, first-run setup card) each carry their own ClubLog matrix,
 re-downloaded on a per-account schedule (daily by default) so a QSO worked
 today stops showing as new tomorrow, with ClubLog's own DX Dashboard embedded
-under My ClubLog and a **band × mode grid** of entities worked and confirmed —
+under My ClubLog — re-tinted to follow this app's appearance, because left
+alone that page picks light or dark by the clock — and a **band × mode
+grid** of entities worked and confirmed —
 a row per mode class against every band, with a Total column and a Mixed row,
 the RUMlog layout; the shared LoTW users list refreshes
 server-wide, weekly by default. Every spot classifies per user with
@@ -607,6 +689,75 @@ the history answers the same question after the fact. Alerts sent before
 this shipped show `—`: the column was added to existing databases on
 upgrade, and there was nothing to back-fill it with.
 
+### Confirmation-path gate (optional, off by default)
+
+The four `?` levels exist to hunt confirmations, and a confirmation needs
+the right station: some operators simply never QSL, and re-working one
+cannot turn an entity green. Two ticks on **Alerts**, under *For the ?
+levels*, narrow those pings to stations that still can:
+
+- **The call is new to my log** — hold `?` pings for calls already in your
+  log. A call you worked that never confirmed is a demonstrated non-QSLer.
+- **The call uses LoTW** — hold `?` pings for calls not on the LoTW users
+  list, the same server-wide list the green markers read. A LoTW user is
+  the fast path to a confirmation.
+
+With both on, only a call you have never worked that uploads to LoTW will
+ping — a station that can be worked *and* will confirm. Both narrow the
+`?` half of the ladder only: the **New** levels always follow their own
+ticks, because an ATNO is worth working whatever the QSL prospects. Like
+every other narrowing here it gates Telegram and the panadapters, never
+the screen — the spot still shows with its tint; you are just not woken
+for it. Design in [`docs/AWARDS.md`](docs/AWARDS.md).
+
+### IOTA, WAS and VUCC (optional, off by default)
+
+Three awards beyond DXCC, each with its own New/`?` level pair
+(`docs/AWARDS.md` phases 2–4). **Settings › My station › Awards** is where
+you pick your awards: the DXCC ladder at the top (it moved here from
+the ClubLog page), then one tick per award — **IOTA**, **WAS**, **VUCC**
+— that reveals its New/`?` pair. **An award left unticked does not exist
+anywhere in the app** — no chips on Spots, no rows in the Alerts ladder, nothing on
+Stats — so an operator who never opts in keeps exactly the classic
+eight-level screen. Chased levels behave like any others: row tints and
+chips on Spots, "Ping me for" narrowing on Alerts, colours on the
+panadapters, and the alert names the catch — *New Grid MK83*, *? State
+OH*, *New IOTA AS-153*.
+
+What each level runs on, spot side:
+
+- **VUCC (grid)** — the DX station's locator, from the cluster comment or
+  an FT8 CQ. Counts 4-character squares **per band, 50 MHz and up only**
+  (6m, 2m, 1.25m, 70cm, 33cm, 23cm — the ARRL rule; `RR73` is always a
+  sign-off, never a square).
+- **WAS (state)** — which US state the call is licensed in, looked up in
+  the FCC amateur database. An admin downloads that once under **Settings
+  › Server › Reference data** (~200 MB, distilled to ~8 MB on the spot);
+  until then the State levels stay quiet. **A station operating away from
+  its licence earns no state**: `DV2/K7AZQ` is an Arizona licensee
+  transmitting from the Philippines, and a suffix override or a call-area
+  digit (`W1AW/7`) is refused for the same reason. The caveat that remains
+  is the one no logger escapes — the FCC knows the *licence* address, so a
+  plain `W6` call held by someone who has moved to Ohio still reads as
+  California. DC counts as Maryland, per the WAS rules.
+- **IOTA (island)** — the reference a cluster spot's comment announces
+  (`AS-153`), validated against the IOTA directory, which downloads from
+  iota-world.org on the same Reference data page (their terms are personal
+  non-commercial use, so it is fetched at runtime, never bundled). FT8
+  decodes never name an island, so IOTA levels ride cluster spots only.
+
+Log side, **worked** comes from your ClubLog download: grids ride its
+`GRIDSQUARE` field; states and islands appear only if your uploads carried
+them. **Confirmed** is where LoTW comes in: ClubLog's export carries no
+state, island or QSL detail at all, so **Settings › My station › LoTW
+account** takes an optional **LoTW website login** — your LoTW QSL report
+is then merged at every log refresh (downloaded weekly, cached in
+`data/`), and it is the authoritative source for confirmed states, grids
+and islands.
+Totals live on **Stats › My ClubLog** — an Awards card showing only what
+you chase: IOTA and WAS counts with the missing-states chase list, and
+grids per VUCC band.
+
 ### Stats
 
 A **Stats** tab answers what the feed is actually made of: the total spots
@@ -893,8 +1044,10 @@ Four things differ from the Flex path, and each shaped the implementation:
 - **There is no lifetime field.** `SPOT` has five arguments and that is all of
   them. A spot stays on the panorama until something removes it, so **DXCA
   holds each deadline itself** and sends `SPOT_DELETE:<call>;` when it passes.
-  The consequence worth knowing: if DXCA restarts in between, whatever is on
-  the panorama stays until you clear it in ExpertSDR3.
+  The consequence worth knowing: if DXCA **restarts** in between, whatever is
+  on the panorama stays until you clear it in ExpertSDR3. A dropped *link* is
+  different — the deadlines survive a reconnect and the deletions go out when
+  it comes back, because the spots are the radio's state, not the link's.
 - **`:` `,` and `;` are reserved** (§3.1) and one of them inside a value
   truncates the command, exactly as a space does in SmartSDR's. They are
   replaced with spaces. **Spaces themselves are fine** here, which is the

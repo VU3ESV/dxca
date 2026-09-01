@@ -10,7 +10,10 @@
   import { setStatus } from '../lib/status.svelte';
   import { awards, pick, canFilter } from '../lib/awards.svelte';
   import { bandMask, masked, hidden } from '../lib/bandmask.svelte';
-  import { loadReference, bands, modes, levels, levelLabel } from '../lib/reference.svelte';
+  import {
+    loadReference, bands, modes, levels, levelLabel, referenceLoaded,
+  } from '../lib/reference.svelte';
+  import { loadChase, chasedLevels, chaseLoaded } from '../lib/chase.svelte';
 
   let spots = $state<any[]>([]);
   let status = $state<any>(null);
@@ -66,6 +69,20 @@
   let modeFilter = $state<Set<string>>(restore('modes'));
   let bandFilter = $state<Set<string>>(restore('bands'));
 
+  // A chip for an award you have since stopped chasing would keep FILTERING
+  // the feed while no longer being on screen to un-tick — and if it were the
+  // only one selected, the feed would go empty with no visible cause. So the
+  // stored selection is pruned to what is actually offered, once both
+  // vocabularies are in (before that `levels()` is empty and this would drop
+  // everything).
+  $effect(() => {
+    if (!referenceLoaded() || !chaseLoaded()) return;
+    const allowed = new Set(chasedLevels(levels()).map((l) => l.key));
+    if ([...levelFilter].some((k) => !allowed.has(k))) {
+      levelFilter = new Set([...levelFilter].filter((k) => allowed.has(k)));
+    }
+  });
+
   $effect(() => {
     const payload = {
       levels: [...levelFilter],
@@ -81,7 +98,7 @@
 
   onMount(() => {
     (async () => {
-      await loadReference();
+      await Promise.all([loadReference(), loadChase()]);
       const r = await api('GET', '/api/spots?limit=500');
       if (r.json?.spots) spots = r.json.spots;
       // Guarded, unlike the `r.json?.spots` above which is safe by its own
@@ -373,7 +390,9 @@
       options={sourceNames.map((n) => ({ key: n, label: n }))}
       bind:selected={sourceFilter}
     />
-    <ChipGroup stacked label="Alerts" options={levels()} bind:selected={levelFilter} levelKeys />
+    <!-- Only the levels this account can actually see: the classic eight
+         plus chased awards (Settings › My station › Awards). -->
+    <ChipGroup stacked label="Alerts" options={chasedLevels(levels())} bind:selected={levelFilter} levelKeys />
     <ChipGroup stacked label="Modes" options={modes()} bind:selected={modeFilter} />
     <ChipGroup stacked label="Bands" options={bands()} bind:selected={bandFilter} />
   </FilterRail>

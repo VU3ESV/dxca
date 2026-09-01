@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.package]
-version = "2.16.0"
+version = "2.17.6"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/vu2cpl/dxca"
@@ -45,6 +45,10 @@ sha2 = "0.10"
 ureq = { version = "2", features = ["json"] }
 # ClubLog responses are gzipped.
 flate2 = "1"
+# FCC l_amat.zip only (fcc.rs). Deflate-only, no default features — the
+# dump's members are plain deflate and every extra feature is a
+# cross-compile liability.
+zip = { version = "2", default-features = false, features = ["deflate"] }
 # MQTT publish for the panadapter feed. default-features off: that drops
 # TLS, websocket and proxy support, none of which the shack broker uses
 # (plain 1883 with username/password). Turning `use-rustls` back on is the

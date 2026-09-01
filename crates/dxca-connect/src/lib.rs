@@ -19,8 +19,11 @@
 pub mod broadcast;
 pub mod clublog;
 pub mod dxcluster;
+pub mod fcc;
 pub mod flex;
+pub mod iota;
 pub mod lotw;
+pub mod lotwreport;
 pub mod mqtt;
 pub mod tci;
 pub mod telegram;

@@ -19,6 +19,37 @@ pub struct LatLon {
     pub lon: f64,
 }
 
+/// Is this token shaped like a 4- or 6-character Maidenhead locator?
+///
+/// The one deliberate refusal beyond shape: **`RR73` is not a grid.** It
+/// parses as one (a square in the Bering Sea) but on the air it is the FT8
+/// sign-off, sent thousands of times an hour by stations that have never
+/// been near RR73 — so for award purposes the token always means goodbye.
+pub fn is_grid(token: &str) -> bool {
+    let b = token.as_bytes();
+    if b.len() != 4 && b.len() != 6 {
+        return false;
+    }
+    if token.eq_ignore_ascii_case("RR73") {
+        return false;
+    }
+    let in_range = |c: u8, hi: u8| {
+        let c = c.to_ascii_uppercase();
+        c.is_ascii_uppercase() && c <= hi
+    };
+    in_range(b[0], b'R')
+        && in_range(b[1], b'R')
+        && b[2].is_ascii_digit()
+        && b[3].is_ascii_digit()
+        && (b.len() == 4 || (in_range(b[4], b'X') && in_range(b[5], b'X')))
+}
+
+/// The 4-character square a VUCC credit counts, uppercased —
+/// `"mk83va"` → `"MK83"`. `None` when the input is not a locator.
+pub fn grid4(locator: &str) -> Option<String> {
+    is_grid(locator.trim()).then(|| locator.trim()[..4].to_ascii_uppercase())
+}
+
 /// Parse a 4- or 6-character Maidenhead locator to the centre of its square.
 ///
 /// `None` for anything malformed — the caller treats an unparseable locator

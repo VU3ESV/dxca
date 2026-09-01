@@ -34,26 +34,45 @@
   let wrapper = $state<HTMLElement | null>(null);
   let pop = $state<HTMLElement | null>(null);
 
-  // The popover is centred on its icon, which hangs off the screen when the
-  // icon sits near an edge — a tip on a `.settings-form` label is close to
-  // the left margin on a narrow window. Measure and nudge it back inside.
+  // The popover is positioned in VIEWPORT coordinates (`position: fixed`),
+  // not relative to its icon, because an absolutely-positioned tip is
+  // clipped by any scrolling ancestor — and the two places tips are densest
+  // are exactly those: the Spots/Alerts filter rail (`overflow-y: auto`, so
+  // a tip was cut off at the rail's 12rem edge, reported 2026-09-01) and the
+  // Settings editor tables. `fixed` escapes every such container, so the
+  // only edge left to respect is the screen's.
   const EDGE_MARGIN = 8;
+  const GAP = 6;
   function reposition() {
-    if (!open || !pop) return;
-    // Re-centre before measuring, or a second pass would compound the shift.
-    pop.style.setProperty('--nudge', '0px');
-    const r = pop.getBoundingClientRect();
-    const shift =
-      r.left < EDGE_MARGIN
-        ? EDGE_MARGIN - r.left
-        : r.right > window.innerWidth - EDGE_MARGIN
-          ? window.innerWidth - EDGE_MARGIN - r.right
-          : 0;
-    if (shift) pop.style.setProperty('--nudge', `${shift}px`);
+    if (!open || !pop || !wrapper) return;
+    const icon = wrapper.getBoundingClientRect();
+    const w = pop.offsetWidth;
+    const h = pop.offsetHeight;
+    // Centred on the icon, then pulled inside whichever screen edge it
+    // would have crossed.
+    const left = Math.max(
+      EDGE_MARGIN,
+      Math.min(icon.left + icon.width / 2 - w / 2, window.innerWidth - EDGE_MARGIN - w),
+    );
+    // Below the icon, unless that would run off the bottom and there is
+    // more room above — a tip on the last rail group would otherwise open
+    // into nothing.
+    const below = icon.bottom + GAP;
+    const above = icon.top - GAP - h;
+    const top = below + h > window.innerHeight - EDGE_MARGIN && above > EDGE_MARGIN ? above : below;
+    pop.style.left = `${left}px`;
+    pop.style.top = `${top}px`;
   }
-  // On open, and again on resize: the viewport edge it was nudged off can
-  // move while the popover is still up.
+  // On open, and again whenever the anchor could have moved under it: a
+  // resize, or a scroll ANYWHERE — hence the capture-phase listener, since
+  // scroll events from an inner container never reach window by bubbling.
   $effect(reposition);
+  $effect(() => {
+    if (!open) return;
+    const onScroll = () => reposition();
+    window.addEventListener('scroll', onScroll, true);
+    return () => window.removeEventListener('scroll', onScroll, true);
+  });
 
   // Toggles the PIN, not the openness. Toggling openness looked equivalent and
   // was not: with a mouse you are always hovering by the time you click, so
@@ -153,11 +172,11 @@
      HTML. `display: block` buys the layout back. */
   .help-pop {
     display: block;
-    position: absolute;
-    top: calc(100% + 6px);
-    left: 50%;
-    /* `--nudge` is set on open when centring would push it off a screen edge. */
-    transform: translateX(calc(-50% + var(--nudge, 0px)));
+    /* Viewport-positioned: see `reposition`. `top`/`left` are written there
+       on open; the values here only matter for the frame before it runs. */
+    position: fixed;
+    top: 0;
+    left: 0;
     z-index: 40;
     width: 17rem;
     max-width: 78vw;

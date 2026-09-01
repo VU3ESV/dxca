@@ -69,7 +69,27 @@ use tungstenite::{Message, WebSocket, client::client, stream::MaybeTlsStream};
 /// Wait between reconnect attempts, as in [`crate::flex`]: connections are
 /// only attempted when a spot needs sending, so this only matters when
 /// alerts arrive in a burst while the radio is off.
+#[cfg(not(test))]
 const RECONNECT_AFTER: Duration = Duration::from_secs(30);
+/// Shortened under test so the reconnect path can be exercised at all — a
+/// 30-second wait would price its regression test out of the gate, and the
+/// reconnect is exactly where this module's one real defect lived.
+#[cfg(test)]
+const RECONNECT_AFTER: Duration = Duration::from_millis(200);
+
+/// How long past its deadline a deletion we could not send is still worth
+/// sending.
+///
+/// `pending` is deliberately KEPT across a reconnect (see `worker`), because
+/// a TCI spot is the *server's* state and outlives our link — dropping the
+/// deletions would silt the panorama up permanently, which is the one thing
+/// this module exists to prevent. But keeping them forever has its own cost:
+/// a non-empty `pending` is what makes the worker keep dialling, so a radio
+/// switched off for a week would be dialled every 30s for a week. After this
+/// long the operator has almost certainly restarted ExpertSDR3 (which clears
+/// the panorama anyway) and the mark is moot, so we let it go and fall back
+/// to sleeping until the next alert.
+const PENDING_GRACE: Duration = Duration::from_secs(30 * 60);
 
 /// Queue depth. Alerts are rare; anything approaching this means the radio
 /// has gone away and the backlog is worthless anyway.
@@ -268,18 +288,35 @@ fn worker(target: String, rx: Receiver<TciSpot>, counters: Arc<Counters>) {
         } else {
             // Otherwise wake for whichever comes first: a spot, the next
             // deletion falling due, or the drain interval.
-            let wait = pending
-                .iter()
-                .map(|p| p.due.saturating_duration_since(Instant::now()))
-                .min()
-                .unwrap_or(READ_TIMEOUT)
-                .min(READ_TIMEOUT);
+            //
+            // While DISCONNECTED, wait for the next dial instead: nothing
+            // can be sent until then, and the deletions we are holding are
+            // by now overdue, so asking for the soonest deadline would give
+            // a zero-length timeout and spin this thread at full tilt.
+            let wait = if conn.is_none() {
+                last_attempt.map_or(Duration::ZERO, |t| {
+                    RECONNECT_AFTER.saturating_sub(t.elapsed())
+                })
+            } else {
+                pending
+                    .iter()
+                    .map(|p| p.due.saturating_duration_since(Instant::now()))
+                    .min()
+                    .unwrap_or(READ_TIMEOUT)
+                    .min(READ_TIMEOUT)
+            };
             match rx.recv_timeout(wait) {
                 Ok(spot) => Some(spot),
                 Err(RecvTimeoutError::Timeout) => None,
                 Err(RecvTimeoutError::Disconnected) => break,
             }
         };
+
+        // Deletions we could not send stay owed across a reconnect, but not
+        // past `PENDING_GRACE` — that is what stops a dark radio being
+        // dialled forever for marks nobody can see any more.
+        let now = Instant::now();
+        pending.retain(|p| now < p.due + PENDING_GRACE);
 
         if conn.is_none() && (next.is_some() || !pending.is_empty()) {
             // Only one attempt per RECONNECT_AFTER, so a burst of alerts at
@@ -288,13 +325,18 @@ fn worker(target: String, rx: Receiver<TciSpot>, counters: Arc<Counters>) {
             if due {
                 last_attempt = Some(Instant::now());
                 conn = dial(&target);
-                if conn.is_some() {
-                    // A reconnect means the server lost every spot we
-                    // placed, so the deletions we owed are moot — and
-                    // re-sending them would delete a *fresh* spot for the
-                    // same call that some other client had just put up.
-                    pending.clear();
-                }
+                // `pending` is deliberately KEPT here. The premise it used
+                // to be cleared on — "a reconnect means the server lost our
+                // spots" — is wrong for TCI: a spot is server-side state on
+                // the panorama and outlives the client that placed it, so
+                // dropping the deletions strands our marks there for good.
+                // `expire_due` sends the overdue ones on the next pass.
+                //
+                // The counter-risk is real but much the smaller one: if some
+                // other client re-spotted the same call during our outage,
+                // our delete takes their mark down too. That is one spot,
+                // recoverable by re-spotting; the alternative was a panorama
+                // that silts up permanently and can only be cleared by hand.
             }
         }
 
@@ -346,9 +388,9 @@ fn worker(target: String, rx: Receiver<TciSpot>, counters: Arc<Counters>) {
         }
 
         if failed {
+            // The link is gone; the spots on the panorama are NOT — they are
+            // the server's, so what we owe stays owed (see the dial above).
             conn = None;
-            // The link is gone and so are the spots on it.
-            pending.clear();
         }
     }
 }
@@ -693,6 +735,61 @@ mod tests {
             .expect("the spot should be deleted when its lifetime passes");
         assert_eq!(deleted, "SPOT_DELETE:3Y0J;");
         assert_eq!(client.counters.expired.load(Ordering::Relaxed), 1);
+    }
+
+    /// The defect deferred to the release pass: a reconnect used to call
+    /// `pending.clear()`, on the premise that the server had lost our spots.
+    /// It has not — a TCI spot is the panorama's state, not the link's — so
+    /// a transient drop stranded every mark DXCA had placed, permanently,
+    /// which is the exact silting-up the lifetimes exist to prevent.
+    #[test]
+    fn a_reconnect_still_owes_the_deletions_it_could_not_send() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let (got_tx, got_rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            // Two sessions: the first is dropped mid-life on purpose, the
+            // second is where the owed deletion has to turn up.
+            for session in 0..2 {
+                let Ok((stream, _)) = listener.accept() else {
+                    return;
+                };
+                let Ok(mut server) = tungstenite::accept(stream) else {
+                    return;
+                };
+                let _ = server.send(Message::Text("READY;".into()));
+                while let Ok(msg) = server.read() {
+                    if let Message::Text(t) = msg {
+                        let t = t.to_string();
+                        let is_spot = t.starts_with("SPOT:");
+                        if got_tx.send(t).is_err() {
+                            return;
+                        }
+                        // Kill the first link the moment the spot is placed.
+                        if session == 0 && is_spot {
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+
+        let client = TciClient::connect(&addr.ip().to_string(), addr.port());
+        assert!(client.spot(&TciSpot {
+            lifetime_secs: 1,
+            ..spot()
+        }));
+
+        let placed = got_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+        assert!(placed.starts_with("SPOT:3Y0J,"), "{placed}");
+
+        // The link dies here. The deletion must survive it and arrive on the
+        // NEW session — before the fix, nothing ever came.
+        let deleted = got_rx
+            .recv_timeout(Duration::from_secs(20))
+            .expect("the deletion must survive the reconnect");
+        assert_eq!(deleted, "SPOT_DELETE:3Y0J;");
     }
 
     /// A radio that is not there must not panic, block, or lose the client —

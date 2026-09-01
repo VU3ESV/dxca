@@ -24,6 +24,29 @@
   import { onMount } from 'svelte';
   import HelpTip from '../lib/HelpTip.svelte';
   import { awards, pick, canFilter } from '../lib/awards.svelte';
+  import { loadChase, chasedAny, isChased } from '../lib/chase.svelte';
+  import { currentTheme } from '../lib/theme.svelte';
+
+  // ClubLog's DX Dash picks its own appearance — a `dxd-theme` cookie if the
+  // browser sends one, otherwise BY THE CLOCK: light 07:00–19:59 on the
+  // browser's clock, dark at night (the inline script in its <head>, read
+  // 2026-09-01). Neither input is ours to set: inside this iframe the cookie
+  // is third-party (Safari refuses those outright, SameSite=Lax keeps them
+  // out elsewhere), and there is no URL parameter. So left alone the embed
+  // turns dark at 8 pm however the rest of this screen is set.
+  //
+  // The clock rule reads the browser's clock — the same clock this page has
+  // — so the frame's choice is exactly predictable. Captured when the frame
+  // LOADS (it is lazy, so mount time is not load time), and when its
+  // appearance disagrees with the app's, a CSS invert+hue-rotate flips it
+  // back: lightness swaps, hues stay put, so the map and charts keep their
+  // own colours. If ClubLog ever honours prefers-color-scheme or grows a
+  // theme parameter, delete all of this and use that instead.
+  let embedTheme = $state<'light' | 'dark'>('light');
+  function embedLoaded() {
+    const h = new Date().getHours();
+    embedTheme = h >= 7 && h < 20 ? 'light' : 'dark';
+  }
 
   // Which half is showing. Persisted per browser, because the segmented
   // control turned out to be easy to miss entirely: the page lands on the feed
@@ -64,6 +87,7 @@
   onMount(() => {
     loadFeed();
     loadStation();
+    loadChase();
     // The ring turns over in under an hour on a busy feed, so a static
     // snapshot goes stale while you look at it.
     const t = setInterval(loadFeed, 15000);
@@ -242,6 +266,73 @@
       </dl>
     </div>
 
+    <!-- Only the awards this account chases (Settings › My station ›
+         Awards) — nothing here for anyone who has not opted in. -->
+    {#if station.award_stats && chasedAny()}
+      <div class="card">
+        <h2>
+          Awards
+          <HelpTip label="Awards">
+            <span class="para">
+              The awards ticked under <b>Settings › My station › Awards</b>
+              — only those show here. Worked comes from your ClubLog log;
+              <b>confirmed needs the login on LoTW account</b>, because
+              ClubLog's export carries no state, island or QSL detail.
+            </span>
+            <span class="para">
+              <b>VUCC</b> counts 4-character grid squares per band, 50 MHz
+              and up only. <b>WAS</b> counts the fifty states, any band or
+              mode; DC counts as Maryland. <b>IOTA</b> counts island groups.
+            </span>
+          </HelpTip>
+        </h2>
+        <dl class="stats">
+          {#if isChased('iota')}
+            <div><dt>IOTA worked</dt><dd class="num">{station.award_stats.iota_worked}</dd></div>
+            <div>
+              <dt>IOTA confirmed</dt>
+              <dd class="num ok-num">{station.award_stats.iota_confirmed}</dd>
+            </div>
+          {/if}
+          {#if isChased('was')}
+            <div><dt>States worked</dt><dd class="num">{station.award_stats.was_worked}</dd></div>
+            <div>
+              <dt>States confirmed</dt>
+              <dd class="num ok-num">{station.award_stats.was_confirmed}</dd>
+            </div>
+          {/if}
+        </dl>
+        {#if isChased('was') && station.award_stats.was_missing.length && station.award_stats.was_missing.length < 50}
+          <!-- The chase list — fifty minus worked is short for anyone actually
+               after WAS, and "which ones" is the question the number raises. -->
+          <p class="hint">
+            Missing states:
+            <span class="mono">{station.award_stats.was_missing.join(' ')}</span>
+          </p>
+        {/if}
+        {#if isChased('vucc') && station.award_stats.vucc.length}
+          <!-- Same table dress as the feed slices — three narrow columns,
+               numbers right-aligned, no new CSS to drift. -->
+          <table class="slices">
+            <thead>
+              <tr><th>VUCC band</th><th>Grids worked</th><th>Confirmed</th></tr>
+            </thead>
+            <tbody>
+              {#each station.award_stats.vucc as v (v.band)}
+                <tr>
+                  <td>{v.band}</td>
+                  <td class="num">{v.worked}</td>
+                  <td class="num ok-num">{v.confirmed}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        {:else if isChased('vucc')}
+          <p class="hint">No 50 MHz+ grids in the log yet — VUCC counts from 6M up.</p>
+        {/if}
+      </div>
+    {/if}
+
     {#if shownBandMode}
       <div class="card">
         <h2>
@@ -334,9 +425,14 @@
             </span>
             <span class="para">
               It is a page from ClubLog, not part of DXCA: your browser fetches
-              it directly, it wears ClubLog's own styling rather than this
-              app's, and it needs the internet even though the rest of this
-              screen does not.
+              it directly, and it needs the internet even though the rest of
+              this screen does not.
+            </span>
+            <span class="para">
+              Left alone it picks light or dark <b>by the clock</b> — light by
+              day, dark after 8 pm — regardless of your appearance here. DXCA
+              re-tints it to match this app, so the page never changes colour
+              halfway down.
             </span>
           </HelpTip>
         </h2>
@@ -356,6 +452,8 @@
             height="1075"
             scrolling="no"
             loading="lazy"
+            onload={embedLoaded}
+            class:flip={currentTheme() !== embedTheme}
           ></iframe>
         </div>
       </div>
@@ -548,11 +646,6 @@
     cursor: pointer;
   }
 
-  .sub-head {
-    margin: 1.25rem 0 0.5rem;
-    font-size: 0.95rem;
-  }
-
   .stats {
     display: flex;
     flex-wrap: wrap;
@@ -627,7 +720,10 @@
     border: 1px solid var(--border);
     border-radius: 8px;
     overflow: hidden;
-    background: #fff;
+    /* The app's own ground, not #fff: the frame is blank until it lazy-loads
+       (and flipped afterwards when the clock disagrees — see the script), so
+       a hard white here would flash-bang a dark screen. */
+    background: Canvas;
   }
 
   .embed-head {
@@ -668,6 +764,13 @@
     display: block;
     width: 100%;
     border: none;
+  }
+
+  /* The counter-flip (see the script's note on ClubLog's clock rule):
+     applied only when the frame's own pick disagrees with the app's, so a
+     matching frame is never touched. */
+  .embed iframe.flip {
+    filter: invert(1) hue-rotate(180deg);
   }
 
   /* Sits between the card title and what it describes, so it takes the gap

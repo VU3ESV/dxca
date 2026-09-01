@@ -1,14 +1,161 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-08-30 · **Status:**
-**v2.16.0 — Settings is two pages: Sources and Destinations**, each with
-tabs. Five rail entries became two, mirroring the two ends of the pipeline,
-and the FlexRadio panadapter settings moved into Destinations from their own
-entry. The multi-station per-account feeds work was **withdrawn** — see the
-entries under Open items.
+**Created:** 2026-08-26 · **Last updated:** 2026-09-01 · **Status:**
+**v2.17.6 — the LoTW download gets time to finish, and a failed one stops
+erasing.** 2.17.5 fixed the *request* (it was incremental) and the very
+first real run then failed a different way: `LoTW report read: timed out
+reading response`. The 600 s timeout was not enough for a 28,467-record
+report that LoTW builds server-side before sending a byte. Raised to
+**1800 s**.
 
-**All five hosts run it as of 2026-08-30.** `adersh@192.168.1.151` was the
+**The more important half is the second fix.** When the download failed,
+`refresh_user` saved the freshly rebuilt matrix with `by_state` and
+`by_iota` EMPTY — the observed `byIota` went 2 → 0 — because the rebuild
+starts from scratch and the merge simply did not happen. That is the same
+erasure as the incremental bug wearing a different hat, and it means *any*
+LoTW hiccup silently republishes "you have worked no states". The failure
+path now **carries the previous axes forward**; `by_grid` is not carried,
+because it is rebuilt from the ClubLog log we just parsed and the fresh
+value is the correct one.
+
+Third: *Refresh log now* said "this can take a minute" while the operator
+watched a spinner for fifteen. It now says **10 minutes or more** when LoTW
+credentials are set, and that it keeps running if the page is left.
+
+**Pattern worth naming, three for three today:** every one of these bugs
+was a rebuild-from-scratch matrix meeting a data source that returned less
+than expected. The `?`-axis guard (2.17.5) and this carry-forward are the
+two structural answers; the individual download bugs were only triggers.
+
+**v2.17.5 — the LoTW report is actually fetched in full.** Manoj: *"getting
+new state alert for NK3L CA, but I have worked CA"*. His matrix held
+`byState: 0`, `byIota: 2`, `byGrid: 594` — grids healthy (they come from
+ClubLog), states and islands empty.
+
+**Cause:** LoTW's QSL report is **incremental by default** — it returns the
+QSLs received since your last download — and `lotwreport::download` never
+pinned a start date. The first fetch brought the history; a later one
+brought two records and overwrote the cache; and because `refresh_user`
+rebuilds the matrix from scratch and merges whatever it gets, every state
+and island earned before that vanished. Measured against the live endpoint
+with his credentials: the request as it stood returned **1 record, 0 STATE
+fields, 871 bytes**; with `qso_qslsince=1945-01-01` it returned **28,467
+records, 6,786 STATE fields, 16.8 MB**.
+
+**The module doc had stated the requirement** — *"Always a FULL report ...
+an incremental pull would lose every older LoTW-only confirmation on the
+next rebuild"* — and the code did not implement it. A comment asserting a
+property is not a test of it.
+
+**Second fix, for the whole class:** an empty award axis now claims nothing
+is new (`best_award`). States and islands have exactly one source, an
+optional external report that can be absent, refused or — as here —
+quietly partial, so an empty map means *unknown*, not *none worked*.
+`by_grid` is deliberately NOT guarded: it comes from the same ClubLog log
+that drives DXCC, so empty there really does mean none worked. Two of the
+2.17.3 tests had to be repaired to keep testing what they claimed — their
+fixtures had empty axes, so they would have passed on the new guard rather
+than on the rule they were written for.
+
+**Operator step after upgrading: one Refresh log now**, or states stay
+empty until the daily refresh comes round. **The poisoned 1,431-byte cache
+was deleted from noderedpi4** during the 2.17.5 deploy — without that the
+week-long cache would have re-merged the bad file and re-erased the states
+even on the fixed build. No other host had a cached report (no LoTW
+credentials set on them).
+
+**v2.17.4 — the Server card and the file-only line stop lying.** Three
+display defects Manoj found by reading the Reference-data page: the
+**Milestone** row was a hardcoded `"2.1 — alerts, awards, auto-refresh"` in
+`status_json` that nothing ever updated, printing 2.1 beside a version
+reading 2.17 — removed from the API and the card, and nothing else consumed
+the field. The **file-only settings line** omitted `iota_refresh_days` and
+`fcc_refresh_days`, added to the config in 2.17.0 and never added to the
+line, so it under-reported what the TOML owns. And **`telnet_interactive`
+was invisible from the web UI entirely** — a flag that changes what port
+7575 accepts, readable only by opening the TOML on the box; it is now in
+`read_only` and on the line as `telnet 7575 (login on/off)`. Intervals of
+`0` render as `off` rather than `0d`, which read as "constantly".
+
+**The lesson for that line specifically:** it is a promise of completeness,
+so any new `Config` field must be added to it in the same commit. It went
+wrong the moment a config key shipped without one.
+
+**v2.17.3 — a US call operating abroad is no longer a New State.** Manoj
+spotted `DV2/K7AZQ` flagged as one: an Arizona licensee transmitting from
+the Philippines. **The cause is the part worth remembering** —
+`StateTable::lookup` reused the exact / before-slash / after-slash ladder
+that `lotw::is_user` and `has_worked_call` walk. That ladder answers *who
+does this call belong to*, where finding `K7AZQ` inside `DV2/K7AZQ` is
+exactly right; it was being asked *where is this operator*, where it is
+exactly wrong. **A test asserted the broken behaviour** (`KH6/K6XYZ` →
+`CA`, labelled "prefix override"), which is how it shipped — a test can
+only protect a rule someone stated correctly.
+
+Two guards now, deliberately redundant: `best_award` requires the spot's
+resolved entity to be WAS-countable (291 / 6 / 110 — Alaska and Hawaii are
+WAS states though separate DXCC entities), and `lookup` itself takes only
+an exact match or a plain `/P`, `/M`, `/QRP`. A call-area digit (`W1AW/7`)
+is refused too: that suffix is the operator *saying* they are not home.
+Also in 2.17.3: the settings pages are just **ClubLog** and **LoTW**.
+
+**v2.17.2 — explanatory prose lives on the `?` hovers** (Manoj: *"move all
+explanatory texts to on hover"*), continuing the rule `HelpTip.svelte`'s own
+header states: read-once paragraphs were pushing the daily controls down the
+page. Moved: each award's "what it runs on" (Awards), the LoTW "what it is
+for" intro, the ClubLog ladder/LoTW pointer, and both `.always` reassurances
+in the Alerts rail — the band-mask group gained a HelpTip to hold its New
+DXCC exemption, **overriding an earlier deliberate choice** to keep that one
+on the page ("a tooltip nobody hovers"); say so if it should go back.
+**Kept visible:** conditional warnings and state (no FCC table, no IOTA
+directory, no levels ticked, LoTW not set) — those are not explanation.
+
+**v2.17.1 — ClubLog and LoTW are separate settings pages** (Manoj, same
+day: *"my clublog and my lotw to be different tabs"*). Two accounts at two
+organisations; the LoTW login was a footnote under the ClubLog form and
+easy to miss. **UI split only** — both pages still edit the one
+`clublog_json` row and both write it back whole, so a partial PUT cannot
+blank the other's credentials. No schema change, deliberately.
+
+**v2.17.0 — awards beyond DXCC, and a settings page to pick them.** IOTA,
+WAS and VUCC each get a New/`?` level pair, switched on under **Settings ›
+My station › Awards**; an award left unticked adds no control anywhere, so
+the Spots and Alerts screens of a non-chaser are unchanged. Also in the
+release: the confirmation-path gate on the `?` levels, the TCI (ExpertSDR3)
+destination with its reconnect defect fixed, and the ClubLog embed
+following the app's appearance. **v2.17.0 through v2.17.5 all released 2026-09-01** (tag + GitHub release
++ Windows zip each), and **the whole fleet is on v2.17.5** —
+deployed and verified the same day, every host answering with its nodes
+live:
+
+| Host | Nodes | cty / IOTA / FCC |
+|---|---|---|
+| `192.168.1.169` noderedpi4 | 9/9 | 402 / 1178 / 816973 |
+| `192.168.1.170` Windows | 2/2 | 0 / 0 / 0 |
+| `192.168.1.151` adersh | 4/4 | 402 / 0 / 0 |
+| `192.168.1.201` vu2wj | 2/2 | 402 / 0 / 0 |
+| `192.168.220.51` vu2oy | 2/2 | 402 / 0 / 0 |
+
+**The award reference files are noderedpi4's alone**, and that is correct,
+not an incomplete deploy: `pi-deploy.sh --no-seed` ships no data, and the
+FCC table is a ~200 MB download that must stay each admin's own deliberate
+act (Server › Reference data). The four other hosts can tick IOTA/WAS/VUCC
+on Awards, but their island and state levels stay quiet until their own
+admin downloads the files. Grid (VUCC) works everywhere immediately — it
+needs no reference data.
+
+The Windows box's `cty_entities: 0` is unchanged and still the known,
+accepted state — do not re-raise it.
+
+Bringing the three WireGuard tunnels up needs a sudo password, so it is
+**Manoj's step, not an automatable one**: `sudo wg-quick up Adersh_vu2cpl`
+/ `Shaji_vu2wj` / `vu2cpl_Ranjith`, bare names from
+`/opt/homebrew/etc/wireguard/`. All three ran up together with the shack
+LAN, as designed since the AllowedIPs narrowing.
+
+**All five hosts ran v2.16.0 as of 2026-08-30**, and four still do —
+noderedpi4 is the only one on v2.17.0 so far. `adersh@192.168.1.151` was the
 last one — it had missed the deploy pass with `ssh: connect to host
 192.168.1.151 port 22: Operation timed out`, which read as the third-party
 power-state case but was **not**: the Pi was up and its `192.168.1.151/32`
@@ -908,6 +1055,297 @@ the cross-build exists to avoid. Notes should cover everything since the
 last *published* release, because tags can outrun releases.
 
 ## Open items → next session
+
+### DONE in v2.17.0: the TCI reconnect defect, fixed before the tag
+
+The deferral held: the defect was fixed in the release pass, as decided,
+and the release went out with it.
+
+**What was wrong.** `worker` called `pending.clear()` on both the failure
+path and a successful re-dial, on the premise that a reconnect means the
+server lost the spots we placed. **That premise is wrong for TCI**: a spot
+is the panorama's state, not the link's, and outlives the client that
+placed it. So any transient drop stranded every mark DXCA had put up —
+permanently, and only clearable by hand in ExpertSDR3 — which is the exact
+silting-up the per-level lifetimes exist to prevent.
+
+**What it took, beyond deleting two lines.** Keeping `pending` across a
+reconnect has two second-order costs the naive fix would have shipped:
+
+* **A busy-spin.** The wait is "the soonest deadline", and after an outage
+  every held deadline is already overdue → a zero-length `recv_timeout` →
+  a thread spinning at full tilt on the always-on Pi. While disconnected
+  the worker now waits for the next *dial* instead, since nothing can be
+  sent before then anyway.
+* **Dialling a dark radio forever.** A non-empty `pending` is what keeps
+  the worker reconnecting, so a radio switched off for a week would be
+  dialled every 30s for a week. `PENDING_GRACE` (30 min past due) lets
+  those go — by then ExpertSDR3 has almost certainly been restarted and
+  the mark is moot — and the worker falls back to blocking on the channel.
+
+**The counter-risk was weighed, not dodged:** if another client re-spotted
+the same call during our outage, the delete takes their mark down too.
+That is one spot, recoverable by re-spotting, against a panorama that
+silts up permanently. Documented in the code at the decision point.
+
+**Tested for real.** `a_reconnect_still_owes_the_deletions_it_could_not_send`
+drives a fake TCI server that accepts, takes the spot, drops the link, then
+accepts again, and asserts the `SPOT_DELETE` arrives on the new session. It
+was **verified to fail** with `pending.clear()` restored (timeout) and pass
+without it — a regression test that was never watched fail is not one.
+`RECONNECT_AFTER` is `#[cfg(test)]`-shortened to 200 ms, which is what makes
+the reconnect path testable inside the gate at all.
+
+Follow-ups 2 and 3 from the original entry (the idle-drain comment
+overclaiming, the direct `tungstenite` pin) are **still open** — neither
+blocks anything, both are comment/`Cargo.toml` scale.
+
+### DONE (on main, unreleased): four fixes from the first real awards run (2026-09-01)
+
+All four came out of Manoj using the new UI on the Pi, and all four are
+worth knowing about beyond the awards feature:
+
+1. **`data.fcc.gov` 403s on `Accept-Encoding: gzip`.** Not the UA, not
+   HTTP/2, not the Pi's network — ureq adds that header itself because the
+   `gzip` feature is on for ClubLog's gzipped endpoints. Verified against
+   the live host: `gzip` and `identity` are BOTH refused, while `*`,
+   `deflate`, `br`, `gzip;q=0`, an empty value and no header at all all
+   return 200/206. A WAF rule, not content negotiation. `fcc.rs` now sends
+   `identity;q=1, *;q=0` (accepted, and the honest ask for a zip), and the
+   Pi answers 206 to that exact request.
+2. **Help popovers were clipped by the filter rail.** `FilterRail` is a
+   scroll container (`overflow-y: auto`) and an absolutely-positioned
+   popover cannot escape one, so a tip opened in the rail was cut at 12rem.
+   `HelpTip` is **viewport-positioned** now (`position: fixed`, placed in
+   `reposition()` from the icon's rect, flipped above when there is no room
+   below, re-placed on any ancestor scroll via a capture-phase listener).
+   Fixes every tip in both rails and the Settings editors, not just the one
+   reported.
+3. **A stale award chip kept filtering the Spots feed invisibly.** The chip
+   selection persists in `localStorage`; deselecting an award removed the
+   chip from the rail but not from the stored set, so it kept narrowing the
+   feed — and would have emptied it if it was the only chip. `Dashboard`
+   now prunes the stored selection to the levels actually offered, guarded
+   on both vocabularies being loaded.
+4. **UDP destinations column order**: the wide Sources CSV field sat
+   mid-row and pushed Unf / On / ✕ off the right edge; Sources is last now.
+
+### DONE (on main, unreleased): the Awards settings page + declutter (2026-09-01, same day)
+
+The first cut of phases 2–4 folded the award toggles into the ClubLog
+page's ladder and let all fourteen levels flood every level list. **Manoj
+rejected that shape** — "I wanted the awards as a tab in my awards
+settings and user should be able to select which awards he is chasing. I
+don't want the spots or alerts to get cluttered" — and this restructure is
+the answer, UI-only, no schema change:
+
+* **Settings › My station › Awards** (`AwardSettings.svelte`, new rail
+  entry): the DXCC ladder at the top (moved OFF the ClubLog page, which is
+  credentials-only again), then one block per award with a **Chasing
+  IOTA/WAS/VUCC** tick that reveals its New/`?` pair, per-award data notes,
+  and live warnings (FCC table missing → State levels quiet; IOTA
+  directory missing → refs unvalidated). "Chasing" is not a stored flag:
+  an award is chased exactly when either of its classifier levels is on,
+  so a selector and the levels can never disagree. Both pages edit the
+  same `clublog_json` row wholesale, the notify_json precedent.
+* **The declutter rule**: `AlertLevel::award()` tags each level with its
+  award (`null` for the classic eight) and `/api/reference` serves it;
+  `web-ui/src/lib/chase.svelte.ts` reads the account's pair flags once and
+  every level list filters through it — the Alerts "Ping me for" ladder,
+  the Spots Alerts chips, and the Stats Awards card (which now shows only
+  chased awards, and nothing at all when none are). Not logged in → nothing
+  chased → the app looks exactly as it did before awards existed.
+
+The lesson is the standing one (see the user-memory *scope a UI request as
+a UI request*): the request said "tab" and "select which awards", and the
+first build answered with architecture instead of the asked-for control.
+
+### DONE (on main, unreleased): IOTA / WAS / VUCC — docs/AWARDS.md phases 2–4
+
+Built 2026-09-01 in one pass on Manoj's "complete the 2-4". The design doc
+carries the reasoning; this entry is the implementation map a future
+session needs.
+
+**Core (`dxca-core`):**
+
+* `awards.rs` (new) — `US_STATES` (50, DC→MD per WAS rule 6),
+  `normalize_state`, `normalize_iota`, `find_iota_ref` (comment scanning),
+  and `StateTable`: the 7.9 MB distilled FCC file binary-searched in place
+  instead of a ~90 MB HashMap, with the lotw-style slash ladder.
+* `Spot` gains `grid` and `iota` (serde-defaulted; **state is looked up,
+  not stored** — a deliberate refinement of the design doc, since the FCC
+  answer is a server-side fact like `is_lotw`). `grid_from_message` reads
+  the trailing locator of an FT8 CQ/exchange; `grid::is_grid` refuses
+  `RR73` everywhere, `grid::grid4` folds to the VUCC square.
+* `LogMatrix` gains `by_grid` / `by_state` / `by_iota`
+  (`AwardStatus` = bands + confirmedBands; serde-defaulted, so every
+  stored matrix_json and 1.x matrix.json still loads). Build records
+  awards inside the same credit-gated loop (an invalid operation earns no
+  grid either); `merge_lotw_confirmed` layers the LoTW QSL report on top,
+  additive, never touching by_dxcc. `award_stats()` totals per VUCC band
+  plus WAS/IOTA counts and the missing-states list.
+* `AlertLevel` grows the six award levels; **FLAGGABLE (now 14) is also
+  the tiebreak** — a spot qualifying for several levels flags as the
+  rarest, and a level switched off simply stops being a candidate, so
+  disabling NEW DXCC lets the same spot flag as New State instead of
+  vanishing. `classify_spot(…, AwardRefs)` extends `classify`;
+  `Classification.award_ref` names the key that fired. Grid is per band
+  and `VUCC_BANDS` only (6M up, no 4M — no US allocation); state and IOTA
+  are key-level.
+
+**Connect (`dxca-connect`):** `iota.rs` (groups.json download + directory,
+refuses <500 groups), `fcc.rs` (zip download → HD.dat active filter →
+EN.dat distill, refuses <100k calls; new `zip` crate, deflate-only),
+`lotwreport.rs` (full `lotwreport.adi`, `qso_qsl=yes&qso_qsldetail=yes`;
+detects LoTW's HTML-with-HTTP-200 login failure). Always a FULL report:
+the matrix rebuilds from scratch, so an incremental pull would shed old
+confirmations — the weekly `data/lotw-report-<id>.adi` cache is what keeps
+fullness from hammering ARRL, and a failed download falls back to the
+stale cache.
+
+**Server:** classify gathers `AwardRefs` (state only when the user's
+config could rank it); `synthetic_spot` stops dropping the parsed grid and
+scans comments for IOTA; the decode path parses message grids. Six new
+`alert_*` classifier flags (the award selector, default off) and six
+`notify_*` flags (**default ON** — the classifier pair is the opt-in, so
+notify must not be a second gate to find). The phase-1 unconf gate covers
+the new `?` levels automatically via `is_unconfirmed`. New admin routes
+`/api/iota/refresh` + `/api/fcc/refresh`; `iota_groups`/`fcc_calls` in
+status; `award_ref` on annotated spots and in `alerts_sent` (column
+migration, `''` backfill); `award_stats` in the station payload. Refresh
+scheduler: IOTA monthly by default; **FCC refuses to schedule until the
+table exists** — the ~200 MB first pull is always a person's act
+(`config/dxca.example.toml` documents both).
+
+**UI:** the 14-level ladder flows everywhere from `/api/reference` (Alerts
++ ClubLog-account FIELD maps extended, level grid now 7×2 pairs); three
+new hues (`--alert-iota/state/grid`, GitHub purple/pink/teal) with the
+same 58% `?` wash; LoTW credentials on the ClubLog page; IOTA/FCC rows on
+Reference data; the IOTA · WAS · VUCC card on Stats; Telegram titles name
+the catch ("🟢 New Grid MK83: …"), history rows show the ref.
+
+**Verified:** `just gate` green (275 Rust tests), and a scratch-config
+smoke run served 14 levels and loaded the real reference files
+(1,178 IOTA groups, 816,973 FCC calls). The §2.6 data checks are resolved
+inline in the design doc — ClubLog's export DOES carry GRIDSQUARE (98% of
+records), groups.json suffices over fulllist.json, and the FCC numbers
+above are from a real distillation.
+
+**Known limits, stated where users meet them:** FCC = license address,
+not operating QTH (README, tooltip); IOTA rides cluster comments only;
+WAS band/mode endorsements and satellite VUCC deferred; the iota-world
+"accepted activations" list (call→ref tagging without a comment mention)
+deliberately not consumed — it is a PDF.
+
+### DONE (on main, unreleased): the confirmation-path gate — docs/AWARDS.md phase 1
+
+Two per-account ticks on **Alerts › For the ? levels**, narrowing only the
+four `Unconf*` levels — the feature request of 2026-09-01: some operators
+simply refuse to QSL, so an unconfirmed entity should only ping for **a new
+call that uses LoTW**, a station that can be worked *and* will confirm.
+
+* **The call is new to my log** — `LogMatrix::has_worked_call`, the first
+  real consumer of `workedCalls` (1.x carried the field but never read it),
+  with the same exact / bare-before-slash / after-slash handling as
+  `lotw::is_user`.
+* **The call uses LoTW** — the server-wide users list the green markers
+  already read; this is the first place it *gates* anything.
+
+The gate is `NotifyUserConfig::passes_unconf_gate`, called from `fan_out`
+right after `wants_level`, so it holds Telegram, Flex and TCI alike and
+never touches the screen, the telnet feed or MQTT. Both ticks default off
+and ride `notify_json` with `#[serde(default)]` — **no migration**, and an
+account that has not opted in behaves exactly as before. The `New*` levels
+are exempt on purpose: an ATNO is worth working whatever the QSL prospects.
+Tests: the gate truth table (`db.rs`), the slash lookup (`matrix.rs`), the
+ladder half (`classify.rs`); `just gate` green.
+
+**Deployed to noderedpi4 on 2026-09-01** (`deploy/pi-deploy.sh`, service
+restarted clean, all nine nodes back, bundle `index-DVgWuuUL.js` serving
+the new rail) — the trial Manoj asked for, gate and TCI together, ahead of
+any tag. The release pass above then covers both. Phases 2–4 (VUCC / IOTA
+/ WAS) are designed but unbuilt — `docs/AWARDS.md`, including the three
+data checks to run before building anything.
+
+### DONE (merged, unreleased): alerts on an ExpertSDR3 panorama (TCI) — PR #1
+
+`crates/dxca-connect/src/tci.rs`, pushed from the same alert fan-out in
+`users.rs` that feeds Flex. From VU3ESV, merged to `main` on 2026-09-01 as
+`8525e5e`. **The merge carried no version bump** — `Cargo.toml` is still
+2.16.0 — so there is no tag and no release; since 2026-09-01 it runs
+unreleased on **noderedpi4 only** (the confirmation-path-gate trial deploy
+carried it). **Put the version on this heading when it ships.** The Destinations tab list in the
+v2.16.0 entry below is left as it is on purpose: that entry records what
+v2.16.0 shipped, and TCI was not in it.
+
+**Destinations has a fourth tab** — UDP | MQTT | FlexRadio | TCI. The two
+radio tabs are independent in every direction: one, the other, both or
+neither, and either without Telegram. Settings are per-account in
+`notify_json` under `tci_*`, defaulting off, so a stored row that predates
+them reads as off with the Flex fields beside it untouched — there is a test
+for exactly that, which is the upgrade risk worth having one for.
+
+**Four things differ from the Flex path**, and each shaped the module:
+
+* **It is a WebSocket, not a raw socket.** `SPOT:...;` written to a plain TCP
+  socket is discarded by the server without a word — the same silent-success
+  trap `flex.rs`'s header warns about, one layer down. It cost no new package:
+  `tungstenite` was already in the tree under axum, so `Cargo.lock` grew by
+  one line.
+* **`SPOT` has no lifetime argument.** SmartSDR is told how long to keep a
+  spot and forgets it itself; TCI is not, so the worker holds each call's
+  deadline and sends `SPOT_DELETE:<call>;` when it passes. Same ladder as
+  Flex — DXCC 60 min, Band/Mode 15, the rest 1 — but **DXCA enforces it**,
+  which means a restart leaves whatever is already on the panorama.
+* **`:` `,` `;` are reserved** and truncate the command exactly as a space
+  does in SmartSDR's; they become spaces. **Spaces themselves are legal
+  here**, the opposite of Flex, so level and entity both fit rather than one
+  having to win.
+* **`SPOT_CLEAR;` is never sent**, not even to tidy up on connect. The server
+  synchronises state across every connected client, so it would wipe the
+  spots another logger put there.
+
+The ARGB palette is now **one table with two renderings** — hex for SmartSDR,
+decimal for TCI — rather than a second copy that would quietly drift.
+
+**Gate verified on the branch before merging, 2026-09-01.** The four steps
+`just gate` runs, run individually with the rustup bin dir on PATH: fmt
+clean, clippy clean with warnings denied, `cargo test --workspace` **258
+passed / 0 failed** (10 of them new `tci::` tests, two of those standing up a
+real WebSocket server), and `pnpm -C web-ui build` clean. On top of the gate,
+**both ship targets cross-build** — `x86_64-pc-windows-gnu` and
+`aarch64-unknown-linux-gnu.2.36` via `cargo zigbuild`. The new dep carries
+`default-features = false`, so no TLS backend is dragged in, which is what
+keeps those two clean.
+
+**Known follow-ups — merged with these open (2026-09-01):**
+
+1. **A reconnect abandons every pending deletion.** Both the failure path and
+   a successful re-dial call `pending.clear()`, on the premise that the server
+   lost the spots. For TCI that premise looks wrong — spots are server-side
+   state that survives a client disconnect — so a transient drop with the
+   radio still up leaves DXCA's spots on the panorama with nothing left to
+   remove them, which is the silting-up the module exists to prevent. The
+   counter-risk is real but narrow: re-deleting a call some other logger had
+   just re-spotted. The UI and README warn only about a DXCA *restart*, not a
+   reconnect. **Deliberately left for the release pass** (Manoj, 2026-09-01) —
+   see the NEXT entry above. Of the three it is the one with operational
+   consequence, so it goes first in that pass — not rediscovered once the tag
+   is being cut.
+2. **The idle-cost claim expires after the first alert.** The worker blocks on
+   the channel only while there is no link; once connected there is no idle
+   disconnect, so it wakes every 250 ms to drain for the life of the process.
+   Negligible on a Pi, but the module docs claim more than the code does.
+3. **`tungstenite = "0.29"` is pinned directly** while axum is what keeps it
+   deduped. An axum bump that moves tungstenite lands two copies in the tree.
+
+**GOTCHA WORTH RECORDING:** a bare `cargo test --workspace` on the Mac dies at
+the doctest step — `could not execute process rustdoc … No such file or
+directory`. Homebrew's rustup symlinks only the `cargo`/`rustc` proxies into
+`/usr/local/bin`; there is no `rustdoc` there. The `Justfile` already prepends
+`/opt/homebrew/opt/rustup/bin` for exactly this reason, so **run `just gate`,
+never a bare `cargo test`** — a run that stops at the doctests looks like a
+much smaller test count than the 258 the workspace actually has.
 
 ### DONE: Settings is Sources and Destinations — v2.16.0 (2026-08-30)
 

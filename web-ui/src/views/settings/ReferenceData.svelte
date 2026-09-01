@@ -21,6 +21,11 @@
   import { server, loadServerConfig } from '../../lib/serverconfig.svelte';
 
   let s = $derived(status());
+
+  /// A refresh interval as the file-only line shows it. `0` means the job is
+  /// switched off, and saying "0d" would read as "constantly" — the exact
+  /// opposite of what it does.
+  const days = (n: number) => (n ? `${n}d` : 'off');
   let message = $state('');
   let error = $state('');
   let busy = $state(false);
@@ -53,6 +58,30 @@
       await loadServerConfig(true);
     } else { message = ''; error = r.json?.error ?? `HTTP ${r.status}`; }
   }
+
+  async function refreshIota() {
+    busy = true; message = 'Downloading IOTA directory…'; error = '';
+    const r = await api('POST', '/api/iota/refresh');
+    busy = false;
+    if (r.status === 200) {
+      message = `IOTA directory refreshed: ${r.json.iota_groups} groups.`;
+      await refreshStatus();
+      await loadServerConfig(true);
+    } else { message = ''; error = r.json?.error ?? `HTTP ${r.status}`; }
+  }
+
+  async function refreshFcc() {
+    busy = true;
+    message = 'Downloading the FCC amateur database — ~200 MB, this takes minutes…';
+    error = '';
+    const r = await api('POST', '/api/fcc/refresh');
+    busy = false;
+    if (r.status === 200) {
+      message = `FCC table refreshed: ${r.json.fcc_calls} calls.`;
+      await refreshStatus();
+      await loadServerConfig(true);
+    } else { message = ''; error = r.json?.error ?? `HTTP ${r.status}`; }
+  }
 </script>
 
 {#if s}
@@ -60,7 +89,6 @@
     <h2>Server</h2>
     <dl class="stats">
       <div><dt>Version</dt><dd class="mono">v{s.version}</dd></div>
-      <div><dt>Milestone</dt><dd>{s.milestone}</dd></div>
       <div><dt>Users</dt><dd class="num">{s.users}</dd></div>
       <div><dt>TCP clients</dt><dd class="num">{s.telnet_clients}</dd></div>
       <div><dt>UDP sent</dt><dd class="num">{s.udp_sent}</dd></div>
@@ -130,6 +158,58 @@
           </td>
           <td><button onclick={refreshLotw} disabled={busy}>Refresh now</button></td>
         </tr>
+        <tr>
+          <td class="what">
+            IOTA directory<br />
+            <span class="hint">{s?.iota_groups || '—'} groups</span>
+          </td>
+          <td class="when hint">
+            {#if server.cfg.read_only.iota_refresh_days}
+              auto every {server.cfg.read_only.iota_refresh_days}d ·
+            {:else}
+              auto off ·
+            {/if}
+            {#if server.cfg.iota_last_refresh_unix}
+              last {ago(server.cfg.iota_last_refresh_unix)} ago
+            {:else}
+              never downloaded here
+            {/if}
+          </td>
+          <td>
+            <button
+              onclick={refreshIota}
+              disabled={busy}
+              title="groups.json from iota-world.org (~290 KB) — validates spot IOTA references and names the island groups. Their terms are personal non-commercial use, which is why it downloads here rather than shipping with DXCA."
+              >Refresh now</button
+            >
+          </td>
+        </tr>
+        <tr>
+          <td class="what">
+            FCC call→state<br />
+            <span class="hint">{s?.fcc_calls || '—'} calls</span>
+          </td>
+          <td class="when hint">
+            {#if server.cfg.read_only.fcc_refresh_days}
+              auto every {server.cfg.read_only.fcc_refresh_days}d ·
+            {:else}
+              auto off ·
+            {/if}
+            {#if server.cfg.fcc_last_refresh_unix}
+              last {ago(server.cfg.fcc_last_refresh_unix)} ago
+            {:else}
+              never downloaded here — State alerts stay quiet until it is
+            {/if}
+          </td>
+          <td>
+            <button
+              onclick={refreshFcc}
+              disabled={busy}
+              title="The FCC amateur database (~200 MB download, distilled here to ~8 MB) — which US state a call is licensed in, the data behind New State / ? State. The schedule only re-runs after this first manual pull; a licensee operating away from their license address will still read as their license state."
+              >Download now</button
+            >
+          </td>
+        </tr>
       </tbody>
     </table>
     {#if message}<p class="ok">{message}</p>{/if}
@@ -137,12 +217,23 @@
 
     <ApplySave />
 
+    <!-- Everything in config/dxca.toml that this page cannot change, listed
+         so the UI never implies it owns a setting it does not. It must stay
+         COMPLETE: the IOTA and FCC intervals were added to the config in
+         2.17.0 and left off this line until 2.17.4, which made the line
+         quietly wrong rather than merely terse. The telnet login flag is
+         here for a stronger reason — it changes what port 7575 accepts, and
+         it was previously invisible from the web UI altogether. -->
     <p class="hint file-only">
       File-only settings: web {server.cfg.read_only.web_bind} · telnet
-      {server.cfg.read_only.telnet_port} · dedupe {server.cfg.read_only.dedupe_window_secs}s ·
-      ring {server.cfg.read_only.spot_ring_capacity} · cty refresh
-      {server.cfg.read_only.cty_refresh_days}d · LoTW refresh
-      {server.cfg.read_only.lotw_refresh_days}d · data dir
+      {server.cfg.read_only.telnet_port}
+      (login {server.cfg.read_only.telnet_interactive ? 'on' : 'off'}) ·
+      dedupe {server.cfg.read_only.dedupe_window_secs}s · ring
+      {server.cfg.read_only.spot_ring_capacity} · refresh: cty
+      {days(server.cfg.read_only.cty_refresh_days)}, LoTW
+      {days(server.cfg.read_only.lotw_refresh_days)}, IOTA
+      {days(server.cfg.read_only.iota_refresh_days)}, FCC
+      {days(server.cfg.read_only.fcc_refresh_days)} · data dir
       <code>{server.cfg.read_only.data_dir}</code> (edit config/dxca.toml + restart).
     </p>
   </div>

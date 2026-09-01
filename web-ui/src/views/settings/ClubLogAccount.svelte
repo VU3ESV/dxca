@@ -1,26 +1,22 @@
 <script lang="ts">
-  // Settings › My station › ClubLog account — the credentials, and what the
-  // log they fetch is allowed to flag.
+  // Settings › My station › ClubLog account — the credentials that fetch
+  // this account's log.
   //
-  // The two are one page because they are one stored object and one Save, and
-  // because separating them was actively misleading: on its own rail page
-  // called "Alert levels", the ladder sat next to an identical-looking list on
-  // the Alerts tab with no way to tell which was which. They are NOT the same
-  // control:
+  // The LoTW login moved to its own page on 2026-09-01 (Manoj: "my clublog
+  // and my lotw to be different tabs") — two accounts at two organisations.
+  // Both pages still edit ONE stored row, so both load the whole object and
+  // write it back whole; see the note on LotwAccount.svelte.
   //
-  //   * THIS one is the classifier gate. Switch a level off here and it is
-  //     never assigned at all — it vanishes from the spots feed AND from
-  //     Telegram, because nothing downstream ever sees it. It rides on the
-  //     ClubLog config because your log is what decides the level.
-  //   * The Alerts tab's "Ping me for" only narrows what this already allows,
-  //     and only for Telegram. The feed keeps showing everything.
-  //
-  // Under "ClubLog account", the ladder reads as what it is: what your log
-  // flags. That is the whole reason it moved back here.
+  // The alert ladder lived on this page from 2026-08-29 to 2026-09-01 (the
+  // classifier gate reads the log these credentials fetch, so the pairing
+  // was honest). It moved to its own **Awards** page when the chaseable
+  // awards arrived, on Manoj's direction: which awards you chase is an
+  // awards question, and fourteen checkboxes under "ClubLog account" buried
+  // it. This page is credentials again; the ladder's two-control story
+  // (classifier here-ish vs Telegram narrowing on Alerts) is told on Awards.
   import { api } from '../../lib/api';
   import { onMount } from 'svelte';
   import HelpTip from '../../lib/HelpTip.svelte';
-  import { loadReference, levels } from '../../lib/reference.svelte';
 
   // 0 = manual only. Mirrors the server's `refresh_hours`, whose own default
   // is 24 — a log that only moves when someone presses a button means
@@ -34,32 +30,24 @@
     [168, 'Weekly'],
   ];
 
-  // Level key → the classifier toggle that decides whether a spot is ever
-  // flagged as that level at all. The server owns the ladder and its order
-  // (AlertLevel::FLAGGABLE); this only maps key → field name.
-  const FIELD: Record<string, string> = {
-    newDXCC: 'alert_new_dxcc',
-    newBand: 'alert_new_band',
-    newMode: 'alert_new_mode',
-    newSlot: 'alert_new_slot',
-    unconfDXCC: 'alert_unconf_dxcc',
-    unconfBand: 'alert_unconf_band',
-    unconfMode: 'alert_unconf_mode',
-    unconfSlot: 'alert_unconf_slot',
-  };
-
+  // The level flags stay in this object (one stored row, edited by two
+  // pages the way Alerts and Telegram share notify_json): loaded whole,
+  // written back whole with only this page's fields touched. The defaults
+  // below cover a failed load so a save can never blank the ladder.
   let cfg = $state<any>({
     callsign: '', email: '', app_password: '', refresh_hours: 24,
+    lotw_login: '', lotw_password: '',
     alert_new_dxcc: true, alert_new_band: true, alert_new_mode: true, alert_new_slot: true,
     alert_unconf_dxcc: false, alert_unconf_band: false,
     alert_unconf_mode: false, alert_unconf_slot: false,
+    alert_new_iota: false, alert_new_state: false, alert_new_grid: false,
+    alert_unconf_iota: false, alert_unconf_state: false, alert_unconf_grid: false,
   });
   let message = $state('');
   let error = $state('');
   let busy = $state(false);
 
   onMount(async () => {
-    await loadReference();
     const r = await api('GET', '/api/config/me/clublog');
     if (r.status === 200 && r.json) cfg = { ...cfg, ...r.json };
   });
@@ -79,7 +67,16 @@
   }
 
   async function refresh() {
-    busy = true; message = 'Downloading log — this can take a minute…'; error = '';
+    busy = true;
+    // Honest about the real cost. With LoTW configured this pulls the whole
+    // QSL report as well as the ClubLog log, and on a large account that is
+    // a quarter of an hour, not "a minute" — which is what it used to claim
+    // while the operator sat watching a spinner.
+    message = cfg.lotw_login
+      ? 'Downloading your ClubLog log and your full LoTW QSL report — this can '
+        + 'take 10 minutes or more on a large log. It keeps running if you leave this page.'
+      : 'Downloading log — this can take a minute…';
+    error = '';
     const r = await api('POST', '/api/clublog/refresh');
     busy = false;
     if (r.status === 200) {
@@ -89,18 +86,26 @@
       error = r.json?.error ?? `HTTP ${r.status}`;
     }
   }
-
-  let anyLevel = $derived(levels().some((l) => cfg[FIELD[l.key]]));
 </script>
 
 <div class="card">
   <h2>
-    ClubLog account
-    <HelpTip label="ClubLog account">
-      Your log drives the New / ? highlighting — only for your account. The
-      <b>ClubLog API key</b> is not here: it only fetches the shared DXCC prefix
-      database, so it is one server-wide setting under <b>Server › Reference
-      data</b>. These credentials download <em>your</em> log.
+    ClubLog
+    <HelpTip label="ClubLog">
+      <span class="para">
+        Your log drives the New / ? highlighting — only for your account.
+        These credentials download <em>your</em> log.
+      </span>
+      <span class="para">
+        What it is allowed to flag — the alert ladder, and the awards you
+        tick — lives under <b>Awards</b> in this rail. Your <b>LoTW</b> login
+        is its own page there too.
+      </span>
+      <span class="para">
+        The <b>ClubLog API key</b> is not here: it only fetches the shared
+        DXCC prefix database, so it is one server-wide setting under
+        <b>Server › Reference data</b>.
+      </span>
     </HelpTip>
   </h2>
   <div class="settings-form">
@@ -129,41 +134,6 @@
     </select>
   </div>
 
-  <h2>
-    Levels my log flags
-    <HelpTip label="Levels my log flags">
-      <span class="para">
-        Which levels this account flags <b>at all</b>. <b>New</b> means never
-        worked; <b>?</b> means worked and still not confirmed — the QSL gap you
-        close by working it again.
-      </span>
-      <span class="para">
-        The widest of the three controls, and the reason it belongs with your
-        log: a level switched off here is never assigned, so it disappears from
-        the spots feed <em>and</em> from Telegram. The <b>Alerts</b> tab's "ping
-        me for" only narrows what this already allows, and only for Telegram —
-        the feed still shows everything.
-      </span>
-    </HelpTip>
-  </h2>
-  <!-- Column-major over four rows, so the server's FLAGGABLE order (the four
-       New levels, then the four ? ones) lands as PAIRS: New DXCC beside ? DXCC,
-       New Band beside ? Band. Reading across a row then compares the two rungs
-       of the same axis, which is the comparison the operator actually makes.
-       Row-major would have put New Band next to New DXCC — tidy, but it pairs
-       nothing. -->
-  <div class="levels">
-    {#each levels() as l (l.key)}
-      <label data-level={l.key}>
-        <input type="checkbox" bind:checked={cfg[FIELD[l.key]]} />
-        <span class="level-dot"></span>{l.label}
-      </label>
-    {/each}
-  </div>
-  {#if !anyLevel}
-    <p class="warn">No levels ticked — nothing will ever be flagged, on screen or in Telegram.</p>
-  {/if}
-
   <div class="actions">
     <button class="primary" onclick={save} disabled={busy}>Save</button>
     <button onclick={refresh} disabled={busy}>Refresh log now</button>
@@ -173,33 +143,6 @@
 </div>
 
 <style>
-  .levels {
-    display: grid;
-    grid-auto-flow: column;
-    grid-template-rows: repeat(4, auto);
-    grid-template-columns: repeat(2, minmax(8.5rem, 1fr));
-    gap: 0.35rem 1rem;
-    max-width: 24rem;
-  }
-
-  .levels label {
-    gap: 0.45rem;
-  }
-
-  /* Too narrow to pair: one column, still in FLAGGABLE order. */
-  @media (max-width: 30rem) {
-    .levels {
-      grid-auto-flow: row;
-      grid-template-columns: 1fr;
-      grid-template-rows: none;
-    }
-  }
-
-  .warn {
-    color: var(--warn);
-    font-size: var(--fs-hint);
-  }
-
   p {
     margin: 0.75rem 0 0;
   }

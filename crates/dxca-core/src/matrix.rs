@@ -22,6 +22,31 @@ pub struct DxccStatus {
     pub confirmed_slots: HashSet<String>,
 }
 
+/// Worked/confirmed state for one non-DXCC award key — a VUCC grid square,
+/// a WAS state, an IOTA reference. Bands only: mode endorsements are a
+/// deliberate deferral (`docs/AWARDS.md` §2.4), and adding sets later is a
+/// serde default away, not a migration.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct AwardStatus {
+    pub bands: HashSet<String>,
+    #[serde(rename = "confirmedBands")]
+    pub confirmed_bands: HashSet<String>,
+}
+
+impl AwardStatus {
+    fn record(&mut self, band: &str, confirmed: bool) {
+        self.bands.insert(band.to_string());
+        if confirmed {
+            self.confirmed_bands.insert(band.to_string());
+        }
+    }
+
+    /// Confirmed at the key level — on any band. What WAS and IOTA count.
+    pub fn is_confirmed(&self) -> bool {
+        !self.confirmed_bands.is_empty()
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct LogMatrix {
     #[serde(rename = "byDXCC")]
@@ -29,6 +54,20 @@ pub struct LogMatrix {
     /// Lowercased calls already worked — fast path for exact-call checks.
     #[serde(rename = "workedCalls")]
     pub worked_calls: HashSet<String>,
+    // The three non-DXCC award axes (docs/AWARDS.md phases 2–4). All three
+    // default empty under serde, so every matrix_json stored before they
+    // existed — and every 1.x matrix.json — still deserializes untouched.
+    /// VUCC: 4-char grid square → per-band state, **50 MHz+ bands only**
+    /// (`bands::is_vucc_band` gates what `record_grid` accepts).
+    #[serde(default, rename = "byGrid")]
+    pub by_grid: HashMap<String, AwardStatus>,
+    /// WAS: two-letter state → per-band state. Keys are validated through
+    /// `awards::normalize_state`, so territories never take a slot.
+    #[serde(default, rename = "byState")]
+    pub by_state: HashMap<String, AwardStatus>,
+    /// IOTA: normalized reference (`AS-003`) → per-band state.
+    #[serde(default, rename = "byIota")]
+    pub by_iota: HashMap<String, AwardStatus>,
 }
 
 impl LogMatrix {
@@ -129,15 +168,88 @@ impl LogMatrix {
                 ));
                 continue;
             }
-            matrix.record(
-                d,
-                &band,
-                crate::modes::canonical(&mode),
-                &call,
-                r.is_confirmed(),
-            );
+            let confirmed = r.is_confirmed();
+            matrix.record(d, &band, crate::modes::canonical(&mode), &call, confirmed);
+            // The award axes ride the same credit-gated loop on purpose: a
+            // contact ClubLog would not credit for DXCC (invalid operation,
+            // whitelist reject) earns no grid, state or island either.
+            // ClubLog's export carries GRIDSQUARE (verified 2026-09-01,
+            // 98% of records) but never STATE or IOTA — those two record
+            // nothing here and are fed by `merge_lotw_confirmed`.
+            if let Some(g) = r.grid_square() {
+                matrix.record_grid(&g, &band, confirmed);
+            }
+            if let Some(s) = r.state() {
+                matrix.record_state(&s, &band, confirmed);
+            }
+            if let Some(i) = r.iota() {
+                matrix.record_iota(&i, &band, confirmed);
+            }
         }
         (matrix, count, uncredited)
+    }
+
+    /// Merge a **LoTW QSL report** (`lotwreport.adi`, confirmations only)
+    /// into the award axes — the source for what ClubLog's export cannot
+    /// carry: `STATE`, `IOTA`, and grid confirmations from the other
+    /// station's own TQSL location. Strictly additive, and deliberately
+    /// blind to `by_dxcc`: DXCC stays ClubLog's. Every record in a
+    /// `qso_qsl=yes` report is a confirmation by definition.
+    ///
+    /// Returns how many records landed at least one award fact.
+    pub fn merge_lotw_confirmed(&mut self, content: &str) -> usize {
+        let mut merged = 0;
+        for r in crate::adif::parse(content) {
+            let Some(band) = r.band() else { continue };
+            let mut any = false;
+            if let Some(g) = r.grid_square() {
+                any |= self.record_grid(&g, &band, true);
+            }
+            if let Some(s) = r.state() {
+                any |= self.record_state(&s, &band, true);
+            }
+            if let Some(i) = r.iota() {
+                any |= self.record_iota(&i, &band, true);
+            }
+            merged += usize::from(any);
+        }
+        merged
+    }
+
+    /// Record a grid credit — VUCC bands only, 4-char square. Returns
+    /// whether anything was recorded (the input was a real locator on a
+    /// scoring band).
+    pub fn record_grid(&mut self, locator: &str, band: &str, confirmed: bool) -> bool {
+        let Some(g4) = crate::grid::grid4(locator) else {
+            return false;
+        };
+        if !crate::bands::is_vucc_band(band) {
+            return false;
+        }
+        self.by_grid.entry(g4).or_default().record(band, confirmed);
+        true
+    }
+
+    /// Record a WAS credit; territories and noise fall out in
+    /// `normalize_state` (DC folds into MD there too).
+    pub fn record_state(&mut self, raw: &str, band: &str, confirmed: bool) -> bool {
+        let Some(st) = crate::awards::normalize_state(raw) else {
+            return false;
+        };
+        self.by_state
+            .entry(st.to_string())
+            .or_default()
+            .record(band, confirmed);
+        true
+    }
+
+    /// Record an IOTA credit under the normalized reference.
+    pub fn record_iota(&mut self, raw: &str, band: &str, confirmed: bool) -> bool {
+        let Some(r) = crate::awards::normalize_iota(raw) else {
+            return false;
+        };
+        self.by_iota.entry(r).or_default().record(band, confirmed);
+        true
     }
 
     pub fn record(&mut self, dxcc: i32, band: &str, mode: &str, call: &str, confirmed: bool) {
@@ -158,6 +270,26 @@ impl LogMatrix {
         self.by_dxcc.get(&dxcc)
     }
 
+    /// Is this call already in the log? Same slash handling as
+    /// `lotw::is_user` — exact, bare-before-slash, and after-slash (prefix
+    /// overrides like VP8/K1JT) — against the lowercased calls [`record`]
+    /// stores. The first real consumer of `worked_calls`: 1.x carried the
+    /// field but never read it.
+    ///
+    /// [`record`]: Self::record
+    pub fn has_worked_call(&self, callsign: &str) -> bool {
+        let lower = callsign.to_lowercase();
+        if self.worked_calls.contains(&lower) {
+            return true;
+        }
+        match lower.split_once('/') {
+            Some((bare, suffix)) => {
+                self.worked_calls.contains(bare) || self.worked_calls.contains(suffix)
+            }
+            None => false,
+        }
+    }
+
     pub fn total_dxcc_count(&self) -> usize {
         self.by_dxcc.len()
     }
@@ -167,6 +299,48 @@ impl LogMatrix {
     /// whose every slot is confirmed.
     pub fn stats(&self) -> MatrixStats {
         self.stats_excluding(&HashSet::new())
+    }
+
+    /// Totals for the three non-DXCC awards (`docs/AWARDS.md` phases 2–4).
+    /// The ARRL deleted-entities toggle does not apply here — a grid, a
+    /// state or an island cannot be deleted out from under a QSO — so there
+    /// is no `_excluding` twin.
+    pub fn award_stats(&self) -> AwardStats {
+        // VUCC scores per band; a band nothing was worked on is left out
+        // rather than sent as a zero row (most stations have no 33cm).
+        let vucc = crate::bands::VUCC_BANDS
+            .iter()
+            .map(|b| VuccBandCount {
+                band: (*b).to_string(),
+                worked: self
+                    .by_grid
+                    .values()
+                    .filter(|s| s.bands.contains(*b))
+                    .count(),
+                confirmed: self
+                    .by_grid
+                    .values()
+                    .filter(|s| s.confirmed_bands.contains(*b))
+                    .count(),
+            })
+            .filter(|c| c.worked > 0)
+            .collect();
+        // The missing list is the useful shape for WAS — fifty minus worked
+        // is short for anyone chasing it, and "which ones" is the question.
+        let mut was_missing: Vec<String> = crate::awards::US_STATES
+            .iter()
+            .filter(|s| !self.by_state.contains_key(**s))
+            .map(|s| (*s).to_string())
+            .collect();
+        was_missing.sort();
+        AwardStats {
+            vucc,
+            was_worked: self.by_state.len(),
+            was_confirmed: self.by_state.values().filter(|s| s.is_confirmed()).count(),
+            was_missing,
+            iota_worked: self.by_iota.len(),
+            iota_confirmed: self.by_iota.values().filter(|s| s.is_confirmed()).count(),
+        }
     }
 
     /// [`stats`](Self::stats) with `skip` entities left out — the ARRL
@@ -375,9 +549,123 @@ pub struct MatrixStats {
     pub challenge_confirmed: usize,
 }
 
+/// One VUCC band's grid counts.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VuccBandCount {
+    pub band: String,
+    pub worked: usize,
+    pub confirmed: usize,
+}
+
+/// Totals for the non-DXCC awards, shaped for the Stats screen.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AwardStats {
+    /// Per scoring band, bands with nothing worked omitted.
+    pub vucc: Vec<VuccBandCount>,
+    pub was_worked: usize,
+    pub was_confirmed: usize,
+    /// States never worked, alphabetical — the chase list.
+    pub was_missing: Vec<String>,
+    pub iota_worked: usize,
+    pub iota_confirmed: usize,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn award_axes_record_and_count() {
+        let mut m = LogMatrix::default();
+        // VUCC: 6M scores, 20M never does, RR73 is not a grid.
+        assert!(m.record_grid("MK83va", "6M", false));
+        assert!(
+            m.record_grid("MK83", "6M", true),
+            "same square, now confirmed"
+        );
+        assert!(m.record_grid("FN20", "2M", false));
+        assert!(!m.record_grid("MK83", "20M", false), "HF never scores VUCC");
+        assert!(!m.record_grid("RR73", "6M", false));
+        // WAS: DC folds to MD, PR is not a state.
+        assert!(m.record_state("OH", "20M", true));
+        assert!(m.record_state("dc", "40M", false));
+        assert!(!m.record_state("PR", "20M", true));
+        // IOTA normalizes.
+        assert!(m.record_iota("as-3", "15M", false));
+        assert!(!m.record_iota("XX-1", "15M", false));
+
+        let a = m.award_stats();
+        assert_eq!(
+            a.vucc,
+            vec![
+                VuccBandCount {
+                    band: "6M".into(),
+                    worked: 1,
+                    confirmed: 1
+                },
+                VuccBandCount {
+                    band: "2M".into(),
+                    worked: 1,
+                    confirmed: 0
+                },
+            ],
+            "bands in VUCC order, empty bands omitted"
+        );
+        assert_eq!((a.was_worked, a.was_confirmed), (2, 1));
+        assert_eq!(a.was_missing.len(), 48);
+        assert!(!a.was_missing.contains(&"OH".to_string()));
+        assert!(
+            !a.was_missing.contains(&"MD".to_string()),
+            "DC counted as MD"
+        );
+        assert_eq!((a.iota_worked, a.iota_confirmed), (1, 0));
+        assert!(m.by_iota.contains_key("AS-003"));
+    }
+
+    #[test]
+    fn lotw_merge_is_additive_and_confirmed() {
+        let mut m = LogMatrix::default();
+        m.record_state("OH", "20M", false); // worked via ClubLog, unconfirmed
+        let report = "<CALL:4>W8AA<BAND:3>20M<STATE:2>OH<eor>\
+                      <CALL:4>K6BB<BAND:2>6M<GRIDSQUARE:6>DM04QD<eor>\
+                      <CALL:5>VK9CC<BAND:3>15M<IOTA:6>OC-003<eor>\
+                      <CALL:4>NOAW<BAND:3>40M<eor>"; // no award fact
+        assert_eq!(m.merge_lotw_confirmed(report), 3);
+        assert!(m.by_state["OH"].is_confirmed(), "LoTW confirmed the state");
+        assert!(m.by_grid["DM04"].confirmed_bands.contains("6M"));
+        assert!(m.by_iota["OC-003"].is_confirmed());
+        assert!(m.by_dxcc.is_empty(), "DXCC stays ClubLog's");
+        assert!(m.worked_calls.is_empty(), "worked calls stay ClubLog's");
+    }
+
+    #[test]
+    fn adif_build_records_award_axes_from_clublog_fields() {
+        // A GRIDSQUARE on a VUCC band lands in by_grid straight from the
+        // ClubLog export; the same field on HF records nothing for VUCC.
+        let adif = "<CALL:5>SV2AB<BAND:2>6M<MODE:3>FT8<DXCC:3>236\
+                    <GRIDSQUARE:6>KN10LO<QSL_RCVD:1>Y<eor>\
+                    <CALL:5>SV2CD<BAND:3>20M<MODE:3>FT8<DXCC:3>236\
+                    <GRIDSQUARE:4>KN20<STATE:2>OH<IOTA:6>EU-001<eor>";
+        let (m, count) = LogMatrix::build_from_adif(adif, &resolver_with(vec![]));
+        assert_eq!(count, 2);
+        assert!(m.by_grid["KN10"].confirmed_bands.contains("6M"));
+        assert!(!m.by_grid.contains_key("KN20"), "HF grid scores nothing");
+        // STATE/IOTA never actually appear in ClubLog exports, but the build
+        // path must take them when present — an uploaded ADIF might.
+        assert!(m.by_state.contains_key("OH"));
+        assert!(m.by_iota.contains_key("EU-001"));
+    }
+
+    #[test]
+    fn worked_call_lookup_handles_slashes() {
+        let mut m = LogMatrix::default();
+        m.record(324, "20M", "DATA", "VU2ABC", false);
+        assert!(m.has_worked_call("vu2abc"), "case-insensitive exact");
+        assert!(m.has_worked_call("VU2ABC/P"), "suffix stripped");
+        assert!(m.has_worked_call("VP8/VU2ABC"), "prefix override stripped");
+        assert!(!m.has_worked_call("VU2XYZ"));
+        assert!(!LogMatrix::default().has_worked_call("VU2ABC"), "empty log");
+    }
 
     /// The ARRL counts current entities; a deleted one is a real QSO that
     /// scores nothing. Excluding must drop it from every total at once —

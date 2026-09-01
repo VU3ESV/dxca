@@ -11,6 +11,7 @@
 //! live shack decoders (`tests/vectors/`).
 
 pub mod adif;
+pub mod awards;
 pub mod bands;
 pub mod beacons;
 pub mod classify;
@@ -24,4 +25,4 @@ pub mod solar;
 mod spot;
 pub mod wsjtx;
 
-pub use spot::{Spot, message_is_cq, time_from_decode_ms};
+pub use spot::{Spot, grid_from_message, message_is_cq, time_from_decode_ms};

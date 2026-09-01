@@ -32,6 +32,12 @@
   import {
     loadReference, bands, modes, levels, levelLabel,
   } from '../lib/reference.svelte';
+  import { loadChase, chasedLevels } from '../lib/chase.svelte';
+
+  // The ladder shows the classic eight plus only the awards this account
+  // chases (Settings › My station › Awards) — an award nobody opted into
+  // must not add rows here.
+  let myLevels = $derived(chasedLevels(levels()));
 
   // Level key → the notify_* field that gates it. The server owns the ladder
   // and its order (AlertLevel::FLAGGABLE); this only maps key → field name.
@@ -44,6 +50,12 @@
     unconfBand: 'notify_unconf_band',
     unconfMode: 'notify_unconf_mode',
     unconfSlot: 'notify_unconf_slot',
+    newIOTA: 'notify_new_iota',
+    newState: 'notify_new_state',
+    newGrid: 'notify_new_grid',
+    unconfIOTA: 'notify_unconf_iota',
+    unconfState: 'notify_unconf_state',
+    unconfGrid: 'notify_unconf_grid',
   };
 
   let cfg = $state<any>({
@@ -53,6 +65,11 @@
     notify_new_band: true, notify_new_mode: true,
     notify_unconf_dxcc: false, notify_unconf_slot: false,
     notify_unconf_band: false, notify_unconf_mode: false,
+    // The award levels default ON here (chasing an award on Settings ›
+    // Awards is the opt-in; this gate must not be a second one to find).
+    notify_new_iota: true, notify_new_state: true, notify_new_grid: true,
+    notify_unconf_iota: true, notify_unconf_state: true, notify_unconf_grid: true,
+    notify_unconf_skip_worked: false, notify_unconf_lotw_only: false,
     notify_bands: [], notify_modes: [],
     notify_manual_only: false,
     notify_spotter_kind: 'all',
@@ -75,7 +92,7 @@
   }
 
   onMount(async () => {
-    await loadReference();
+    await Promise.all([loadReference(), loadChase()]);
     const r = await api('GET', '/api/config/me/notifications');
     if (r.status === 200 && r.json) {
       cfg = { ...cfg, ...r.json };
@@ -102,14 +119,15 @@
     else error = r.json?.error ?? `HTTP ${r.status}`;
   }
 
-  let anyLevel = $derived(levels().some((l) => cfg[FIELD[l.key]]));
+  let anyLevel = $derived(myLevels.some((l) => cfg[FIELD[l.key]]));
 
   // What the collapsed rail's badge reports — counted per CONTROL, the same
   // rule Spots uses, so the number means the same thing on both screens. The
   // eight-level ladder is ONE control, so anything short of all eight counts
   // once rather than eight times.
   let activeFilters = $derived(
-    (levels().length && !levels().every((l) => cfg[FIELD[l.key]]) ? 1 : 0) +
+    (myLevels.length && !myLevels.every((l) => cfg[FIELD[l.key]]) ? 1 : 0) +
+      (cfg.notify_unconf_skip_worked || cfg.notify_unconf_lotw_only ? 1 : 0) +
       (modeSel.size ? 1 : 0) +
       (bandSel.size ? 1 : 0) +
       (cfg.notify_spotter_kind !== 'all' ? 1 : 0) +
@@ -125,8 +143,9 @@
         <HelpTip label="Ping me for">
           <span class="para">
             This is the <b>Telegram</b> gate. It narrows, it never widens: a
-            level only pings if <b>Settings › My station › ClubLog account</b>
-            allows your log to flag it in the first place.
+            level only pings if <b>Settings › My station › Awards</b> allows
+            your log to flag it in the first place — and an award not ticked
+            there has no rows here at all.
           </span>
           <span class="para">
             Nothing here touches the Spots feed — untick a level and you will
@@ -135,13 +154,52 @@
         </HelpTip>
       </span>
       <div class="levels">
-        {#each levels() as l (l.key)}
+        {#each myLevels as l (l.key)}
           <label data-level={l.key}>
             <input type="checkbox" bind:checked={cfg[FIELD[l.key]]} />
             <span class="level-dot"></span>{l.label}
           </label>
         {/each}
       </div>
+    </div>
+
+    <div class="railgroup">
+      <span class="railhead">
+        For the ? levels
+        <HelpTip label="For the ? levels">
+          <span class="para">
+            The <b>?</b> levels exist to hunt confirmations, and a
+            confirmation needs the right station: some operators simply never
+            QSL, and re-working one cannot turn an entity green.
+          </span>
+          <span class="para">
+            Both ticks narrow only the <b>?</b> levels. With both on,
+            only a call you have never worked that uploads to LoTW will ping
+            — a station that can be worked <b>and</b> will confirm.
+          </span>
+          <span class="para">
+            The <b>New</b> levels are untouched and always ping their own
+            ticks: an ATNO is worth working whatever the QSL prospects.
+          </span>
+        </HelpTip>
+      </span>
+      <!-- docs/AWARDS.md phase 1. On the call, not the spot's provenance —
+           and only on the ? half of the ladder: an ATNO is worth working
+           whatever the QSL prospects. -->
+      <label
+        class="flabel"
+        title="Hold ? pings for calls already in your log. A call you worked that never confirmed is a demonstrated non-QSLer — re-working them cannot confirm the entity."
+      >
+        <input type="checkbox" bind:checked={cfg.notify_unconf_skip_worked} />The call is
+        new to my log
+      </label>
+      <label
+        class="flabel"
+        title="Hold ? pings for calls not on the LoTW users list — a LoTW user is the fast path to a confirmation."
+      >
+        <input type="checkbox" bind:checked={cfg.notify_unconf_lotw_only} />The call uses
+        LoTW
+      </label>
     </div>
 
     <ChipGroup stacked label="Modes" options={modes()} bind:selected={modeSel} />
@@ -171,7 +229,22 @@
     </div>
 
     <div class="railgroup">
-      <span class="railhead">Only ping when</span>
+      <span class="railhead">
+        Only ping when
+        <HelpTip label="Only ping when">
+          <span class="para">
+            Holds alerts for bands the sun says are not workable from your
+            QTH right now. Needs a locator in <b>Settings › My station ›
+            Locator &amp; grey line</b>.
+          </span>
+          <span class="para">
+            <b>New DXCC always pings</b>, whatever the sun is doing — and so
+            does a band the model says nothing about. That exemption is what
+            makes this tick safe to enable: the worst it can do is hold a
+            spot you could not have worked.
+          </span>
+        </HelpTip>
+      </span>
       <!-- Milestone 4 of docs/PHASE-ROTATION-MASK.md. Narrowed separately from
            the Spots screen's own mask, like every other narrowing here: watch
            everything on screen, be woken only for what is workable. It fails
@@ -185,10 +258,6 @@
         <input type="checkbox" bind:checked={cfg.notify_respect_band_mask} />The band is
         plausibly open
       </label>
-      <!-- The exemption is the reason that tick is safe to enable, so it is on
-           the page rather than in a tooltip nobody hovers. Muted, because it is
-           a reassurance about what CANNOT happen, not another instruction. -->
-      <span class="always">New DXCC always pings.</span>
     </div>
 
     <div class="railgroup">
@@ -259,7 +328,9 @@
                 <td class="mono">{a.snr_db ?? '—'}</td>
                 <td>{a.band}</td>
                 <td title={a.dxcc_name}>{a.dxcc_name}</td>
-                <td class="alert">{levelLabel(a.level)}</td>
+                <td class="alert"
+                  >{levelLabel(a.level)}{a.award_ref ? ` ${a.award_ref}` : ''}</td
+                >
                 <!-- Shown either way, not just on failure: a column that is
                      blank on a good row cannot be told from a column that is
                      broken, and "did it actually go out" is the question this
@@ -353,12 +424,6 @@
     font-size: 0.78rem;
     gap: 0.3rem;
     align-items: flex-start;
-    line-height: 1.35;
-  }
-
-  .always {
-    color: var(--muted);
-    font-size: 0.7rem;
     line-height: 1.35;
   }
 
