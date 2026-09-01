@@ -8,8 +8,13 @@ My station › Awards**; an award left unticked adds no control anywhere, so
 the Spots and Alerts screens of a non-chaser are unchanged. Also in the
 release: the confirmation-path gate on the `?` levels, the TCI (ExpertSDR3)
 destination with its reconnect defect fixed, and the ClubLog embed
-following the app's appearance. Released and deployed to noderedpi4;
-**the other four installs are still on v2.16.0** (see Open items).
+following the app's appearance. **Released 2026-09-01** (tag + GitHub release + Windows zip) and
+**deployed to noderedpi4, verified reporting v2.17.0 with all nine nodes
+live**. The other four installs are **still on v2.16.0**, deliberately:
+Manoj is watching the alerts for a few hours first. The `iota_groups` /
+`fcc_calls` counts in `/api/status` now tell the two builds apart without
+guessing at bundle hashes — noderedpi4 reads 1178 / 816973, a v2.16.0 host
+reads neither key.
 
 The trial that preceded it ran on noderedpi4 through 2026-09-01 with the
 awards UI reshaped mid-flight after Manoj rejected the first cut — the
