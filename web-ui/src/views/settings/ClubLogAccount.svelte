@@ -67,7 +67,16 @@
   }
 
   async function refresh() {
-    busy = true; message = 'Downloading log — this can take a minute…'; error = '';
+    busy = true;
+    // Honest about the real cost. With LoTW configured this pulls the whole
+    // QSL report as well as the ClubLog log, and on a large account that is
+    // a quarter of an hour, not "a minute" — which is what it used to claim
+    // while the operator sat watching a spinner.
+    message = cfg.lotw_login
+      ? 'Downloading your ClubLog log and your full LoTW QSL report — this can '
+        + 'take 10 minutes or more on a large log. It keeps running if you leave this page.'
+      : 'Downloading log — this can take a minute…';
+    error = '';
     const r = await api('POST', '/api/clublog/refresh');
     busy = false;
     if (r.status === 200) {

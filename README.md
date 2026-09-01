@@ -25,6 +25,15 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.17.6** (2026-09-01): **the LoTW download is given time to finish, and a
+failed one no longer erases what it cannot replace.** The full report that
+2.17.5 started asking for takes longer than the 10-minute timeout allowed, so
+it died mid-body and merged nothing — and because the matrix is rebuilt from
+scratch, that published an empty WAS and IOTA. Three changes: the timeout is
+**30 minutes**; a failed report now **carries the previous states and islands
+forward** instead of replacing them with nothing; and *Refresh log now* says
+it can take **10 minutes or more** rather than "a minute".
+
 **v2.17.5** (2026-09-01): **the LoTW report is actually fetched in full.**
 LoTW's QSL report is *incremental by default* — it answers "what is new
 since you last asked" — and DXCA never pinned a start date. So the first

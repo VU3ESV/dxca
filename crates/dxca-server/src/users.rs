@@ -306,7 +306,31 @@ impl UserService {
                     let n = matrix.merge_lotw_confirmed(&report);
                     println!("dxca: user {user_id}: LoTW report merged, {n} award records");
                 }
-                Err(e) => eprintln!("dxca: user {user_id}: LoTW report skipped: {e}"),
+                Err(e) => {
+                    eprintln!("dxca: user {user_id}: LoTW report skipped: {e}");
+                    // **Carry the previous award axes forward.** The matrix
+                    // is rebuilt from scratch, so without this a single
+                    // failed download — a timeout, an ARRL outage — silently
+                    // republishes an EMPTY WAS and IOTA state, and every
+                    // state on the band starts alerting as new. That is the
+                    // erasure that produced the NK3L/CA report; the download
+                    // bug was only what triggered it.
+                    //
+                    // `by_grid` is NOT carried: it is rebuilt from the
+                    // ClubLog log we just parsed, so the fresh value is the
+                    // right one.
+                    if let Some(prev) = self.matrices.read().unwrap().get(&user_id) {
+                        matrix.by_state = prev.by_state.clone();
+                        matrix.by_iota = prev.by_iota.clone();
+                        if !matrix.by_state.is_empty() || !matrix.by_iota.is_empty() {
+                            println!(
+                                "dxca: user {user_id}: kept {} states and {} islands from the last good report",
+                                matrix.by_state.len(),
+                                matrix.by_iota.len()
+                            );
+                        }
+                    }
+                }
             }
         }
         let dxcc_count = matrix.total_dxcc_count();

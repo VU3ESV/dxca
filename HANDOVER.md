@@ -2,6 +2,32 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-09-01 · **Status:**
+**v2.17.6 — the LoTW download gets time to finish, and a failed one stops
+erasing.** 2.17.5 fixed the *request* (it was incremental) and the very
+first real run then failed a different way: `LoTW report read: timed out
+reading response`. The 600 s timeout was not enough for a 28,467-record
+report that LoTW builds server-side before sending a byte. Raised to
+**1800 s**.
+
+**The more important half is the second fix.** When the download failed,
+`refresh_user` saved the freshly rebuilt matrix with `by_state` and
+`by_iota` EMPTY — the observed `byIota` went 2 → 0 — because the rebuild
+starts from scratch and the merge simply did not happen. That is the same
+erasure as the incremental bug wearing a different hat, and it means *any*
+LoTW hiccup silently republishes "you have worked no states". The failure
+path now **carries the previous axes forward**; `by_grid` is not carried,
+because it is rebuilt from the ClubLog log we just parsed and the fresh
+value is the correct one.
+
+Third: *Refresh log now* said "this can take a minute" while the operator
+watched a spinner for fifteen. It now says **10 minutes or more** when LoTW
+credentials are set, and that it keeps running if the page is left.
+
+**Pattern worth naming, three for three today:** every one of these bugs
+was a rebuild-from-scratch matrix meeting a data source that returned less
+than expected. The `?`-axis guard (2.17.5) and this carry-forward are the
+two structural answers; the individual download bugs were only triggers.
+
 **v2.17.5 — the LoTW report is actually fetched in full.** Manoj: *"getting
 new state alert for NK3L CA, but I have worked CA"*. His matrix held
 `byState: 0`, `byIota: 2`, `byGrid: 594` — grids healthy (they come from

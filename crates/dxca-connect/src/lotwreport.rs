@@ -39,7 +39,12 @@ pub fn download(base: &str, login: &str, password: &str) -> Result<String, Strin
         .query("qso_qsldetail", "yes")
         // Without this the answer is "what is new since you last asked".
         .query("qso_qslsince", QSL_SINCE)
-        .timeout(std::time::Duration::from_secs(600))
+        // THIRTY minutes, not ten. LoTW builds the report server-side
+        // before sending a byte, and a full history is tens of MB: the
+        // 600 s this used to allow expired mid-body on a 28,467-record
+        // account ("LoTW report read: timed out reading response",
+        // VU2CPL 2026-09-01), which then merged nothing at all.
+        .timeout(std::time::Duration::from_secs(1800))
         .call()
         .map_err(|e| format!("LoTW report download: {e}"))?;
     let mut out = String::new();
