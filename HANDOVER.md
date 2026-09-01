@@ -12,14 +12,20 @@ entries under Open items.
 (2026-09-01, `docs/AWARDS.md` phase 1): two per-account ticks on Alerts that
 hold `Unconf*` pings for calls already in the log and/or not on LoTW — only
 a station that can be worked *and* will confirm is worth waking for. No
-version bump; it rides the same release pass as TCI below, and Manoj wants
-**both tried on the local Pi first**. The wider award design (VUCC / IOTA /
-WAS) is drafted in `docs/AWARDS.md`, phases 2–4 unbuilt.
+version bump; it rides the same release pass as TCI below. **Deployed to
+noderedpi4 on 2026-09-01 for the trial Manoj asked for — the gate and TCI
+together, ahead of any tag.** The other four installs still run released
+v2.16.0. Caution for fleet sweeps: the trial build **also reports 2.16.0**
+(`/api/status` cannot tell them apart); noderedpi4's build is identified by
+its asset hash `index-DVgWuuUL.js` and the *For the ? levels* group on
+Alerts. The wider award design (VUCC / IOTA / WAS) is drafted in
+`docs/AWARDS.md`, phases 2–4 unbuilt.
 
 **MERGED, NOT RELEASED — a fourth Destinations tab: TCI (ExpertSDR3
 panorama).** `vu2cpl/dxca` PR #1 from VU3ESV, merged to `main` on 2026-09-01.
-**No tag, no release, on no host** — the five installs still run v2.16.0, and
-the merge carried no version bump. It merged with one real defect known and
+**No tag, no release** — the merge carried no version bump. Running
+unreleased on **noderedpi4 only** (the 2026-09-01 trial deploy above); the
+other four installs run released v2.16.0. It merged with one real defect known and
 **deliberately left for the release pass** (Manoj, 2026-09-01). Both entries
 are at the top of Open items.
 
@@ -979,18 +985,21 @@ are exempt on purpose: an ATNO is worth working whatever the QSL prospects.
 Tests: the gate truth table (`db.rs`), the slash lookup (`matrix.rs`), the
 ladder half (`classify.rs`); `just gate` green.
 
-**Next, per Manoj (2026-09-01): try it on the local Pi together with the
-TCI destination before any tag** — the release pass above then covers both.
-Phases 2–4 (VUCC / IOTA / WAS) are designed but unbuilt — `docs/AWARDS.md`,
-including the three data checks to run before building anything.
+**Deployed to noderedpi4 on 2026-09-01** (`deploy/pi-deploy.sh`, service
+restarted clean, all nine nodes back, bundle `index-DVgWuuUL.js` serving
+the new rail) — the trial Manoj asked for, gate and TCI together, ahead of
+any tag. The release pass above then covers both. Phases 2–4 (VUCC / IOTA
+/ WAS) are designed but unbuilt — `docs/AWARDS.md`, including the three
+data checks to run before building anything.
 
 ### DONE (merged, unreleased): alerts on an ExpertSDR3 panorama (TCI) — PR #1
 
 `crates/dxca-connect/src/tci.rs`, pushed from the same alert fan-out in
 `users.rs` that feeds Flex. From VU3ESV, merged to `main` on 2026-09-01 as
 `8525e5e`. **The merge carried no version bump** — `Cargo.toml` is still
-2.16.0 — so there is no tag, no release, and no host running it. **Put the
-version on this heading when it ships.** The Destinations tab list in the
+2.16.0 — so there is no tag and no release; since 2026-09-01 it runs
+unreleased on **noderedpi4 only** (the confirmation-path-gate trial deploy
+carried it). **Put the version on this heading when it ships.** The Destinations tab list in the
 v2.16.0 entry below is left as it is on purpose: that entry records what
 v2.16.0 shipped, and TCI was not in it.
 

@@ -1,9 +1,9 @@
 # Award filters and the unconfirmed-alert gate
 
-**Status:** phase 1 (the unconfirmed-alert gate) **built, on main,
-unreleased** — to be tried on the local Pi alongside the TCI destination
-before any tag. Phases 2–4 (VUCC / IOTA / WAS) remain design only ·
-**Drafted:** 2026-09-01 · **Targets:** dxca ≥ 2.16
+**Status:** phase 1 (the unconfirmed-alert gate) **built and under trial
+on noderedpi4 since 2026-09-01**, alongside the TCI destination, unreleased
+— the release pass covers both. Phases 2–4 (VUCC / IOTA / WAS) remain
+design only · **Drafted:** 2026-09-01 · **Targets:** dxca ≥ 2.16
 
 Two related feature requests from VU2CPL, 2026-09-01:
 
