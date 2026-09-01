@@ -32,6 +32,12 @@
   import {
     loadReference, bands, modes, levels, levelLabel,
   } from '../lib/reference.svelte';
+  import { loadChase, chasedLevels } from '../lib/chase.svelte';
+
+  // The ladder shows the classic eight plus only the awards this account
+  // chases (Settings › My station › Awards) — an award nobody opted into
+  // must not add rows here.
+  let myLevels = $derived(chasedLevels(levels()));
 
   // Level key → the notify_* field that gates it. The server owns the ladder
   // and its order (AlertLevel::FLAGGABLE); this only maps key → field name.
@@ -59,8 +65,8 @@
     notify_new_band: true, notify_new_mode: true,
     notify_unconf_dxcc: false, notify_unconf_slot: false,
     notify_unconf_band: false, notify_unconf_mode: false,
-    // The award levels default ON here (their classifier flags are the
-    // award selector — see Settings › ClubLog account).
+    // The award levels default ON here (chasing an award on Settings ›
+    // Awards is the opt-in; this gate must not be a second one to find).
     notify_new_iota: true, notify_new_state: true, notify_new_grid: true,
     notify_unconf_iota: true, notify_unconf_state: true, notify_unconf_grid: true,
     notify_unconf_skip_worked: false, notify_unconf_lotw_only: false,
@@ -86,7 +92,7 @@
   }
 
   onMount(async () => {
-    await loadReference();
+    await Promise.all([loadReference(), loadChase()]);
     const r = await api('GET', '/api/config/me/notifications');
     if (r.status === 200 && r.json) {
       cfg = { ...cfg, ...r.json };
@@ -113,14 +119,14 @@
     else error = r.json?.error ?? `HTTP ${r.status}`;
   }
 
-  let anyLevel = $derived(levels().some((l) => cfg[FIELD[l.key]]));
+  let anyLevel = $derived(myLevels.some((l) => cfg[FIELD[l.key]]));
 
   // What the collapsed rail's badge reports — counted per CONTROL, the same
   // rule Spots uses, so the number means the same thing on both screens. The
   // eight-level ladder is ONE control, so anything short of all eight counts
   // once rather than eight times.
   let activeFilters = $derived(
-    (levels().length && !levels().every((l) => cfg[FIELD[l.key]]) ? 1 : 0) +
+    (myLevels.length && !myLevels.every((l) => cfg[FIELD[l.key]]) ? 1 : 0) +
       (cfg.notify_unconf_skip_worked || cfg.notify_unconf_lotw_only ? 1 : 0) +
       (modeSel.size ? 1 : 0) +
       (bandSel.size ? 1 : 0) +
@@ -137,8 +143,9 @@
         <HelpTip label="Ping me for">
           <span class="para">
             This is the <b>Telegram</b> gate. It narrows, it never widens: a
-            level only pings if <b>Settings › My station › ClubLog account</b>
-            allows your log to flag it in the first place.
+            level only pings if <b>Settings › My station › Awards</b> allows
+            your log to flag it in the first place — and an award you are not
+            chasing there has no rows here at all.
           </span>
           <span class="para">
             Nothing here touches the Spots feed — untick a level and you will
@@ -147,7 +154,7 @@
         </HelpTip>
       </span>
       <div class="levels">
-        {#each levels() as l (l.key)}
+        {#each myLevels as l (l.key)}
           <label data-level={l.key}>
             <input type="checkbox" bind:checked={cfg[FIELD[l.key]]} />
             <span class="level-dot"></span>{l.label}
@@ -166,7 +173,7 @@
             QSL, and re-working one cannot turn an entity green.
           </span>
           <span class="para">
-            Both ticks narrow only the four <b>?</b> levels. With both on,
+            Both ticks narrow only the <b>?</b> levels. With both on,
             only a call you have never worked that uploads to LoTW will ping
             — a station that can be worked <b>and</b> will confirm.
           </span>

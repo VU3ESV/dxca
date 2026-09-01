@@ -641,14 +641,17 @@ for it. Design in [`docs/AWARDS.md`](docs/AWARDS.md).
 
 ### IOTA, WAS and VUCC (optional, off by default)
 
-Three awards beyond DXCC, each with its own New/`?` level pair on the same
-ladder (`docs/AWARDS.md` phases 2–4). **Ticking a pair under Settings › My
-station › ClubLog account is what switches an award on** — there is no
-separate selector, because a level that can never be flagged and an award
-that is off are the same fact. Their levels then behave like any others:
-row tints and chips on Spots, "Ping me for" narrowing on Alerts, colours
-on the panadapters, and the alert names the catch — *New Grid MK83*,
-*? State OH*, *New IOTA AS-153*.
+Three awards beyond DXCC, each with its own New/`?` level pair
+(`docs/AWARDS.md` phases 2–4). **Settings › My station › Awards** is where
+you pick what you chase: the DXCC ladder at the top (it moved here from
+the ClubLog page), then a *Chasing IOTA / WAS / VUCC* tick per award that
+reveals its pair. **An award you are not chasing does not exist anywhere
+in the app** — no chips on Spots, no rows in the Alerts ladder, nothing on
+Stats — so an operator who never opts in keeps exactly the classic
+eight-level screen. Chased levels behave like any others: row tints and
+chips on Spots, "Ping me for" narrowing on Alerts, colours on the
+panadapters, and the alert names the catch — *New Grid MK83*, *? State
+OH*, *New IOTA AS-153*.
 
 What each level runs on, spot side:
 
@@ -676,8 +679,9 @@ state, island or QSL detail at all, so the ClubLog account page takes an
 optional **LoTW username and password** — your LoTW QSL report is then
 merged at every log refresh (downloaded weekly, cached in `data/`), and it
 is the authoritative source for confirmed states, grids and islands.
-Totals live on **Stats › My ClubLog**: IOTA and WAS counts with the
-missing-states chase list, and grids per VUCC band.
+Totals live on **Stats › My ClubLog** — an Awards card showing only what
+you chase: IOTA and WAS counts with the missing-states chase list, and
+grids per VUCC band.
 
 ### Stats
 

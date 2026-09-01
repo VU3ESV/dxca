@@ -668,7 +668,9 @@ async fn station(State(app): State<AppState>, headers: HeaderMap) -> Response {
 async fn reference() -> Response {
     let levels: Vec<serde_json::Value> = dxca_core::classify::AlertLevel::FLAGGABLE
         .iter()
-        .map(|l| serde_json::json!({ "key": l.key(), "label": l.label() }))
+        // `award` is what lets the UI hide an unchased award's levels — the
+        // classic eight carry null and are always shown.
+        .map(|l| serde_json::json!({ "key": l.key(), "label": l.label(), "award": l.award() }))
         .collect();
     Json(serde_json::json!({
         "bands": dxca_core::bands::SELECTABLE_BANDS,

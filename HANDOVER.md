@@ -991,6 +991,36 @@ Follow-ups 2 and 3 in the entry below — the idle-drain comment overclaiming,
 and the direct `tungstenite` pin — are comment-and-`Cargo.toml` scale. Worth
 taking in the same pass while it is open; neither blocks a tag on its own.
 
+### DONE (on main, unreleased): the Awards settings page + declutter (2026-09-01, same day)
+
+The first cut of phases 2–4 folded the award toggles into the ClubLog
+page's ladder and let all fourteen levels flood every level list. **Manoj
+rejected that shape** — "I wanted the awards as a tab in my awards
+settings and user should be able to select which awards he is chasing. I
+don't want the spots or alerts to get cluttered" — and this restructure is
+the answer, UI-only, no schema change:
+
+* **Settings › My station › Awards** (`AwardSettings.svelte`, new rail
+  entry): the DXCC ladder at the top (moved OFF the ClubLog page, which is
+  credentials-only again), then one block per award with a **Chasing
+  IOTA/WAS/VUCC** tick that reveals its New/`?` pair, per-award data notes,
+  and live warnings (FCC table missing → State levels quiet; IOTA
+  directory missing → refs unvalidated). "Chasing" is not a stored flag:
+  an award is chased exactly when either of its classifier levels is on,
+  so a selector and the levels can never disagree. Both pages edit the
+  same `clublog_json` row wholesale, the notify_json precedent.
+* **The declutter rule**: `AlertLevel::award()` tags each level with its
+  award (`null` for the classic eight) and `/api/reference` serves it;
+  `web-ui/src/lib/chase.svelte.ts` reads the account's pair flags once and
+  every level list filters through it — the Alerts "Ping me for" ladder,
+  the Spots Alerts chips, and the Stats Awards card (which now shows only
+  chased awards, and nothing at all when none are). Not logged in → nothing
+  chased → the app looks exactly as it did before awards existed.
+
+The lesson is the standing one (see the user-memory *scope a UI request as
+a UI request*): the request said "tab" and "select which awards", and the
+first build answered with architecture instead of the asked-for control.
+
 ### DONE (on main, unreleased): IOTA / WAS / VUCC — docs/AWARDS.md phases 2–4
 
 Built 2026-09-01 in one pass on Manoj's "complete the 2-4". The design doc

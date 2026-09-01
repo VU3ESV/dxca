@@ -108,6 +108,19 @@ impl AlertLevel {
         )
     }
 
+    /// Which chased award a level belongs to — `None` for the classic
+    /// DXCC eight. Served with the reference vocabulary so the UI can keep
+    /// an unchased award's levels out of every ladder, chip row and
+    /// badge: opting out of an award means never seeing its controls.
+    pub fn award(self) -> Option<&'static str> {
+        match self {
+            AlertLevel::NewGrid | AlertLevel::UnconfGrid => Some("vucc"),
+            AlertLevel::NewState | AlertLevel::UnconfState => Some("was"),
+            AlertLevel::NewIota | AlertLevel::UnconfIota => Some("iota"),
+            _ => None,
+        }
+    }
+
     /// Stable machine key — the same string serde emits.
     pub fn key(self) -> &'static str {
         match self {

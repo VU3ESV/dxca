@@ -11,6 +11,7 @@
   // has: is this mine, is this the server's, or is this about who may log in.
   import Users from './Users.svelte';
   import ClubLogAccount from './settings/ClubLogAccount.svelte';
+  import AwardSettings from './settings/AwardSettings.svelte';
   import Station from './settings/Station.svelte';
   import Telegram from './settings/Telegram.svelte';
   import ReferenceData from './settings/ReferenceData.svelte';
@@ -30,10 +31,13 @@
       head: 'My station',
       admin: false,
       items: [
-        // The alert ladder lives ON this page now, so its words find it here.
         { key: 'clublog', label: 'ClubLog account',
-          find: 'clublog credentials email app password callsign log download refresh auto-refresh api '
-              + 'alert level levels new dxcc band mode slot unconfirmed confirmed flag classifier highlight' },
+          find: 'clublog credentials email app password callsign log download refresh auto-refresh api lotw username' },
+        // The whole alert ladder lives here — DXCC's classic eight and the
+        // chaseable awards — so every level word finds this page.
+        { key: 'awards', label: 'Awards',
+          find: 'award awards chasing chase iota was vucc grid grids square state states island islands '
+              + 'alert level levels new dxcc band mode slot unconfirmed confirmed flag classifier highlight ladder' },
         { key: 'station', label: 'Locator & grey line',
           find: 'locator maidenhead grid square qth sun sunrise sunset greyline grey line band mask dawn dusk' },
         { key: 'telegram', label: 'Telegram',
@@ -138,6 +142,8 @@
   <div class="page narrow settings-content">
     {#if tab === 'clublog'}
       <ClubLogAccount />
+    {:else if tab === 'awards'}
+      <AwardSettings />
     {:else if tab === 'station'}
       <Station />
     {:else if tab === 'telegram'}

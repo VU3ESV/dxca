@@ -11,6 +11,7 @@
   import { awards, pick, canFilter } from '../lib/awards.svelte';
   import { bandMask, masked, hidden } from '../lib/bandmask.svelte';
   import { loadReference, bands, modes, levels, levelLabel } from '../lib/reference.svelte';
+  import { loadChase, chasedLevels } from '../lib/chase.svelte';
 
   let spots = $state<any[]>([]);
   let status = $state<any>(null);
@@ -81,7 +82,7 @@
 
   onMount(() => {
     (async () => {
-      await loadReference();
+      await Promise.all([loadReference(), loadChase()]);
       const r = await api('GET', '/api/spots?limit=500');
       if (r.json?.spots) spots = r.json.spots;
       // Guarded, unlike the `r.json?.spots` above which is safe by its own
@@ -373,7 +374,9 @@
       options={sourceNames.map((n) => ({ key: n, label: n }))}
       bind:selected={sourceFilter}
     />
-    <ChipGroup stacked label="Alerts" options={levels()} bind:selected={levelFilter} levelKeys />
+    <!-- Only the levels this account can actually see: the classic eight
+         plus chased awards (Settings › My station › Awards). -->
+    <ChipGroup stacked label="Alerts" options={chasedLevels(levels())} bind:selected={levelFilter} levelKeys />
     <ChipGroup stacked label="Modes" options={modes()} bind:selected={modeFilter} />
     <ChipGroup stacked label="Bands" options={bands()} bind:selected={bandFilter} />
   </FilterRail>

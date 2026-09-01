@@ -141,10 +141,16 @@ same worked/confirmed shape, different keys:
 Classifier: per-award `New*`/`Unconf*` pairs (e.g. `NewIota`,
 `UnconfGrid`) appended to `AlertLevel::FLAGGABLE` and served through
 `GET /api/reference` so the UI chip groups pick them up without drift.
-An award only classifies when the user has enabled it — an **award
-selector** (per-user, in Settings) plus award chip groups on the Spots
-and Alerts rails. The Phase-1 gate applies to the new `Unconf*` levels
-identically.
+An award only classifies when the user has enabled it. The Phase-1 gate
+applies to the new `Unconf*` levels identically.
+
+**UI shape (settled 2026-09-01, after the first cut was rejected):** a
+dedicated **Settings › My station › Awards** page carries the DXCC ladder
+plus a *Chasing* selector per award revealing its pair — and an award
+nobody chases surfaces **no controls anywhere**: reference levels carry
+an `award` tag, and every ladder, chip row and Stats section filters
+through the account's chased set (`lib/chase.svelte.ts`). The Spots and
+Alerts screens of a non-chaser are byte-identical to the pre-awards app.
 
 ### 2.5 Phasing
 
