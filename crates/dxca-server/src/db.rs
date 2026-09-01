@@ -234,16 +234,23 @@ impl Default for StationConfig {
     }
 }
 
-/// One ExpertSDR3 radio to put this account's alerts on.
+/// One radio to put this account's alerts on — a FlexRadio panadapter or an
+/// ExpertSDR3 panorama.
 ///
-/// A station can run more than one — a second rig on the bench, or a
-/// separate ExpertSDR3 instance driving a different panorama — and there is
-/// nothing in TCI that makes the second harder than the first: each is its
-/// own WebSocket, and the client pool in `users.rs` is already keyed by
+/// One type for both, because the two are the same three facts and a second
+/// copy would quietly drift, the way the ARGB palette would have. What
+/// differs between them is the default port, which is why it is an argument
+/// to [`NotifyUserConfig::tci_targets`] and its Flex twin rather than a
+/// field here.
+///
+/// A station can run more than one of either — a second rig on the bench, a
+/// separate ExpertSDR3 instance driving its own panorama — and neither
+/// protocol makes the second harder than the first: each radio is its own
+/// session, and both client pools in `users.rs` were already keyed by
 /// address. What was single was only ever the *setting*.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct TciDevice {
+pub struct RadioDevice {
     /// The radio's address. Empty switches this entry off however
     /// `enabled` is set, exactly as the single-radio field it replaces did.
     pub host: String,
@@ -255,13 +262,13 @@ pub struct TciDevice {
     pub enabled: bool,
 }
 
-impl Default for TciDevice {
+impl Default for RadioDevice {
     fn default() -> Self {
         // `enabled` true and not false: every path that creates a device —
         // the UI's Add button, the adoption below — means "use this one".
         // A serde default of false would switch a device off the moment a
         // future field made an old entry parse through `#[serde(default)]`.
-        TciDevice {
+        RadioDevice {
             host: String::new(),
             port: 0,
             enabled: true,
@@ -394,6 +401,16 @@ pub struct NotifyUserConfig {
     #[serde(default)]
     pub flex_port: u16,
 
+    /// Every FlexRadio this account's alerts go to.
+    ///
+    /// The `tci_devices` twin below, with the same contract: **this list is
+    /// the truth**, `flex_host`/`flex_port` above are the single-radio
+    /// fields it grew out of and are kept in step by `set_notify_config`,
+    /// and an account saved before the list existed has its one address
+    /// adopted into it by `notify_config`.
+    #[serde(default)]
+    pub flex_devices: Vec<RadioDevice>,
+
     // How long a spot stays on the panadapter, per level. 0 means the
     // default shown against each.
     //
@@ -448,7 +465,7 @@ pub struct NotifyUserConfig {
     /// not find it switched off because the setting learned to count past
     /// one.
     #[serde(default)]
-    pub tci_devices: Vec<TciDevice>,
+    pub tci_devices: Vec<RadioDevice>,
 
     // How long a spot stays on the panorama, per level — the same ladder as
     // the Flex fields above, and for the same reason: New Slot and the four
@@ -511,6 +528,7 @@ impl Default for NotifyUserConfig {
             flex_enabled: false,
             flex_host: String::new(),
             flex_port: 0,
+            flex_devices: Vec::new(),
             flex_life_dxcc_minutes: 0,
             flex_life_band_mode_minutes: 0,
             flex_life_other_minutes: 0,
@@ -525,34 +543,56 @@ impl Default for NotifyUserConfig {
     }
 }
 
-impl NotifyUserConfig {
-    /// Every ExpertSDR3 address this account's alerts should reach, with the
-    /// port resolved and duplicates dropped.
-    ///
-    /// Resolving before deduping is the point: `192.168.1.60` with the port
-    /// box left blank and `192.168.1.60:40001` are one radio typed two ways,
-    /// and a station that ends up with both would otherwise get two marks per
-    /// alert and two `SPOT_DELETE`s racing to remove one of them.
-    ///
-    /// Hosts are trimmed and compared case-insensitively — a hostname is not
-    /// case-sensitive, and a stray space is a typo, not a second radio.
-    pub fn tci_targets(&self, default_port: u16) -> Vec<(String, u16)> {
-        let mut out: Vec<(String, u16)> = Vec::new();
-        for d in &self.tci_devices {
-            let host = d.host.trim();
-            if !d.enabled || host.is_empty() {
-                continue;
-            }
-            let port = if d.port == 0 { default_port } else { d.port };
-            if out
-                .iter()
-                .any(|(h, p)| *p == port && h.eq_ignore_ascii_case(host))
-            {
-                continue;
-            }
-            out.push((host.to_string(), port));
+/// The addresses in `devices` worth sending to, with the port resolved and
+/// duplicates dropped.
+///
+/// Resolving BEFORE deduping is the point: `192.168.1.60` with the port box
+/// left blank and `192.168.1.60:40001` are one radio typed two ways, and a
+/// station that ends up with both would otherwise get two marks per alert —
+/// and, on TCI, two deletions racing to remove one of them.
+///
+/// Hosts are trimmed and compared case-insensitively: a hostname is not
+/// case-sensitive, and a stray space is a typo, not a second radio. A
+/// different port on the same host IS a second radio — two SmartSDR or
+/// ExpertSDR3 instances on one machine.
+///
+/// Shared by both radios rather than written twice. The dedupe rule is the
+/// part that would drift, and its drift would be invisible until someone got
+/// two marks per spot on one of the two.
+fn radio_targets(devices: &[RadioDevice], default_port: u16) -> Vec<(String, u16)> {
+    let mut out: Vec<(String, u16)> = Vec::new();
+    for d in devices {
+        let host = d.host.trim();
+        if !d.enabled || host.is_empty() {
+            continue;
         }
-        out
+        let port = if d.port == 0 { default_port } else { d.port };
+        if out
+            .iter()
+            .any(|(h, p)| *p == port && h.eq_ignore_ascii_case(host))
+        {
+            continue;
+        }
+        out.push((host.to_string(), port));
+    }
+    out
+}
+
+impl NotifyUserConfig {
+    /// Every ExpertSDR3 address this account's alerts should reach.
+    ///
+    /// See [`radio_targets`] for what "resolved and deduped" means and why.
+    pub fn tci_targets(&self, default_port: u16) -> Vec<(String, u16)> {
+        radio_targets(&self.tci_devices, default_port)
+    }
+
+    /// Every FlexRadio address this account's alerts should reach.
+    ///
+    /// The [`Self::tci_targets`] twin, over the same helper: the two radios
+    /// differ in what they send, not in which addresses are worth sending
+    /// to.
+    pub fn flex_targets(&self, default_port: u16) -> Vec<(String, u16)> {
+        radio_targets(&self.flex_devices, default_port)
     }
 
     /// Does this spot's band/mode survive the Telegram narrowing? Empty list
@@ -1260,9 +1300,17 @@ impl Db {
         // panorama on upgrade. An empty host adopts to nothing, which is
         // right: that was already the off switch.
         if cfg.tci_devices.is_empty() && !cfg.tci_host.trim().is_empty() {
-            cfg.tci_devices.push(TciDevice {
+            cfg.tci_devices.push(RadioDevice {
                 host: cfg.tci_host.clone(),
                 port: cfg.tci_port,
+                enabled: true,
+            });
+        }
+        // The same adoption for the other radio, and for the same reason.
+        if cfg.flex_devices.is_empty() && !cfg.flex_host.trim().is_empty() {
+            cfg.flex_devices.push(RadioDevice {
+                host: cfg.flex_host.clone(),
+                port: cfg.flex_port,
                 enabled: true,
             });
         }
@@ -1300,6 +1348,16 @@ impl Db {
             None => {
                 cfg.tci_host = String::new();
                 cfg.tci_port = 0;
+            }
+        }
+        match cfg.flex_devices.first() {
+            Some(d) => {
+                cfg.flex_host = d.host.clone();
+                cfg.flex_port = d.port;
+            }
+            None => {
+                cfg.flex_host = String::new();
+                cfg.flex_port = 0;
             }
         }
         let cfg = &cfg;
@@ -1604,7 +1662,7 @@ mod tests {
 
         let mut cfg = NotifyUserConfig {
             tci_enabled: true,
-            tci_devices: vec![TciDevice {
+            tci_devices: vec![RadioDevice {
                 host: "192.168.1.60".into(),
                 port: 40001,
                 enabled: true,
@@ -1633,12 +1691,12 @@ mod tests {
         let cfg = NotifyUserConfig {
             tci_enabled: true,
             tci_devices: vec![
-                TciDevice {
+                RadioDevice {
                     host: "192.168.1.60".into(),
                     port: 0,
                     enabled: true,
                 },
-                TciDevice {
+                RadioDevice {
                     host: "192.168.1.61".into(),
                     port: 40002,
                     enabled: true,
@@ -1670,44 +1728,44 @@ mod tests {
     fn targets_drop_the_off_the_blank_and_the_duplicated() {
         let cfg = NotifyUserConfig {
             tci_devices: vec![
-                TciDevice {
+                RadioDevice {
                     host: "192.168.1.60".into(),
                     port: 0,
                     enabled: true,
                 },
                 // The same radio, port written out in full.
-                TciDevice {
+                RadioDevice {
                     host: "192.168.1.60".into(),
                     port: 40001,
                     enabled: true,
                 },
                 // The same radio again, with a typo's worth of whitespace
                 // and a hostname in the other case.
-                TciDevice {
+                RadioDevice {
                     host: "  Radio.local ".into(),
                     port: 40001,
                     enabled: true,
                 },
-                TciDevice {
+                RadioDevice {
                     host: "radio.local".into(),
                     port: 40001,
                     enabled: true,
                 },
                 // Configured but switched off for the evening.
-                TciDevice {
+                RadioDevice {
                     host: "192.168.1.61".into(),
                     port: 40001,
                     enabled: false,
                 },
                 // A row someone added and never filled in.
-                TciDevice {
+                RadioDevice {
                     host: "   ".into(),
                     port: 40001,
                     enabled: true,
                 },
                 // A genuinely different port on the same host: two
                 // ExpertSDR3 instances on one machine, and two real targets.
-                TciDevice {
+                RadioDevice {
                     host: "192.168.1.60".into(),
                     port: 40002,
                     enabled: true,
@@ -1723,6 +1781,128 @@ mod tests {
                 ("192.168.1.60".to_string(), 40002),
             ]
         );
+    }
+
+    /// The Flex half of the upgrade, and the risk the shared code introduces:
+    /// two adoptions now run in one function, so a row carrying only ONE
+    /// radio's address must not grow the other a device it never had.
+    #[test]
+    fn each_radio_adopts_its_own_address_and_not_the_others() {
+        let (db, _p) = temp_db();
+
+        // Flex configured, TCI never touched.
+        let a = db.create_user("VU2CPL", "h", "", "admin").unwrap();
+        db.set_config_json(
+            a,
+            "notify_json",
+            &serde_json::json!({
+                "flex_enabled": true,
+                "flex_host": "192.168.1.148",
+                "flex_port": 4992,
+            }),
+        )
+        .unwrap();
+        let cfg = db.notify_config(a).unwrap();
+        assert_eq!(cfg.flex_devices.len(), 1, "the Flex radio is adopted");
+        assert_eq!(cfg.flex_devices[0].host, "192.168.1.148");
+        assert!(cfg.flex_devices[0].enabled);
+        assert!(cfg.tci_devices.is_empty(), "TCI must not grow a device");
+        assert_eq!(
+            cfg.flex_targets(4992),
+            vec![("192.168.1.148".to_string(), 4992)]
+        );
+        assert!(cfg.tci_targets(40001).is_empty());
+
+        // And the mirror image: TCI configured, Flex never touched.
+        let b = db.create_user("K1ABC", "h", "", "user").unwrap();
+        db.set_config_json(
+            b,
+            "notify_json",
+            &serde_json::json!({ "tci_enabled": true, "tci_host": "192.168.1.60" }),
+        )
+        .unwrap();
+        let cfg = db.notify_config(b).unwrap();
+        assert_eq!(cfg.tci_devices.len(), 1);
+        assert!(cfg.flex_devices.is_empty(), "Flex must not grow a device");
+    }
+
+    /// A station running both radios keeps both lists, and they do not bleed
+    /// into each other on the way through the mirror.
+    #[test]
+    fn both_radios_hold_their_own_lists() {
+        let (db, _p) = temp_db();
+        let uid = db.create_user("VU2CPL", "h", "", "admin").unwrap();
+
+        let cfg = NotifyUserConfig {
+            flex_enabled: true,
+            tci_enabled: true,
+            flex_devices: vec![
+                RadioDevice {
+                    host: "192.168.1.148".into(),
+                    port: 0,
+                    enabled: true,
+                },
+                RadioDevice {
+                    host: "192.168.1.149".into(),
+                    port: 4993,
+                    enabled: true,
+                },
+            ],
+            tci_devices: vec![RadioDevice {
+                host: "192.168.1.60".into(),
+                port: 0,
+                enabled: true,
+            }],
+            ..Default::default()
+        };
+        db.set_notify_config(uid, &cfg).unwrap();
+
+        let back = db.notify_config(uid).unwrap();
+        assert_eq!(back.flex_devices.len(), 2);
+        assert_eq!(back.tci_devices.len(), 1);
+        // Each legacy pair follows its OWN first device.
+        assert_eq!(back.flex_host, "192.168.1.148");
+        assert_eq!(back.tci_host, "192.168.1.60");
+        // And each list resolves against its own default port.
+        assert_eq!(
+            back.flex_targets(4992),
+            vec![
+                ("192.168.1.148".to_string(), 4992),
+                ("192.168.1.149".to_string(), 4993),
+            ]
+        );
+        assert_eq!(
+            back.tci_targets(40001),
+            vec![("192.168.1.60".to_string(), 40001)]
+        );
+    }
+
+    /// The Flex twin of the TCI removal test: emptying the list has to stick,
+    /// or the adoption reads the old address back on the next load.
+    #[test]
+    fn removing_every_flex_radio_does_not_resurrect_the_old_one() {
+        let (db, _p) = temp_db();
+        let uid = db.create_user("VU2CPL", "h", "", "admin").unwrap();
+
+        let mut cfg = NotifyUserConfig {
+            flex_enabled: true,
+            flex_devices: vec![RadioDevice {
+                host: "192.168.1.148".into(),
+                port: 4992,
+                enabled: true,
+            }],
+            ..Default::default()
+        };
+        db.set_notify_config(uid, &cfg).unwrap();
+        assert_eq!(db.notify_config(uid).unwrap().flex_devices.len(), 1);
+
+        cfg.flex_devices.clear();
+        db.set_notify_config(uid, &cfg).unwrap();
+
+        let back = db.notify_config(uid).unwrap();
+        assert!(back.flex_devices.is_empty(), "the removal must stick");
+        assert_eq!(back.flex_host, "", "the legacy field is cleared with it");
+        assert!(back.flex_targets(4992).is_empty());
     }
 
     #[test]

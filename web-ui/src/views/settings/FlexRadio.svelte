@@ -19,10 +19,13 @@
   import { onMount } from 'svelte';
   import HelpTip from '../../lib/HelpTip.svelte';
 
+  const DEFAULT_PORT = 4992;
+
   let cfg = $state<any>({
     flex_enabled: false,
     flex_host: '',
-    flex_port: 4992,
+    flex_port: DEFAULT_PORT,
+    flex_devices: [],
     flex_life_dxcc_minutes: 60,
     flex_life_band_mode_minutes: 15,
     flex_life_other_minutes: 1,
@@ -39,27 +42,70 @@
       // wire and useless to show: a lifetime field reading 0 tells the
       // operator nothing about how long a spot will actually last. Fill the
       // real values in for display; 0 still round-trips harmlessly.
-      if (!cfg.flex_port) cfg.flex_port = 4992;
       if (!cfg.flex_life_dxcc_minutes) cfg.flex_life_dxcc_minutes = 60;
       if (!cfg.flex_life_band_mode_minutes) cfg.flex_life_band_mode_minutes = 15;
       if (!cfg.flex_life_other_minutes) cfg.flex_life_other_minutes = 1;
+      // The server adopts a pre-list account's single radio into the list
+      // before it ever reaches here, so this is belt and braces for a row
+      // written by something else — and it is what puts an empty account in
+      // front of one blank row to type into rather than a bare Add button.
+      if (!Array.isArray(cfg.flex_devices) || cfg.flex_devices.length === 0) {
+        cfg.flex_devices = cfg.flex_host
+          ? [{ host: cfg.flex_host, port: cfg.flex_port || DEFAULT_PORT, enabled: true }]
+          : [blank()];
+      }
+      for (const d of cfg.flex_devices) if (!d.port) d.port = DEFAULT_PORT;
     }
   });
 
+  function blank() {
+    return { host: '', port: DEFAULT_PORT, enabled: true };
+  }
+
+  function addDevice() {
+    cfg.flex_devices = [...cfg.flex_devices, blank()];
+  }
+
+  // Removing the last row leaves one blank rather than none: an empty list
+  // and a list holding one empty host mean the same thing to the server
+  // (both send nowhere), and the blank row is the one that can be typed
+  // into without hunting for Add.
+  function removeDevice(i: number) {
+    const rest = cfg.flex_devices.filter((_: unknown, j: number) => j !== i);
+    cfg.flex_devices = rest.length ? rest : [blank()];
+  }
+
   async function save() {
     busy = true; message = ''; error = '';
+    // A row whose address was never filled in is not a radio, so it is
+    // dropped rather than saved as an entry that can only ever do nothing.
+    const devices = cfg.flex_devices
+      .filter((d: any) => String(d.host ?? '').trim() !== '')
+      .map((d: any) => ({
+        host: String(d.host).trim(),
+        // `|| DEFAULT_PORT` and not `?? DEFAULT_PORT`: an emptied number
+        // field yields '', which is falsy but not nullish, and NaN fails
+        // the deserialize.
+        port: Number(d.port) || DEFAULT_PORT,
+        enabled: d.enabled !== false,
+      }));
     const r = await api('PUT', '/api/config/me/notifications', {
       ...cfg,
-      // `|| default` and not `?? default`: an emptied number field yields
-      // '', which is falsy but not nullish, and NaN fails the deserialize.
-      flex_port: Number(cfg.flex_port) || 4992,
+      flex_devices: devices,
+      // Kept in step with the first radio so a row stays readable by a DXCA
+      // that predates the list. The server does this too; sending it here
+      // keeps the object we hold identical to the one it stores.
+      flex_host: devices[0]?.host ?? '',
+      flex_port: devices[0]?.port ?? DEFAULT_PORT,
       flex_life_dxcc_minutes: Number(cfg.flex_life_dxcc_minutes) || 60,
       flex_life_band_mode_minutes: Number(cfg.flex_life_band_mode_minutes) || 15,
       flex_life_other_minutes: Number(cfg.flex_life_other_minutes) || 1,
     });
     busy = false;
-    if (r.status === 200) message = 'Saved.';
-    else error = r.json?.error ?? `HTTP ${r.status}`;
+    if (r.status === 200) {
+      message = devices.length === 1 ? 'Saved.' : `Saved. ${devices.length} radios.`;
+      if (devices.length === 0) cfg.flex_devices = [blank()];
+    } else error = r.json?.error ?? `HTTP ${r.status}`;
   }
 </script>
 
@@ -89,17 +135,47 @@
     <input type="checkbox" bind:checked={cfg.flex_enabled} />Send alerts to a FlexRadio
   </label>
 
-  <div class="settings-form">
-    <span class="label">Radio IP</span>
-    <input bind:value={cfg.flex_host} placeholder="192.168.1.148" />
-    <span class="label">
-      API port
-      <HelpTip label="API port">
-        SmartSDR's command port, 4992 unless you have changed it. A TCP
-        session, not one of the UDP spot outputs.
-      </HelpTip>
-    </span>
-    <input class="short" type="number" min="1" max="65535" bind:value={cfg.flex_port} />
+  <h3>
+    Radios
+    <HelpTip label="Radios">
+      One row per FlexRadio you want marked. <b>Add as many as you run</b> — a
+      second rig on the bench, or another SmartSDR instance — and every alert
+      goes to all of them.
+      <br /><br />
+      The <b>port</b> is SmartSDR's command port, 4992 unless you have changed
+      it. A TCP session, not one of the UDP spot outputs. Each radio has its
+      own, so two instances on one machine can each take a row.
+      <br /><br />
+      Clearing a row's <b>On</b> box keeps the address but stops sending to
+      it — the way to silence one radio for an evening without retyping its
+      IP. A row left with no address is dropped when you save.
+    </HelpTip>
+  </h3>
+
+  <div class="devices">
+    {#each cfg.flex_devices as d, i (i)}
+      <div class="device">
+        <input class="host" bind:value={d.host} placeholder="192.168.1.148" aria-label="Radio IP" />
+        <input
+          class="short"
+          type="number"
+          min="1"
+          max="65535"
+          bind:value={d.port}
+          aria-label="API port"
+        />
+        <label class="on"><input type="checkbox" bind:checked={d.enabled} />On</label>
+        <button
+          class="remove"
+          onclick={() => removeDevice(i)}
+          aria-label="Remove radio {d.host || i + 1}">Remove</button
+        >
+      </div>
+    {/each}
+  </div>
+
+  <div class="add">
+    <button onclick={addDevice}>Add radio</button>
   </div>
 
   <h3>
@@ -153,6 +229,37 @@
 <style>
   .enable {
     margin-bottom: 0.9rem;
+  }
+
+  .devices {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  /* Wraps rather than scrolls: on a phone the four controls stack instead of
+     pushing Remove off the edge of the card. */
+  .device {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .host {
+    flex: 1 1 12rem;
+    min-width: 0;
+  }
+
+  .on {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    white-space: nowrap;
+  }
+
+  .add {
+    margin-top: 0.7rem;
   }
 
   .short {

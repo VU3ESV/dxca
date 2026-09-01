@@ -976,6 +976,17 @@ buzzing is a perfectly good way to run.
 pushing every cluster spot plus DXCA pushing alerts means each alert lands
 twice.
 
+**More than one radio is allowed.** The tab holds a list rather than a single
+address: **Add radio** for each FlexRadio you want marked — a second rig on
+the bench, or another SmartSDR instance — and every alert goes to all of
+them. Each row carries its own port, so two instances on one machine can each
+take a row, and each row's **On** box keeps the address while stopping the
+sending. The same address entered twice is sent to once, a blank port and an
+explicit 4992 being the same radio. An account that configured its one radio
+before the list existed keeps it, adopted into the list on upgrade with
+nothing to re-enter. The ExpertSDR3 tab below works the same way, and the two
+lists are wholly independent.
+
 Three things worth knowing about the implementation:
 
 - **It is not a broadcast destination.** Those are UDP datagrams; 4992 is a

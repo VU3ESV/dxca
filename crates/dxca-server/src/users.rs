@@ -544,7 +544,8 @@ impl UserService {
             // the gate asks whether ANY of them wants this account's alerts,
             // not whether Telegram does.
             let wants_telegram = notify.telegram_enabled;
-            let wants_flex = notify.flex_enabled && !notify.flex_host.is_empty();
+            let wants_flex =
+                notify.flex_enabled && !notify.flex_targets(flex::DEFAULT_PORT).is_empty();
             let wants_tci = notify.tci_enabled && !notify.tci_targets(tci::DEFAULT_PORT).is_empty();
             if !wants_telegram && !wants_flex && !wants_tci {
                 continue;
@@ -730,18 +731,34 @@ impl UserService {
     /// keyed by address, so several accounts pointing at one radio share a
     /// single connection rather than opening one each.
     fn push_flex(&self, notify: &NotifyUserConfig, c: &Classification, call: &str, spot: &Spot) {
-        let port = if notify.flex_port == 0 {
-            4992
-        } else {
-            notify.flex_port
-        };
-        let key = (notify.flex_host.clone(), port);
-        let client = {
-            let mut map = self.flex.lock().unwrap();
-            map.entry(key)
-                .or_insert_with(|| Arc::new(flex::FlexClient::connect(&notify.flex_host, port)))
-                .clone()
-        };
+        // One radio or five, the work per radio is the same queue push, so
+        // this is a loop and not a special case — the `push_tci` shape, for
+        // the same reason. `flex_targets` has already dropped the disabled,
+        // the blank and the duplicates.
+        for (host, port) in notify.flex_targets(flex::DEFAULT_PORT) {
+            let client = {
+                let mut map = self.flex.lock().unwrap();
+                map.entry((host.clone(), port))
+                    .or_insert_with(|| Arc::new(flex::FlexClient::connect(&host, port)))
+                    .clone()
+            };
+            self.push_flex_one(&client, notify, c, call, spot);
+        }
+    }
+
+    /// The body of [`Self::push_flex`] for one radio.
+    ///
+    /// Split out for the reason [`Self::push_tci_one`] is: every field but
+    /// the address is the same for every radio, so the loop above stays
+    /// about *which* radios and this stays about *what* is sent.
+    fn push_flex_one(
+        &self,
+        client: &Arc<flex::FlexClient>,
+        notify: &NotifyUserConfig,
+        c: &Classification,
+        call: &str,
+        spot: &Spot,
+    ) {
         // Level plus entity when they fit in the radio's 20 characters, the
         // entity alone when they do not — the colour already says which
         // level it is, so the entity is the half worth keeping.
