@@ -36,6 +36,15 @@ Gate green, 293 tests.
 and is complete** — that set does not grow, and the award levels there come
 from the `AWARDS` array, so this fault has no second home.
 
+**Tagged, released and on all five hosts, 2026-09-01.** Bump before the
+deploy this time, so one round did it: local Pi first and verified
+(`/api/reference` there returns 17 levels, 17 with a `notifyField`), then
+`--no-seed` to `adersh`, `vu2wj` and `vu2oy`, then `win-deploy.sh`. Sweep
+reads **v2.20.4** on all five, every cluster node reconnected (9/9, 4/4,
+2/2, 2/2, 2/2), and each host serves the full ladder. Windows still reads
+`cty_entities: 0`, the accepted state. Release page carries
+`dxca-2.20.4-windows-x64.zip`.
+
 **v2.20.3 — the Awards help tips claimed confirmed always means LoTW,
 which is false for WAZ** (Manoj: *"why 2 zones worked and
 confirmed"*). Both zone numbers come from the ClubLog export and nowhere
