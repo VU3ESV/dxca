@@ -268,6 +268,9 @@ pub enum WazScope {
     /// Five-band WAZ and its kin: the zone on each band.
     #[serde(rename = "band")]
     PerBand,
+    /// The zone in each mode class — the WAZ counterpart of Triple Play.
+    #[serde(rename = "mode")]
+    PerMode,
 }
 
 impl Default for AlertConfig {
@@ -540,10 +543,22 @@ impl AlertClassifier<'_> {
                     Some(s) if s.bands.contains(band) => AlertLevel::UnconfZone,
                     _ => AlertLevel::NewZone,
                 },
+                // No mode, no honest answer — the same rule Triple Play
+                // follows, and for the same reason: a guessed mode must not
+                // claim a slot in an award counted in modes.
+                WazScope::PerMode => match mode {
+                    None => AlertLevel::Worked,
+                    Some(m) => match have {
+                        Some(s) if s.confirmed_modes.contains(m) => AlertLevel::Worked,
+                        Some(s) if s.modes.contains(m) => AlertLevel::UnconfZone,
+                        _ => AlertLevel::NewZone,
+                    },
+                },
             };
-            let key = match self.config.waz_scope {
-                WazScope::PerBand => format!("Zone {z} {band}"),
-                WazScope::Mixed => format!("Zone {z}"),
+            let key = match (self.config.waz_scope, mode) {
+                (WazScope::PerBand, _) => format!("Zone {z} {band}"),
+                (WazScope::PerMode, Some(m)) => format!("Zone {z} {m}"),
+                _ => format!("Zone {z}"),
             };
             cands.push((raw, key));
         }

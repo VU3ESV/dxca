@@ -162,6 +162,15 @@
     ),
   );
 
+  /// The WAZ worklist: mixed first, then each mode class — the same shape
+  /// the WAS list has, so the two cards read alike.
+  let wazNeeded = $derived.by(() => {
+    const a = station?.award_stats;
+    if (!a) return [];
+    const rows = a.waz_missing?.length ? [{ mode: 'Mixed', zones: a.waz_missing }] : [];
+    return rows.concat(a.waz_needed_by_mode ?? []);
+  });
+
   let wasModeData = $derived(
     (station?.award_stats?.was_by_mode ?? []).some((r: any) => r.confirmed > 0),
   );
@@ -253,7 +262,11 @@
             </div>
           {/if}
           {#if isChased('waz')}
-            <div><dt>Zones</dt><dd class="num ok-num">{station.award_stats.waz_worked} / 40</dd></div>
+            <div><dt>Zones worked</dt><dd class="num">{station.award_stats.waz_worked} / 40</dd></div>
+            <div>
+              <dt>Zones confirmed</dt>
+              <dd class="num ok-num">{station.award_stats.waz_confirmed} / 40</dd>
+            </div>
           {/if}
           {#if isChased('marathon') && thisYear}
             <div>
@@ -361,14 +374,31 @@
               </span>
             </HelpTip>
           </h2>
-          {#if station.award_stats.waz_missing.length}
-            <p class="hint">
-              Missing zones:
-              <span class="mono">{station.award_stats.waz_missing.join(' ')}</span>
-            </p>
+          <h3 class="sub">By mode</h3>
+          <dl class="stats">
+            {#each station.award_stats.waz_by_mode as r (r.key)}
+              <div><dt>{r.key}</dt><dd class="num">{r.confirmed} / 40</dd></div>
+            {/each}
+          </dl>
+
+          <h3 class="sub">Still needed</h3>
+          {#if wazNeeded.length}
+            <!-- Confirmed-wise, like the counts above it: an award is
+                 claimed on confirmations, so a worked-but-unconfirmed zone
+                 is still wanted. -->
+            <dl class="needlist">
+              {#each wazNeeded as n (n.mode)}
+                <dt>{n.mode}</dt>
+                <dd class="mono">{n.zones.join(' ')}</dd>
+              {/each}
+            </dl>
           {:else}
-            <p class="hint">All forty zones worked.</p>
+            <p class="hint">
+              Nothing outstanding — all forty zones confirmed, mixed and in
+              all three modes.
+            </p>
           {/if}
+
           {#if station.award_stats.waz_by_band.length}
             <h3 class="sub">By band</h3>
             <dl class="stats">

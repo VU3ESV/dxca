@@ -45,7 +45,8 @@
 
   // The chaseable awards: their level pair, and what each runs on.
   const WAZ_SCOPES: [string, string, string][] = [
-    ['mixed', 'Mixed', 'Any band — basic WAZ. A zone you have worked is done.'],
+    ['mixed', 'Mixed', 'Any band, any mode — basic WAZ. A zone you have worked is done.'],
+    ['mode', 'Per mode', 'Each zone in CW, Phone and Digital. A worked zone still alerts in a mode you are missing.'],
     ['band', 'Per band', 'Each zone on each band (5-band WAZ). A worked zone still alerts on a band you are missing.'],
   ];
 

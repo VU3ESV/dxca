@@ -25,6 +25,13 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.20.1** (2026-09-01): **WAZ gains a mode split, and says whether it is
+confirmed.** A third scope — **Per mode** — chases each zone in CW, Phone
+and Digital, the WAZ counterpart of Triple Play. The card now shows zones
+**worked and confirmed** rather than one number that looked like both, a
+per-mode breakdown, and a *Still needed* worklist. Missing means **not
+confirmed**, since an award is claimed on confirmations.
+
 **v2.20.0** (2026-09-01): **more than one FlexRadio and more than one
 ExpertSDR3 per account** — contributed by VU3ESV
 ([#2](https://github.com/vu2cpl/dxca/pull/2)). Both radio tabs now hold a

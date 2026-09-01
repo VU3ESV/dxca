@@ -496,9 +496,44 @@ impl LogMatrix {
             .collect();
         // WAZ: forty zones, and which are missing — the same shape WAS
         // gets, because it is the same kind of chase.
-        let mut waz_missing: Vec<i32> =
-            (1..=40).filter(|z| !self.by_zone.contains_key(z)).collect();
+        // Missing means **not confirmed**: an award is claimed on
+        // confirmations, so a worked-but-unconfirmed zone is still wanted.
+        let confirmed_zone = |z: &i32| self.by_zone.get(z).is_some_and(|s| s.is_confirmed());
+        let mut waz_missing: Vec<i32> = (1..=40).filter(|z| !confirmed_zone(z)).collect();
         waz_missing.sort_unstable();
+        // Per mode class, and which zones each still wants — the WAZ twin
+        // of the Triple Play worklist.
+        let waz_by_mode: Vec<AwardBreakdown> = crate::modes::CLASSES
+            .iter()
+            .map(|m| AwardBreakdown {
+                key: (*m).to_string(),
+                worked: self
+                    .by_zone
+                    .values()
+                    .filter(|s| s.modes.contains(*m))
+                    .count(),
+                confirmed: self
+                    .by_zone
+                    .values()
+                    .filter(|s| s.confirmed_modes.contains(*m))
+                    .count(),
+            })
+            .collect();
+        let waz_needed_by_mode: Vec<ZoneNeed> = crate::modes::CLASSES
+            .iter()
+            .map(|m| ZoneNeed {
+                mode: (*m).to_string(),
+                zones: (1..=40)
+                    .filter(|z| {
+                        !self
+                            .by_zone
+                            .get(z)
+                            .is_some_and(|s| s.confirmed_modes.contains(*m))
+                    })
+                    .collect(),
+            })
+            .filter(|n| !n.zones.is_empty())
+            .collect();
         let waz_by_band = crate::bands::SELECTABLE_BANDS
             .iter()
             .map(|b| AwardBreakdown {
@@ -521,6 +556,8 @@ impl LogMatrix {
             waz_worked: self.by_zone.len(),
             waz_confirmed: self.by_zone.values().filter(|s| s.is_confirmed()).count(),
             waz_missing,
+            waz_by_mode,
+            waz_needed_by_mode,
             waz_by_band,
             marathon: self.marathon_years(),
             was_worked: self.by_state.len(),
@@ -812,6 +849,13 @@ pub struct AwardBreakdown {
     pub confirmed: usize,
 }
 
+/// The zones one mode class still wants.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ZoneNeed {
+    pub mode: String,
+    pub zones: Vec<i32>,
+}
+
 /// One state that Triple Play still wants, and in which modes.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TriplePlayGap {
@@ -849,6 +893,9 @@ pub struct AwardStats {
     pub waz_worked: usize,
     pub waz_confirmed: usize,
     pub waz_missing: Vec<i32>,
+    pub waz_by_mode: Vec<AwardBreakdown>,
+    /// Which zones each mode class still wants, confirmed-wise.
+    pub waz_needed_by_mode: Vec<ZoneNeed>,
     pub waz_by_band: Vec<AwardBreakdown>,
     /// DX Marathon, newest year first.
     pub marathon: Vec<MarathonScore>,

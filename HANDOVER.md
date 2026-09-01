@@ -2,6 +2,21 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-09-01 · **Status:**
+**v2.20.1 — WAZ gains a mode split and an honest confirmed count.** Manoj:
+*"waz doesnt have modewise split ... and it doesnt show mixed waz numbers,
+just says all worked, is it confirmed?"* — three faults, and the third was
+the sharp one: the summary printed `waz_worked / 40` in the **confirmed**
+style, so a worked count was being read as a confirmed one. It now shows
+both, and the WAZ card mirrors the WAS endorsements card: by mode, a
+*Still needed* worklist (mixed first, then each mode), and by band.
+`waz_missing` is now **confirmation-based** — an award is claimed on
+confirmations, so a worked-but-unconfirmed zone is still wanted.
+`WazScope::PerMode` joins Mixed and PerBand.
+
+His data, for reference: 40/40 worked **and** 40/40 confirmed mixed, so the
+answer to the question was yes — but CW 40, Phone 38 (missing 2, 6) and
+Data 39 (missing 2), which makes per-mode a live chase where mixed is done.
+
 **v2.20.0 — more than one FlexRadio and more than one ExpertSDR3 per
 account.** VU3ESV's PR #2, reviewed against main at v2.19.3 and merged:
 clean merge, full gate green on the merged result (290 tests), and both
