@@ -25,6 +25,26 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.17.5** (2026-09-01): **the LoTW report is actually fetched in full.**
+LoTW's QSL report is *incremental by default* — it answers "what is new
+since you last asked" — and DXCA never pinned a start date. So the first
+download brought your history and the next one brought a handful of
+records, which then replaced it; since the log matrix is rebuilt from
+scratch each refresh, every worked state and island vanished with it and
+every US state started alerting as new. On this station the request that
+should have returned **28,467 confirmations with 6,786 state fields** was
+returning **one record**. It now asks from 1945.
+
+Alongside it, a guard for the same class of failure: **an award axis with
+no data claims nothing is new.** States and islands come only from that
+optional report, so an empty map means "unknown", not "none worked" —
+DXCA stays quiet instead of flagging every state on the band. Grids are
+not guarded this way: they come from the ClubLog log itself, so empty
+there genuinely means no 50 MHz+ grids worked.
+
+**After upgrading, press Refresh log now** — the corrected report has to
+be downloaded once before your states appear.
+
 **v2.17.4** (2026-09-01): **the Server card and the file-only line tell the
 truth.** The "Milestone" row said `2.1` next to a version that said 2.17 — it
 was a hand-maintained string nothing updated, so it is gone. The file-only

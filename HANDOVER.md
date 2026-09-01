@@ -2,6 +2,39 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-09-01 · **Status:**
+**v2.17.5 — the LoTW report is actually fetched in full.** Manoj: *"getting
+new state alert for NK3L CA, but I have worked CA"*. His matrix held
+`byState: 0`, `byIota: 2`, `byGrid: 594` — grids healthy (they come from
+ClubLog), states and islands empty.
+
+**Cause:** LoTW's QSL report is **incremental by default** — it returns the
+QSLs received since your last download — and `lotwreport::download` never
+pinned a start date. The first fetch brought the history; a later one
+brought two records and overwrote the cache; and because `refresh_user`
+rebuilds the matrix from scratch and merges whatever it gets, every state
+and island earned before that vanished. Measured against the live endpoint
+with his credentials: the request as it stood returned **1 record, 0 STATE
+fields, 871 bytes**; with `qso_qslsince=1945-01-01` it returned **28,467
+records, 6,786 STATE fields, 16.8 MB**.
+
+**The module doc had stated the requirement** — *"Always a FULL report ...
+an incremental pull would lose every older LoTW-only confirmation on the
+next rebuild"* — and the code did not implement it. A comment asserting a
+property is not a test of it.
+
+**Second fix, for the whole class:** an empty award axis now claims nothing
+is new (`best_award`). States and islands have exactly one source, an
+optional external report that can be absent, refused or — as here —
+quietly partial, so an empty map means *unknown*, not *none worked*.
+`by_grid` is deliberately NOT guarded: it comes from the same ClubLog log
+that drives DXCC, so empty there really does mean none worked. Two of the
+2.17.3 tests had to be repaired to keep testing what they claimed — their
+fixtures had empty axes, so they would have passed on the new guard rather
+than on the rule they were written for.
+
+**Operator step after upgrading: one Refresh log now**, or states stay
+empty until the daily refresh comes round.
+
 **v2.17.4 — the Server card and the file-only line stop lying.** Three
 display defects Manoj found by reading the Reference-data page: the
 **Milestone** row was a hardcoded `"2.1 — alerts, awards, auto-refresh"` in

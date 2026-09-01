@@ -14,6 +14,20 @@ use std::io::Read;
 
 pub const DEFAULT_BASE: &str = "https://lotw.arrl.org/lotwuser/lotwreport.adi";
 
+/// The floor date that forces a FULL report.
+///
+/// **LoTW's report is incremental by default**: it returns the QSLs received
+/// since your last download, so a second call returns a handful of records
+/// and a third returns none. That is fine for a logger that appends; it is
+/// poison here, because `refresh_user` rebuilds the matrix from scratch and
+/// merges whatever this returns — so an incremental answer silently erased
+/// every state and island earned before it. The symptom was every US state
+/// alerting as new with 56k QSOs in the log (VU2CPL, 2026-09-01: a cached
+/// report of **two records**, both non-US).
+///
+/// 1945 is the DXCC epoch and comfortably older than any LoTW QSL.
+const QSL_SINCE: &str = "1945-01-01";
+
 /// Download the full QSL report for one LoTW account (blocking; minutes on
 /// a large log — callers run it on a blocking task).
 pub fn download(base: &str, login: &str, password: &str) -> Result<String, String> {
@@ -23,6 +37,8 @@ pub fn download(base: &str, login: &str, password: &str) -> Result<String, Strin
         .query("qso_query", "1")
         .query("qso_qsl", "yes")
         .query("qso_qsldetail", "yes")
+        // Without this the answer is "what is new since you last asked".
+        .query("qso_qslsince", QSL_SINCE)
         .timeout(std::time::Duration::from_secs(600))
         .call()
         .map_err(|e| format!("LoTW report download: {e}"))?;

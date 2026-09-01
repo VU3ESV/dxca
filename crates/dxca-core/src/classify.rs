@@ -381,8 +381,18 @@ impl AlertClassifier<'_> {
         // entity the resolver already worked out is the reliable test —
         // `StateTable::lookup` refuses the same call independently, and
         // both guards earn their place (2026-09-01).
+        // An EMPTY axis means "no data", not "nothing worked", for these
+        // two: their only source is the optional LoTW QSL report, which can
+        // be absent, refused, or — as it was until 2.17.5 — silently
+        // incremental. With nothing in the map every state on the air looks
+        // new, which is the loudest possible way to be wrong.
+        //
+        // `by_grid` is deliberately NOT guarded this way: it comes from the
+        // same ClubLog log that drives DXCC, so empty there really does mean
+        // no 50 MHz+ grids worked, and a first New Grid is then correct.
         if let Some(st) = refs
             .state
+            .filter(|_| !self.matrix.by_state.is_empty())
             .filter(|_| dxcc_id.is_some_and(crate::awards::counts_for_was))
             .and_then(crate::awards::normalize_state)
         {
@@ -393,7 +403,11 @@ impl AlertClassifier<'_> {
             };
             cands.push((raw, st.to_string()));
         }
-        if let Some(r) = refs.iota.and_then(crate::awards::normalize_iota) {
+        if let Some(r) = refs
+            .iota
+            .filter(|_| !self.matrix.by_iota.is_empty())
+            .and_then(crate::awards::normalize_iota)
+        {
             let raw = match self.matrix.by_iota.get(&r) {
                 Some(s) if s.is_confirmed() => AlertLevel::Worked,
                 Some(_) => AlertLevel::UnconfIota,
@@ -726,10 +740,46 @@ mod tests {
     /// The reported bug: `DV2/K7AZQ` is a US licensee operating from the
     /// Philippines. The FCC table knows the call, so a state ref can still
     /// arrive — the entity is what has to refuse it.
+    /// With no state data at all — no LoTW report, or one that came back
+    /// empty — every state on the air would flag as new. Silence is the
+    /// honest answer; the award starts working the moment the log does.
+    #[test]
+    fn an_empty_axis_claims_nothing_is_new() {
+        let cfg = awards_config();
+        let mut m = matrix();
+        m.record(291, "20M", "DATA", "K9XX", true);
+
+        let refs = AwardRefs {
+            state: Some("TX"),
+            iota: Some("AS-153"),
+            ..AwardRefs::NONE
+        };
+        let quiet = classify_refs(&m, "K1ABC", 14.074, &cfg, refs);
+        assert_ne!(quiet.level, AlertLevel::NewState, "no state data, no claim");
+        assert_ne!(quiet.level, AlertLevel::NewIota, "no island data, no claim");
+
+        // One known state is enough to make the axis trustworthy again.
+        m.record_state("OH", "20M", true);
+        let live = classify_refs(
+            &m,
+            "K1ABC",
+            14.074,
+            &cfg,
+            AwardRefs {
+                state: Some("TX"),
+                ..AwardRefs::NONE
+            },
+        );
+        assert_eq!(live.level, AlertLevel::NewState);
+    }
+
     #[test]
     fn a_us_call_operating_abroad_is_not_a_new_state() {
         let cfg = awards_config();
-        let m = matrix();
+        let mut m = matrix();
+        // A worked state, so the empty-axis guard is not what makes this
+        // pass — the DXCC test is what is under examination here.
+        m.record_state("OH", "20M", true);
         // India stands in for "somewhere that is not the US" — the resolver
         // in these tests knows VU and K, and VU is not a WAS entity.
         let abroad = classify_refs(
@@ -749,6 +799,7 @@ mod tests {
         // or the guard would have switched WAS off altogether.
         let mut home = matrix();
         home.record(291, "20M", "DATA", "K9XX", true);
+        home.record_state("OH", "20M", true);
         let at_home = classify_refs(
             &home,
             "K1ABC",
@@ -765,7 +816,8 @@ mod tests {
     #[test]
     fn the_rarest_candidate_wins_and_filters_shift_the_pick() {
         let cfg = awards_config();
-        let m = matrix(); // K* (US) never worked → NEW DXCC
+        let mut m = matrix(); // K* (US) never worked → NEW DXCC
+        m.record_state("OH", "20M", true); // axis live, TX still new
         let refs = AwardRefs {
             state: Some("TX"),
             ..AwardRefs::NONE
