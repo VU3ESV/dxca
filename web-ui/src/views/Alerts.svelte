@@ -34,29 +34,23 @@
   } from '../lib/reference.svelte';
   import { loadChase, chasedLevels } from '../lib/chase.svelte';
 
+  // The notify_* field that gates a level comes FROM THE SERVER, on the
+  // level itself (`NotifyUserConfig::notify_field`). This used to be a
+  // table typed out here, and it was never extended when WAZ and the
+  // Marathon joined the ladder in 2.19.0: their three rows looked up
+  // nothing, so all three bound to the same `cfg[undefined]` — ticking DX
+  // Marathon appeared to tick both Zone rows — and no save carried their
+  // fields, so the server's default-on put them straight back. The only
+  // way to stop those pings was to drop the award on Settings › Awards.
+  //
+  // A row with no field is dropped rather than drawn: a control that
+  // cannot say no is worse than one that is not there.
+  const fieldOf = (l: { notifyField?: string | null }) => l.notifyField ?? '';
+
   // The ladder shows the classic eight plus only the awards this account
   // chases (Settings › My station › Awards) — an award nobody opted into
   // must not add rows here.
-  let myLevels = $derived(chasedLevels(levels()));
-
-  // Level key → the notify_* field that gates it. The server owns the ladder
-  // and its order (AlertLevel::FLAGGABLE); this only maps key → field name.
-  const FIELD: Record<string, string> = {
-    newDXCC: 'notify_new_dxcc',
-    newBand: 'notify_new_band',
-    newMode: 'notify_new_mode',
-    newSlot: 'notify_new_slot',
-    unconfDXCC: 'notify_unconf_dxcc',
-    unconfBand: 'notify_unconf_band',
-    unconfMode: 'notify_unconf_mode',
-    unconfSlot: 'notify_unconf_slot',
-    newIOTA: 'notify_new_iota',
-    newState: 'notify_new_state',
-    newGrid: 'notify_new_grid',
-    unconfIOTA: 'notify_unconf_iota',
-    unconfState: 'notify_unconf_state',
-    unconfGrid: 'notify_unconf_grid',
-  };
+  let myLevels = $derived(chasedLevels(levels()).filter((l) => fieldOf(l)));
 
   let cfg = $state<any>({
     telegram_enabled: false, telegram_bot_token: '', telegram_chat_id: '',
@@ -69,6 +63,7 @@
     // Awards is the opt-in; this gate must not be a second one to find).
     notify_new_iota: true, notify_new_state: true, notify_new_grid: true,
     notify_unconf_iota: true, notify_unconf_state: true, notify_unconf_grid: true,
+    notify_new_zone: true, notify_unconf_zone: true, notify_marathon: true,
     notify_unconf_skip_worked: false, notify_unconf_lotw_only: false,
     notify_bands: [], notify_modes: [],
     notify_manual_only: false,
@@ -119,14 +114,14 @@
     else error = r.json?.error ?? `HTTP ${r.status}`;
   }
 
-  let anyLevel = $derived(myLevels.some((l) => cfg[FIELD[l.key]]));
+  let anyLevel = $derived(myLevels.some((l) => cfg[fieldOf(l)]));
 
   // What the collapsed rail's badge reports — counted per CONTROL, the same
   // rule Spots uses, so the number means the same thing on both screens. The
   // eight-level ladder is ONE control, so anything short of all eight counts
   // once rather than eight times.
   let activeFilters = $derived(
-    (myLevels.length && !myLevels.every((l) => cfg[FIELD[l.key]]) ? 1 : 0) +
+    (myLevels.length && !myLevels.every((l) => cfg[fieldOf(l)]) ? 1 : 0) +
       (cfg.notify_unconf_skip_worked || cfg.notify_unconf_lotw_only ? 1 : 0) +
       (modeSel.size ? 1 : 0) +
       (bandSel.size ? 1 : 0) +
@@ -156,7 +151,7 @@
       <div class="levels">
         {#each myLevels as l (l.key)}
           <label data-level={l.key}>
-            <input type="checkbox" bind:checked={cfg[FIELD[l.key]]} />
+            <input type="checkbox" bind:checked={cfg[fieldOf(l)]} />
             <span class="level-dot"></span>{l.label}
           </label>
         {/each}

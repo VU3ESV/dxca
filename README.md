@@ -25,6 +25,26 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.20.4** (2026-09-01): **the Zone and Marathon rows in Alerts could not
+be switched off.** Manoj: *"if dx marathon is not selected in alerts, still
+notifications were coming ... have to disable in awards to stop the
+notifications"*, and *"dx marathon if selected, selects zone also"*. Both
+symptoms were one fault. The Alerts tab kept its own hand-typed table of
+level → `notify_*` field, and it was never extended when WAZ and the
+Marathon joined the ladder in 2.19.0: those three rows looked up **nothing**,
+so all three bound to the same phantom slot — ticking DX Marathon appeared
+to tick both Zone rows — and no save ever carried their fields, so the
+server's default-on switched them back every time. The only thing that
+actually stopped the pings was dropping the award on **Settings › My station
+› Awards**, which is the classifier gate, not the Telegram one.
+
+The field name is now **served with the level** (`/api/reference` carries
+`notifyField`), so the ladder cannot grow a row the UI has no field for, and
+a level that somehow arrives without one is dropped rather than drawn as a
+checkbox that does nothing. Three tests pin it: every flaggable level names
+a field that exists and that `wants_level` actually reads, no two levels
+share a field, and every served level carries one.
+
 **v2.20.3** (2026-09-01): **the Awards help tips said "confirmed" always
 means LoTW, which is false for WAZ.** Manoj, reading the tab: *"why 2 zones
 worked and confirmed"*. The pair is right — the tip explaining it was not.

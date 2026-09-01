@@ -16,6 +16,12 @@ export interface Option {
   /// 'iota'), null/absent for the classic DXCC eight. What `lib/chase`
   /// filters level lists on.
   award?: string | null;
+  /// Levels only: the `notify_*` field that gates this level's Telegram
+  /// ping. Served with the level so the Alerts tab cannot bind a row to a
+  /// field that does not exist — which is exactly what happened to the
+  /// Zone and Marathon rows when the ladder grew and a hand-kept table in
+  /// Svelte did not.
+  notifyField?: string | null;
 }
 
 const state = $state<{

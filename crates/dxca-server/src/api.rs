@@ -662,13 +662,31 @@ async fn station(State(app): State<AppState>, headers: HeaderMap) -> Response {
 /// The vocabularies the UI builds its filter controls from — served rather
 /// than hardcoded in Svelte so the band list, the mode buckets and the level
 /// ladder cannot drift from what the classifier actually emits.
-async fn reference() -> Response {
-    let levels: Vec<serde_json::Value> = dxca_core::classify::AlertLevel::FLAGGABLE
+/// The level ladder as the UI receives it. Pulled out of the handler so
+/// it can be tested without booting the server — the `notifyField` half is
+/// a contract the Alerts tab now binds to directly, and a level that
+/// reaches the ladder without one is a control that cannot say no.
+fn level_vocabulary() -> Vec<serde_json::Value> {
+    dxca_core::classify::AlertLevel::FLAGGABLE
         .iter()
         // `award` is what lets the UI hide an unchased award's levels — the
-        // classic eight carry null and are always shown.
-        .map(|l| serde_json::json!({ "key": l.key(), "label": l.label(), "award": l.award() }))
-        .collect();
+        // classic eight carry null and are always shown. `notifyField` is
+        // the Telegram gate's field name: served, not retyped in Svelte,
+        // because the hand-kept copy there missed WAZ and the Marathon
+        // entirely and left three rows that could not be switched off.
+        .map(|l| {
+            serde_json::json!({
+                "key": l.key(),
+                "label": l.label(),
+                "award": l.award(),
+                "notifyField": NotifyUserConfig::notify_field(*l),
+            })
+        })
+        .collect()
+}
+
+async fn reference() -> Response {
+    let levels = level_vocabulary();
     Json(serde_json::json!({
         "bands": dxca_core::bands::SELECTABLE_BANDS,
         "modes": dxca_core::modes::CLASSES,
@@ -1269,5 +1287,39 @@ async fn refresh(State(app): State<AppState>, headers: HeaderMap) -> Response {
         .into_response(),
         Ok(Err(e)) => err(StatusCode::BAD_GATEWAY, e),
         Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, format!("join: {e}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The Alerts tab binds each ladder row to the `notifyField` served
+    /// with it. Every level must carry one, or that row is a checkbox
+    /// wired to nothing — which is what WAZ's two levels and the Marathon
+    /// were between 2.19.0 and 2.20.4, sharing a single phantom slot and
+    /// pinging whatever the operator ticked.
+    #[test]
+    fn every_served_level_carries_the_field_that_gates_it() {
+        let levels = level_vocabulary();
+        assert_eq!(
+            levels.len(),
+            dxca_core::classify::AlertLevel::FLAGGABLE.len()
+        );
+        for l in &levels {
+            let key = l["key"].as_str().expect("a key");
+            let field = l["notifyField"]
+                .as_str()
+                .unwrap_or_else(|| panic!("{key} is served without a notifyField"));
+            assert!(field.starts_with("notify_"), "{key} names {field}");
+        }
+        // The three the hand-kept table missed, named so a future trim
+        // cannot quietly drop them again.
+        for key in ["newZone", "unconfZone", "marathon"] {
+            assert!(
+                levels.iter().any(|l| l["key"] == key),
+                "{key} is missing from the served ladder"
+            );
+        }
     }
 }

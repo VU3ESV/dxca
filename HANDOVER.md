@@ -2,6 +2,40 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-09-01 · **Status:**
+**v2.20.4 — the Zone and Marathon rows in Alerts were checkboxes wired to
+nothing** (Manoj: *"if dx marathon is not selected in alerts, still
+notifications were coming"*, *"have to disable in awards to stop the
+notifications"*, *"dx marathon if selected, selects zone also"*). Two
+symptoms, one fault, and the second one names it exactly.
+
+`Alerts.svelte` kept its own `FIELD` table of level key → `notify_*` field,
+fourteen entries, written when the ladder had fourteen levels.
+`AlertLevel::FLAGGABLE` reached **seventeen** in 2.19.0 with `newZone`,
+`unconfZone` and `marathon`. Those three keys missed the table, so
+`FIELD[l.key]` was `undefined` and all three rows bound to `cfg[undefined]`
+— **one shared slot**, which is why the Marathon tick moved both Zone rows.
+Worse, the save spread `{...cfg}` and therefore never sent
+`notify_new_zone`, `notify_unconf_zone` or `notify_marathon`; all three
+carry `#[serde(default = "default_true")]`, so every save put them back ON.
+Nothing in the Alerts tab could silence them. The award pair on Settings ›
+Awards could, because that is the *classifier* gate — which is exactly the
+workaround he found.
+
+**The fix removes the class, not just the three rows.**
+`NotifyUserConfig::notify_field` lives beside `wants_level` in `db.rs`,
+`/api/reference` serves it on each level as `notifyField`, and the Alerts
+tab binds to that instead of a table of its own — the same reason the level
+list, the band table and the mode buckets are served rather than retyped. A
+level arriving without a field is filtered out of the ladder: a control that
+cannot say no is worse than no control. Three tests: every flaggable level
+names a field that exists on the struct *and* that `wants_level` reads (both
+directions), no two levels share a field, every served level carries one.
+Gate green, 293 tests.
+
+**The classic-eight `DXCC_FIELD` table in `AwardSettings.svelte` was checked
+and is complete** — that set does not grow, and the award levels there come
+from the `AWARDS` array, so this fault has no second home.
+
 **v2.20.3 — the Awards help tips claimed confirmed always means LoTW,
 which is false for WAZ** (Manoj: *"why 2 zones worked and
 confirmed"*). Both zone numbers come from the ClubLog export and nowhere

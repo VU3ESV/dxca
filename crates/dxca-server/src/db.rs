@@ -690,7 +690,44 @@ impl NotifyUserConfig {
         true
     }
 
-    /// Whether this level is wanted, over all fourteen flaggable levels.
+    /// Which `notify_*` field gates a level — the same pairing
+    /// `wants_level` applies, as a name the UI can bind to.
+    ///
+    /// It exists because the Alerts tab used to keep its OWN key → field
+    /// table in Svelte, and that table was never extended when WAZ and the
+    /// Marathon arrived in 2.19.0. The three new rows bound to
+    /// `cfg[undefined]` — one shared slot, so ticking DX Marathon appeared
+    /// to tick both Zone rows — and no save ever carried their fields, so
+    /// `#[serde(default = "default_true")]` switched them back on every
+    /// time. Serving the name kills that whole class: a level the server
+    /// flags cannot reach the ladder without the field that turns it off.
+    ///
+    /// Keep in step with `wants_level` below — the test at the foot of this
+    /// file fails if either forgets a level.
+    pub fn notify_field(level: AlertLevel) -> Option<&'static str> {
+        Some(match level {
+            AlertLevel::NewDxcc => "notify_new_dxcc",
+            AlertLevel::NewSlot => "notify_new_slot",
+            AlertLevel::NewBand => "notify_new_band",
+            AlertLevel::NewMode => "notify_new_mode",
+            AlertLevel::UnconfDxcc => "notify_unconf_dxcc",
+            AlertLevel::UnconfSlot => "notify_unconf_slot",
+            AlertLevel::UnconfBand => "notify_unconf_band",
+            AlertLevel::UnconfMode => "notify_unconf_mode",
+            AlertLevel::NewGrid => "notify_new_grid",
+            AlertLevel::UnconfGrid => "notify_unconf_grid",
+            AlertLevel::NewState => "notify_new_state",
+            AlertLevel::UnconfState => "notify_unconf_state",
+            AlertLevel::NewIota => "notify_new_iota",
+            AlertLevel::UnconfIota => "notify_unconf_iota",
+            AlertLevel::NewZone => "notify_new_zone",
+            AlertLevel::UnconfZone => "notify_unconf_zone",
+            AlertLevel::Marathon => "notify_marathon",
+            AlertLevel::Worked | AlertLevel::None => return None,
+        })
+    }
+
+    /// Whether this level is wanted, over all seventeen flaggable levels.
     pub fn wants_level(&self, level: AlertLevel) -> bool {
         match level {
             AlertLevel::NewDxcc => self.notify_new_dxcc,
@@ -1601,6 +1638,60 @@ impl Db {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every flaggable level must name a `notify_*` field that really
+    /// exists on the struct, and that field must be what `wants_level`
+    /// reads. The bug this pins: WAZ and the Marathon reached the Alerts
+    /// ladder in 2.19.0 while the UI's own key → field table stayed at
+    /// fourteen entries, so their rows bound to nothing, shared one slot
+    /// between them, and could never be switched off — the pings stopped
+    /// only by dropping the award itself on Settings › My station ›
+    /// Awards.
+    #[test]
+    fn every_flaggable_level_has_a_notify_field_that_gates_it() {
+        let json = serde_json::to_value(NotifyUserConfig::default()).expect("serializes");
+        let obj = json.as_object().expect("an object");
+        for level in AlertLevel::FLAGGABLE {
+            let field = NotifyUserConfig::notify_field(level)
+                .unwrap_or_else(|| panic!("{} has no notify field", level.key()));
+            assert!(
+                obj.contains_key(field),
+                "{} names {field}, which is not a field on NotifyUserConfig",
+                level.key()
+            );
+            // The name is not merely present — it is the one the gate reads.
+            let mut cfg = NotifyUserConfig::default();
+            let mut row = serde_json::to_value(&cfg).expect("serializes");
+            row[field] = serde_json::Value::Bool(true);
+            cfg = serde_json::from_value(row.clone()).expect("parses");
+            assert!(
+                cfg.wants_level(level),
+                "{field} on must want {}",
+                level.key()
+            );
+            row[field] = serde_json::Value::Bool(false);
+            cfg = serde_json::from_value(row).expect("parses");
+            assert!(
+                !cfg.wants_level(level),
+                "{field} off must silence {} — a control that cannot say no",
+                level.key()
+            );
+        }
+    }
+
+    /// Two levels sharing one field is the same fault wearing a disguise:
+    /// the Marathon row appeared to tick both Zone rows because all three
+    /// bound to the same (missing) slot.
+    #[test]
+    fn no_two_levels_share_a_notify_field() {
+        let mut seen = std::collections::HashMap::new();
+        for level in AlertLevel::FLAGGABLE {
+            let field = NotifyUserConfig::notify_field(level).expect("has a field");
+            if let Some(other) = seen.insert(field, level.key()) {
+                panic!("{field} gates both {other} and {}", level.key());
+            }
+        }
+    }
 
     /// An account stored before this key existed must deserialize to
     /// "off", or an upgrade would silently start suppressing alerts that
