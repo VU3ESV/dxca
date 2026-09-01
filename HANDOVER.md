@@ -30,9 +30,19 @@ now split the rule per award. Text only; the counts were always right.
 **Deployed to noderedpi4 on 2026-09-01** (`deploy/pi-deploy.sh`, seeded
 form, service back clean with all nine cluster nodes Live and the telnet
 client reconnected; bundle `index-LDTEEEYk.js` serves the corrected tip and
-no longer carries the old sentence). Local Pi first, ahead of any tag — and
-`/api/status` there still reads **2.20.2**, because nothing but text
-changed. The other four hosts are on released 2.20.2 and were left alone.
+no longer carries the old sentence). Local Pi first, ahead of any tag.
+
+**Then the other four, the same day** — `--no-seed` to `adersh`, `vu2wj`
+and `vu2oy` (all three tunnels were already up, all three boxes powered and
+on 2.20.2 with no telnet clients to drop), `win-deploy.sh` to the Windows
+box. All five now serve `index-LDTEEEYk.js` with the new wording and every
+cluster node reconnected: 9/9 on noderedpi4, 4/4, 2/2, 2/2, 2/2. Windows
+still reads `cty_entities: 0` — the known, accepted state from 2026-08-30,
+not a deploy fault.
+
+**Every host still reports 2.20.2**, released or this build, so the fleet
+sweep cannot tell them apart until the next tag moves the number. Nothing
+but text differs, which is why that was acceptable.
 
 **v2.20.1 — WAZ gains a mode split and an honest confirmed count.** Manoj:
 *"waz doesnt have modewise split ... and it doesnt show mixed waz numbers,
