@@ -103,9 +103,6 @@ fn status_json(app: &AppState) -> serde_json::Value {
     serde_json::json!({
         "name": "dxca",
         "version": env!("CARGO_PKG_VERSION"),
-        // Named for the release, not the plan's milestone numbering —
-        // M0-M6 all closed at 2.0.0.
-        "milestone": "2.1 — alerts, awards, auto-refresh",
         "setup_required": user_count == 0,
         "users": user_count,
         "cty_loaded": app.users.resolver_loaded(),
@@ -1037,6 +1034,10 @@ async fn get_global(State(app): State<AppState>, headers: HeaderMap) -> Response
         "read_only": {
             "web_bind": cfg.web_bind,
             "telnet_port": cfg.telnet_port,
+            // Whether port 7575 accepts LOGIN. It changes what the telnet
+            // server will do, so an admin must be able to see it without
+            // reading the TOML on the box — it was invisible until 2.17.4.
+            "telnet_interactive": cfg.telnet_interactive,
             "dedupe_window_secs": cfg.dedupe_window_secs,
             "spot_ring_capacity": cfg.spot_ring_capacity,
             "data_dir": cfg.data_dir,

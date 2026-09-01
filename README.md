@@ -25,6 +25,14 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.17.4** (2026-09-01): **the Server card and the file-only line tell the
+truth.** The "Milestone" row said `2.1` next to a version that said 2.17 — it
+was a hand-maintained string nothing updated, so it is gone. The file-only
+settings line now lists **every** setting `config/dxca.toml` owns: the IOTA
+and FCC refresh intervals added in 2.17.0 were missing from it, and
+**whether the telnet server accepts logins** (`telnet_interactive`) was not
+visible anywhere in the web UI at all.
+
 **v2.17.3** (2026-09-01): **a US call operating abroad is no longer a New
 State.** `DV2/K7AZQ` — an Arizona licensee in the Philippines — was credited
 with Arizona, because the state lookup reused the callsign ladder that

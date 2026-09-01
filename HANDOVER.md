@@ -2,6 +2,23 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-09-01 · **Status:**
+**v2.17.4 — the Server card and the file-only line stop lying.** Three
+display defects Manoj found by reading the Reference-data page: the
+**Milestone** row was a hardcoded `"2.1 — alerts, awards, auto-refresh"` in
+`status_json` that nothing ever updated, printing 2.1 beside a version
+reading 2.17 — removed from the API and the card, and nothing else consumed
+the field. The **file-only settings line** omitted `iota_refresh_days` and
+`fcc_refresh_days`, added to the config in 2.17.0 and never added to the
+line, so it under-reported what the TOML owns. And **`telnet_interactive`
+was invisible from the web UI entirely** — a flag that changes what port
+7575 accepts, readable only by opening the TOML on the box; it is now in
+`read_only` and on the line as `telnet 7575 (login on/off)`. Intervals of
+`0` render as `off` rather than `0d`, which read as "constantly".
+
+**The lesson for that line specifically:** it is a promise of completeness,
+so any new `Config` field must be added to it in the same commit. It went
+wrong the moment a config key shipped without one.
+
 **v2.17.3 — a US call operating abroad is no longer a New State.** Manoj
 spotted `DV2/K7AZQ` flagged as one: an Arizona licensee transmitting from
 the Philippines. **The cause is the part worth remembering** —

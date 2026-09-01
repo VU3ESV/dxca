@@ -21,6 +21,11 @@
   import { server, loadServerConfig } from '../../lib/serverconfig.svelte';
 
   let s = $derived(status());
+
+  /// A refresh interval as the file-only line shows it. `0` means the job is
+  /// switched off, and saying "0d" would read as "constantly" — the exact
+  /// opposite of what it does.
+  const days = (n: number) => (n ? `${n}d` : 'off');
   let message = $state('');
   let error = $state('');
   let busy = $state(false);
@@ -84,7 +89,6 @@
     <h2>Server</h2>
     <dl class="stats">
       <div><dt>Version</dt><dd class="mono">v{s.version}</dd></div>
-      <div><dt>Milestone</dt><dd>{s.milestone}</dd></div>
       <div><dt>Users</dt><dd class="num">{s.users}</dd></div>
       <div><dt>TCP clients</dt><dd class="num">{s.telnet_clients}</dd></div>
       <div><dt>UDP sent</dt><dd class="num">{s.udp_sent}</dd></div>
@@ -213,12 +217,23 @@
 
     <ApplySave />
 
+    <!-- Everything in config/dxca.toml that this page cannot change, listed
+         so the UI never implies it owns a setting it does not. It must stay
+         COMPLETE: the IOTA and FCC intervals were added to the config in
+         2.17.0 and left off this line until 2.17.4, which made the line
+         quietly wrong rather than merely terse. The telnet login flag is
+         here for a stronger reason — it changes what port 7575 accepts, and
+         it was previously invisible from the web UI altogether. -->
     <p class="hint file-only">
       File-only settings: web {server.cfg.read_only.web_bind} · telnet
-      {server.cfg.read_only.telnet_port} · dedupe {server.cfg.read_only.dedupe_window_secs}s ·
-      ring {server.cfg.read_only.spot_ring_capacity} · cty refresh
-      {server.cfg.read_only.cty_refresh_days}d · LoTW refresh
-      {server.cfg.read_only.lotw_refresh_days}d · data dir
+      {server.cfg.read_only.telnet_port}
+      (login {server.cfg.read_only.telnet_interactive ? 'on' : 'off'}) ·
+      dedupe {server.cfg.read_only.dedupe_window_secs}s · ring
+      {server.cfg.read_only.spot_ring_capacity} · refresh: cty
+      {days(server.cfg.read_only.cty_refresh_days)}, LoTW
+      {days(server.cfg.read_only.lotw_refresh_days)}, IOTA
+      {days(server.cfg.read_only.iota_refresh_days)}, FCC
+      {days(server.cfg.read_only.fcc_refresh_days)} · data dir
       <code>{server.cfg.read_only.data_dir}</code> (edit config/dxca.toml + restart).
     </p>
   </div>
