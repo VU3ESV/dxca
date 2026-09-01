@@ -281,15 +281,15 @@ My station › Awards**; an award left unticked adds no control anywhere, so
 the Spots and Alerts screens of a non-chaser are unchanged. Also in the
 release: the confirmation-path gate on the `?` levels, the TCI (ExpertSDR3)
 destination with its reconnect defect fixed, and the ClubLog embed
-following the app's appearance. **The whole fleet is on v2.20.0 (2026-09-01)** — all five hosts, every
-cluster node reconnected. `vu2wj@192.168.1.201` needed a second pass: its
-first attempt died at `ssh: connect ... Operation timed out` *before*
-anything transferred, so it sat untouched on v2.17.5 rather than
-half-upgraded. It came back on its own a few minutes later — the
-**stale-handshake signature** (its `/32` route present the whole time
-while ping and ssh both failed) rather than a powered-off box, exactly as
-the 2026-08-30 note predicted. Worth remembering: a failed tunnelled
-deploy is worth simply retrying before anyone bounces a tunnel.
+following the app's appearance. **The whole fleet is on v2.20.2 (2026-09-01)** — all five hosts, every
+cluster node reconnected, verified after the deploy. `vu2wj` had needed a
+retry on the v2.20.0 pass: its first attempt died at `ssh: connect ...
+Operation timed out` *before* anything transferred, so it sat untouched
+rather than half-upgraded, and came back on its own minutes later. Same
+for `adersh` later the same evening. Both were the **stale-handshake
+signature** — the `/32` route present the whole time while ping and ssh
+failed — not powered-off boxes. **Retry a failed tunnelled deploy once
+before bouncing a tunnel or concluding the box is off.**
 
 **The Windows box downloaded the IOTA directory by itself** (1178 groups)
 on the scheduler's first tick, while `fcc_calls` stayed 0 — which is
