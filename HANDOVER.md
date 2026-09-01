@@ -66,6 +66,11 @@ that drives DXCC, so empty there really does mean none worked. Two of the
 fixtures had empty axes, so they would have passed on the new guard rather
 than on the rule they were written for.
 
+**Verified working 2026-09-01 after the 2.17.6 fixes**: a refresh on
+noderedpi4 pulled the full 16.8 MB report and the matrix now holds **49
+states and 319 IOTA groups** (missing: WY only, which is a genuine gap in
+the log, not a bug). `CA` present, so the NK3L report is closed.
+
 **Operator step after upgrading: one Refresh log now**, or states stay
 empty until the daily refresh comes round. **The poisoned 1,431-byte cache
 was deleted from noderedpi4** during the 2.17.5 deploy — without that the
@@ -132,8 +137,12 @@ My station › Awards**; an award left unticked adds no control anywhere, so
 the Spots and Alerts screens of a non-chaser are unchanged. Also in the
 release: the confirmation-path gate on the `?` levels, the TCI (ExpertSDR3)
 destination with its reconnect defect fixed, and the ClubLog embed
-following the app's appearance. **v2.17.0 through v2.17.5 all released 2026-09-01** (tag + GitHub release
-+ Windows zip each), and **the whole fleet is on v2.17.5** —
+following the app's appearance. **v2.17.0 through v2.17.7 all released 2026-09-01** (tag + GitHub release
++ Windows zip each). **noderedpi4 runs v2.17.7**; the other four are on
+**v2.17.5** — 2.17.6 (LoTW timeout + carry-forward) and 2.17.7 (chip
+layout) are inert on hosts with no LoTW credentials, and re-restarting
+third-party feeds for them was not worth it. The table below is the
+2.17.5 fleet pass —
 deployed and verified the same day, every host answering with its nodes
 live:
 
