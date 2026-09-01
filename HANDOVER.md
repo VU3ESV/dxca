@@ -26,10 +26,14 @@ cluster node reconnected: 9/9 on noderedpi4, 4/4, 2/2, 2/2, 2/2. Windows
 still reads `cty_entities: 0` — the known, accepted state from 2026-08-30,
 not a deploy fault.
 
-**All five hosts still report 2.20.2**: they were built and shipped before
-the bump, so they serve this change under the old number. The fix is one
-redeploy round per host — nothing but the version string differs, so it can
-wait for whatever ships next.
+**Tagged, released and re-shipped the same day.** The first round went out
+from unreleased main, so all five served the fix while reporting 2.20.2;
+after the bump they were redeployed in the same order (local Pi, verified,
+then the three `--no-seed` boxes, then Windows) and **`/api/status` reads
+2.20.3 on all five** — 9/9, 4/4, 2/2, 2/2, 2/2 cluster nodes back, telnet
+client back on noderedpi4. The Windows zip is on the release page; `gh
+release create --latest` also moved the *Latest* label, which had been stuck
+on v2.20.1 since the tags were published out of order.
 
 **v2.20.2 — one type scale on the Awards tab** (Manoj: *"each portion has
 different font sizes"*). He was right, and the first fix was wrong: I
