@@ -66,20 +66,20 @@
         credential here (README §Secrets).
       </span>
       <span class="para">
+        <b>What it is for:</b> your <b>QSL report</b>, the list of contacts
+        LoTW has confirmed. It is the only source that says which
+        <b>state</b>, <b>grid square</b> and <b>island</b> a confirmation
+        came from — ClubLog's export carries none of those — so it fills in
+        the <em>confirmed</em> half of WAS, VUCC and IOTA under
+        <b>Awards</b>. DXCC confirmations keep coming from ClubLog either
+        way.
+      </span>
+      <span class="para">
         Optional. Leave it blank and everything else still works; the awards
-        under <b>Awards</b> simply track worked-only.
+        simply track worked-only.
       </span>
     </HelpTip>
   </h2>
-
-  <p class="hint intro">
-    What this is for: your <b>QSL report</b>, the list of contacts LoTW has
-    confirmed. It is the only source that says which <b>state</b>, <b>grid
-    square</b> and <b>island</b> a confirmation came from — ClubLog's export
-    carries none of those — so it is what puts the <em>confirmed</em> half
-    under WAS, VUCC and IOTA on <b>Awards</b>. DXCC confirmations keep coming
-    from ClubLog either way.
-  </p>
 
   <div class="settings-form">
     <span class="label">LoTW username</span>
@@ -111,11 +111,6 @@
 </div>
 
 <style>
-  .intro {
-    max-width: 40rem;
-    line-height: 1.5;
-  }
-
   p {
     margin: 0.75rem 0 0;
   }

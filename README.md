@@ -25,6 +25,12 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.17.2** (2026-09-01): **explanatory prose moved onto the `?` hovers.**
+Settings pages carry their controls; the paragraphs explaining them are one
+hover away. Conditional warnings — "the FCC table is not on this server yet",
+"not set, so no confirmed totals" — stay on the page, because those are state
+you need to see without going looking.
+
 **v2.17.1** (2026-09-01): **ClubLog and LoTW are separate settings pages** —
 two accounts at two organisations, and the LoTW login was easy to miss as a
 footnote under the ClubLog form.

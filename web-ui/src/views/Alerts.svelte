@@ -177,6 +177,10 @@
             only a call you have never worked that uploads to LoTW will ping
             — a station that can be worked <b>and</b> will confirm.
           </span>
+          <span class="para">
+            The <b>New</b> levels are untouched and always ping their own
+            ticks: an ATNO is worth working whatever the QSL prospects.
+          </span>
         </HelpTip>
       </span>
       <!-- docs/AWARDS.md phase 1. On the call, not the spot's provenance —
@@ -196,7 +200,6 @@
         <input type="checkbox" bind:checked={cfg.notify_unconf_lotw_only} />The call uses
         LoTW
       </label>
-      <span class="always">The New levels always ping their ticks.</span>
     </div>
 
     <ChipGroup stacked label="Modes" options={modes()} bind:selected={modeSel} />
@@ -226,7 +229,22 @@
     </div>
 
     <div class="railgroup">
-      <span class="railhead">Only ping when</span>
+      <span class="railhead">
+        Only ping when
+        <HelpTip label="Only ping when">
+          <span class="para">
+            Holds alerts for bands the sun says are not workable from your
+            QTH right now. Needs a locator in <b>Settings › My station ›
+            Locator &amp; grey line</b>.
+          </span>
+          <span class="para">
+            <b>New DXCC always pings</b>, whatever the sun is doing — and so
+            does a band the model says nothing about. That exemption is what
+            makes this tick safe to enable: the worst it can do is hold a
+            spot you could not have worked.
+          </span>
+        </HelpTip>
+      </span>
       <!-- Milestone 4 of docs/PHASE-ROTATION-MASK.md. Narrowed separately from
            the Spots screen's own mask, like every other narrowing here: watch
            everything on screen, be woken only for what is workable. It fails
@@ -240,10 +258,6 @@
         <input type="checkbox" bind:checked={cfg.notify_respect_band_mask} />The band is
         plausibly open
       </label>
-      <!-- The exemption is the reason that tick is safe to enable, so it is on
-           the page rather than in a tooltip nobody hovers. Muted, because it is
-           a reassurance about what CANNOT happen, not another instruction. -->
-      <span class="always">New DXCC always pings.</span>
     </div>
 
     <div class="railgroup">
@@ -410,12 +424,6 @@
     font-size: 0.78rem;
     gap: 0.3rem;
     align-items: flex-start;
-    line-height: 1.35;
-  }
-
-  .always {
-    color: var(--muted);
-    font-size: 0.7rem;
     line-height: 1.35;
   }
 

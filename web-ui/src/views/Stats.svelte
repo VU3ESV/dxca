@@ -646,11 +646,6 @@
     cursor: pointer;
   }
 
-  .sub-head {
-    margin: 1.25rem 0 0.5rem;
-    font-size: 0.95rem;
-  }
-
   .stats {
     display: flex;
     flex-wrap: wrap;

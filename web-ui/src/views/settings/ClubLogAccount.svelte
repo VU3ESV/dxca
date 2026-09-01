@@ -83,10 +83,20 @@
   <h2>
     ClubLog account
     <HelpTip label="ClubLog account">
-      Your log drives the New / ? highlighting — only for your account. The
-      <b>ClubLog API key</b> is not here: it only fetches the shared DXCC prefix
-      database, so it is one server-wide setting under <b>Server › Reference
-      data</b>. These credentials download <em>your</em> log.
+      <span class="para">
+        Your log drives the New / ? highlighting — only for your account.
+        These credentials download <em>your</em> log.
+      </span>
+      <span class="para">
+        What it is allowed to flag — the alert ladder, and the awards you
+        tick — lives under <b>Awards</b> in this rail. Your <b>LoTW</b> login
+        is its own page there too.
+      </span>
+      <span class="para">
+        The <b>ClubLog API key</b> is not here: it only fetches the shared
+        DXCC prefix database, so it is one server-wide setting under
+        <b>Server › Reference data</b>.
+      </span>
     </HelpTip>
   </h2>
   <div class="settings-form">
@@ -114,14 +124,6 @@
       {/each}
     </select>
   </div>
-
-  <!-- The alert ladder is on Settings › Awards; a one-line pointer beats a
-       page of checkboxes here. -->
-  <p class="hint">
-    What this log is allowed to flag — the alert ladder and the awards you
-    chase — lives under <b>Awards</b> in this rail. Your <b>LoTW</b> login
-    is its own page there too.
-  </p>
 
   <div class="actions">
     <button class="primary" onclick={save} disabled={busy}>Save</button>

@@ -48,8 +48,9 @@
     {
       id: 'iota', name: 'IOTA', newField: 'alert_new_iota', unconfField: 'alert_unconf_iota',
       newKey: 'newIOTA', unconfKey: 'unconfIOTA', newLabel: 'New IOTA', unconfLabel: '? IOTA',
-      what: 'Island groups, from the reference a cluster spot’s comment announces (AS-153). '
-          + 'FT8 decodes never name an island, so these levels ride cluster spots only.',
+      what: 'Island groups, from the reference a cluster spot’s comment announces (AS-153), '
+          + 'validated against the IOTA directory. FT8 decodes never name an island, so these '
+          + 'levels ride cluster spots only.',
     },
     {
       id: 'was', name: 'WAS', newField: 'alert_new_state', unconfField: 'alert_unconf_state',
@@ -159,7 +160,10 @@
           <input type="checkbox" checked={chasing(a)} onchange={() => toggle(a)} />
           <b>{a.name}</b>
         </label>
-        <p class="hint what">{a.what}</p>
+        <!-- What the award runs on is a read-once explanation, so it hovers
+             rather than sitting under every row: three of these as body text
+             pushed the ticks themselves down the page. -->
+        <HelpTip label={a.name}>{a.what}</HelpTip>
         {#if chasing(a)}
           <div class="pair">
             <label data-level={a.newKey}>
@@ -231,17 +235,11 @@
     border-top: 1px solid var(--border);
   }
 
-  .award .what {
-    margin: 0.25rem 0 0.4rem;
-    max-width: 38rem;
-    line-height: 1.45;
-  }
-
   .pair {
     display: flex;
     flex-wrap: wrap;
     gap: 0.35rem 1.5rem;
-    margin: 0.2rem 0 0 1.55rem;
+    margin: 0.35rem 0 0 1.55rem;
   }
 
   .pair .hint {

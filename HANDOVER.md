@@ -2,6 +2,17 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-09-01 · **Status:**
+**v2.17.2 — explanatory prose lives on the `?` hovers** (Manoj: *"move all
+explanatory texts to on hover"*), continuing the rule `HelpTip.svelte`'s own
+header states: read-once paragraphs were pushing the daily controls down the
+page. Moved: each award's "what it runs on" (Awards), the LoTW "what it is
+for" intro, the ClubLog ladder/LoTW pointer, and both `.always` reassurances
+in the Alerts rail — the band-mask group gained a HelpTip to hold its New
+DXCC exemption, **overriding an earlier deliberate choice** to keep that one
+on the page ("a tooltip nobody hovers"); say so if it should go back.
+**Kept visible:** conditional warnings and state (no FCC table, no IOTA
+directory, no levels ticked, LoTW not set) — those are not explanation.
+
 **v2.17.1 — ClubLog and LoTW are separate settings pages** (Manoj, same
 day: *"my clublog and my lotw to be different tabs"*). Two accounts at two
 organisations; the LoTW login was a footnote under the ClubLog form and
