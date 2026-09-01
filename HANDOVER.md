@@ -2,6 +2,30 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-09-01 · **Status:**
+**v2.20.0 — more than one FlexRadio and more than one ExpertSDR3 per
+account.** VU3ESV's PR #2, reviewed against main at v2.19.3 and merged:
+clean merge, full gate green on the merged result (290 tests), and both
+halves verified present afterwards — his multi-radio loops and the
+WAZ/Marathon levels that had landed in the same `match` arms hours
+earlier.
+
+**What made it safe to take:** `NotifyUserConfig` carries
+`#[serde(default)]` at struct level *and* on both new lists, and
+`notify_config` adopts a pre-list `flex_host`/`tci_host` into a one-entry
+list — the same move `notify_spotter_kind` makes for the legacy
+`notify_manual_only` boolean. `set_notify_config` writes the legacy pair
+back from the first device and **blanks it when the list is emptied**, so
+deliberately removing every radio cannot resurrect the old address on the
+next load. Both are tested.
+
+**The interesting part is the dedupe**: `radio_targets` resolves the port
+*before* comparing, so `192.168.1.60` with a blank port box and
+`192.168.1.60:40001` are one radio typed two ways rather than two marks
+per spot — and on TCI, two `SPOT_DELETE`s racing to remove one mark. A
+different port on the same host stays two targets, which is two instances
+on one machine. One helper shared by both radios, because that rule
+drifting would be invisible until someone got double marks.
+
 **v2.19.3 — "Still needed" covers mixed WAS too** (Manoj: *"also lacks
 mixed was still needed data"*). The per-mode gaps were listed but the
 mixed list sat in the summary card as "Missing states: …", so the one

@@ -25,6 +25,17 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.20.0** (2026-09-01): **more than one FlexRadio and more than one
+ExpertSDR3 per account** — contributed by VU3ESV
+([#2](https://github.com/vu2cpl/dxca/pull/2)). Both radio tabs now hold a
+list with **Add radio** per row, and every alert goes to all of them.
+Neither wire format changes, and neither client needed changing: both pools
+were already keyed by `(host, port)`, so what was single was only ever the
+*setting*. Addresses are deduped **after** the port is resolved, so
+`192.168.1.60` with the port box blank and `192.168.1.60:40001` are one
+radio rather than two marks per spot. **Existing single-radio setups are
+adopted into a one-entry list on upgrade** — nothing to re-enter.
+
 **v2.19.3** (2026-09-01): **"Still needed" covers mixed WAS too.** The
 per-mode lists were there but the mixed one was stranded as a line in the
 summary card, so the section that answers "which states do I still want"
