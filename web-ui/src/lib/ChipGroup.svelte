@@ -49,18 +49,26 @@
     title="Everything — the same as picking none"
     onclick={() => (selected = new Set())}
   >All</button>
-  {#each options as o (o.key)}
-    <button
-      class="filter-chip"
-      class:on={selected.has(o.key)}
-      aria-pressed={selected.has(o.key)}
-      data-level={levelKeys ? o.key : undefined}
-      onclick={() => toggle(o.key)}
-    >
-      {#if levelKeys}<span class="level-dot"></span>{/if}
-      {o.label}
-    </button>
-  {/each}
+  <!-- The options get their own wrapper purely so "All" keeps the first line
+       to itself. A rail column is ~12rem, so All used to sit at the head of a
+       ragged run of chips and read as one of them rather than as the reset it
+       is. One wrapper rather than a zero-height spacer element: it produces a
+       single row break instead of two stacked gaps, and the chips' own
+       spacing stays governed by one `gap`. -->
+  <div class="options">
+    {#each options as o (o.key)}
+      <button
+        class="filter-chip"
+        class:on={selected.has(o.key)}
+        aria-pressed={selected.has(o.key)}
+        data-level={levelKeys ? o.key : undefined}
+        onclick={() => toggle(o.key)}
+      >
+        {#if levelKeys}<span class="level-dot"></span>{/if}
+        {o.label}
+      </button>
+    {/each}
+  </div>
 </div>
 
 <style>
@@ -75,6 +83,15 @@
     color: var(--muted);
     font-size: 0.8rem;
     margin-right: 0.15rem;
+  }
+
+  /* Full width, so it always starts on the line after All; `gap: inherit`
+     keeps chip spacing identical to the group's, stacked or not. */
+  .options {
+    flex-basis: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: inherit;
   }
 
   /* Stacked: the label becomes a rail heading and takes the whole first line,

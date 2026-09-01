@@ -25,6 +25,10 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.17.7** (2026-09-01): **"All" gets its own line in every filter group** —
+Sources, Alerts, Modes and Bands. It is a reset, not one of the choices, and
+at the head of a ragged run of chips in a 12rem rail it read as one of them.
+
 **v2.17.6** (2026-09-01): **the LoTW download is given time to finish, and a
 failed one no longer erases what it cannot replace.** The full report that
 2.17.5 started asking for takes longer than the 10-minute timeout allowed, so

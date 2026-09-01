@@ -2,6 +2,14 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-09-01 · **Status:**
+**v2.17.7 — "All" owns the first line of every chip group** (Manoj:
+*"keep all in one line and rest in the next lines, will look cleaner"*,
+and *"even in modes"*). One change in `ChipGroup.svelte` covers Sources,
+Alerts, Modes and Bands on both rails, because they share the component.
+The options moved into a `flex-basis: 100%` wrapper rather than getting a
+zero-height spacer element: a spacer is its own flex item and would have
+produced two stacked row-gaps under All instead of one.
+
 **v2.17.6 — the LoTW download gets time to finish, and a failed one stops
 erasing.** 2.17.5 fixed the *request* (it was incremental) and the very
 first real run then failed a different way: `LoTW report read: timed out
