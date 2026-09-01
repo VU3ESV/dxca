@@ -17,9 +17,17 @@ noderedpi4 on 2026-09-01 for the trial Manoj asked for — the gate and TCI
 together, ahead of any tag.** The other four installs still run released
 v2.16.0. Caution for fleet sweeps: the trial build **also reports 2.16.0**
 (`/api/status` cannot tell them apart); noderedpi4's build is identified by
-its asset hash `index-DVgWuuUL.js` and the *For the ? levels* group on
-Alerts. The wider award design (VUCC / IOTA / WAS) is drafted in
-`docs/AWARDS.md`, phases 2–4 unbuilt.
+its asset hash and the *For the ? levels* group on Alerts. **Also in the
+trial build (2026-09-01): the ClubLog DX Dashboard embed follows the app's
+appearance.** ClubLog's page picks light/dark **by the browser's clock**
+(07:00–19:59 light, else dark; `dxd-theme` cookie override — unreachable
+inside an iframe, and no URL parameter exists), so it went dark at 8 pm
+whatever the screen was set to. DXCA now predicts the frame's clock pick at
+iframe load and counter-flips with CSS `invert(1) hue-rotate(180deg)` when
+it disagrees with `currentTheme()` — `Stats.svelte`, comment block has the
+full reasoning. If ClubLog ever honours `prefers-color-scheme` or grows a
+theme parameter, delete the flip and use that. The wider award design
+(VUCC / IOTA / WAS) is drafted in `docs/AWARDS.md`, phases 2–4 unbuilt.
 
 **MERGED, NOT RELEASED — a fourth Destinations tab: TCI (ExpertSDR3
 panorama).** `vu2cpl/dxca` PR #1 from VU3ESV, merged to `main` on 2026-09-01.

@@ -68,7 +68,9 @@ toggle pins one. SQLite-backed accounts (argon2 + session
 cookies, first-run setup card) each carry their own ClubLog matrix,
 re-downloaded on a per-account schedule (daily by default) so a QSO worked
 today stops showing as new tomorrow, with ClubLog's own DX Dashboard embedded
-under My ClubLog and a **band × mode grid** of entities worked and confirmed —
+under My ClubLog — re-tinted to follow this app's appearance, because left
+alone that page picks light or dark by the clock — and a **band × mode
+grid** of entities worked and confirmed —
 a row per mode class against every band, with a Total column and a Mixed row,
 the RUMlog layout; the shared LoTW users list refreshes
 server-wide, weekly by default. Every spot classifies per user with
