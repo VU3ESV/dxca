@@ -15,10 +15,16 @@ My station › Awards**; an award left unticked adds no control anywhere, so
 the Spots and Alerts screens of a non-chaser are unchanged. Also in the
 release: the confirmation-path gate on the `?` levels, the TCI (ExpertSDR3)
 destination with its reconnect defect fixed, and the ClubLog embed
-following the app's appearance. **Released 2026-09-01** (tag + GitHub release + Windows zip) and
-**deployed to noderedpi4, verified reporting v2.17.0 with all nine nodes
-live**. The other four installs are **still on v2.16.0**, deliberately:
-Manoj is watching the alerts for a few hours first. The `iota_groups` /
+following the app's appearance. **v2.17.0 and v2.17.1 both released 2026-09-01** (tag + GitHub release +
+Windows zip each) and **deployed to noderedpi4, verified reporting
+v2.17.1**. The other four installs are **still on v2.16.0**, deliberately:
+Manoj is watching the alerts for a few hours before the fleet goes.
+
+At the v2.17.1 deploy the Pi came back **8 of 9 nodes**: `UberCW`
+(192.168.1.109:7550) reads `Connection refused` — the host pings, its
+skimmer service is not listening. **Not a DXCA fault and not deploy
+damage**; the honest-status graft is reporting it correctly and will redial
+when the service returns. Left alone. The `iota_groups` /
 `fcc_calls` counts in `/api/status` now tell the two builds apart without
 guessing at bundle hashes — noderedpi4 reads 1178 / 816973, a v2.16.0 host
 reads neither key.
