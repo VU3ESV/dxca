@@ -96,8 +96,14 @@
       <table class="editor">
         <thead>
           <tr>
+            <!-- Sources is LAST, after the two tickboxes and the delete
+                 button: it is the widest column by far, and in the middle it
+                 pushed Unf / On / ✕ off the right edge on a laptop, so the
+                 controls you actually reach for needed a horizontal scroll.
+                 The narrow, high-traffic controls come first; the free-text
+                 field takes whatever width is left. -->
             <th>Name</th><th>IP</th><th>Port</th><th>Format</th>
-            <th>Sources (CSV, empty = all)</th><th>Unf</th><th>On</th><th></th>
+            <th>Unf</th><th>On</th><th></th><th>Sources (CSV, empty = all)</th>
           </tr>
         </thead>
         <tbody>
@@ -113,6 +119,13 @@
                   <option value="passthrough">passthrough</option>
                 </select>
               </td>
+              <td><input type="checkbox" bind:checked={d.unfiltered} title="Unfiltered: bypass dedupe" /></td>
+              <td><input type="checkbox" bind:checked={d.enabled} /></td>
+              <td>
+                <button class="drop" title="Remove"
+                  onclick={() =>
+                    (server.cfg.broadcast_destinations = drop(server.cfg.broadcast_destinations, i))}>✕</button>
+              </td>
               <td>
                 <input
                   class="csv"
@@ -120,13 +133,6 @@
                   onchange={(e: any) =>
                     (d.sources = e.target.value.split(',').map((x: string) => x.trim()).filter(Boolean))}
                 />
-              </td>
-              <td><input type="checkbox" bind:checked={d.unfiltered} title="Unfiltered: bypass dedupe" /></td>
-              <td><input type="checkbox" bind:checked={d.enabled} /></td>
-              <td>
-                <button class="drop" title="Remove"
-                  onclick={() =>
-                    (server.cfg.broadcast_destinations = drop(server.cfg.broadcast_destinations, i))}>✕</button>
               </td>
             </tr>
           {/each}

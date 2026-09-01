@@ -40,6 +40,8 @@ export function loadChase(): Promise<void> {
   return inflight;
 }
 
+export const chaseLoaded = () => state.loaded;
+
 export const chasedAny = () => Object.values(state.chased).some(Boolean);
 
 export const isChased = (award?: string | null) => !award || !!state.chased[award];

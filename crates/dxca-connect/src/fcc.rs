@@ -28,6 +28,18 @@ pub const DEFAULT_URL: &str = "https://data.fcc.gov/download/pub/uls/complete/l_
 /// run it on a blocking task.
 pub fn download_and_distill(url: &str, tmp_path: &Path) -> Result<(String, usize), String> {
     let resp = ureq::get(url)
+        // **data.fcc.gov answers 403 to `Accept-Encoding: gzip`** — the
+        // header ureq adds on its own, because the gzip feature is on for
+        // ClubLog's gzipped endpoints. Verified 2026-09-01 against the live
+        // host: `gzip` and `identity` are both refused, every other value
+        // (and no header at all) returns 200/206. It is a WAF rule, not
+        // content negotiation, and it is why the first Pi download failed
+        // with a bare 403.
+        //
+        // This value is both accepted and honest about what we want: a zip
+        // is already compressed, so re-encoding it would cost CPU at both
+        // ends for nothing.
+        .set("Accept-Encoding", "identity;q=1, *;q=0")
         .timeout(std::time::Duration::from_secs(1800))
         .call()
         .map_err(|e| format!("FCC download: {e}"))?;
