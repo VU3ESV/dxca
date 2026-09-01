@@ -26,23 +26,35 @@ My station › Awards**; an award left unticked adds no control anywhere, so
 the Spots and Alerts screens of a non-chaser are unchanged. Also in the
 release: the confirmation-path gate on the `?` levels, the TCI (ExpertSDR3)
 destination with its reconnect defect fixed, and the ClubLog embed
-following the app's appearance. **v2.17.0 and v2.17.1 both released 2026-09-01** (tag + GitHub release +
-Windows zip each) and **deployed to noderedpi4, verified reporting
-v2.17.1**. The other four installs are **still on v2.16.0**, deliberately:
-Manoj is watching the alerts for a few hours before the fleet goes.
+following the app's appearance. **v2.17.0, v2.17.1 and v2.17.2 all released 2026-09-01** (tag + GitHub
+release + Windows zip each), and **the whole fleet is on v2.17.2** —
+deployed and verified the same day, every host answering with its nodes
+live:
 
-At the v2.17.1 deploy the Pi came back **8 of 9 nodes**: `UberCW`
-(192.168.1.109:7550) reads `Connection refused` — the host pings, its
-skimmer service is not listening. **Not a DXCA fault and not deploy
-damage**; the honest-status graft is reporting it correctly and will redial
-when the service returns. Left alone. The `iota_groups` /
-`fcc_calls` counts in `/api/status` now tell the two builds apart without
-guessing at bundle hashes — noderedpi4 reads 1178 / 816973, a v2.16.0 host
-reads neither key.
+| Host | Nodes | cty / IOTA / FCC |
+|---|---|---|
+| `192.168.1.169` noderedpi4 | 9/9 | 402 / 1178 / 816973 |
+| `192.168.1.170` Windows | 2/2 | 0 / 0 / 0 |
+| `192.168.1.151` adersh | 4/4 | 402 / 0 / 0 |
+| `192.168.1.201` vu2wj | 2/2 | 402 / 0 / 0 |
+| `192.168.220.51` vu2oy | 2/2 | 402 / 0 / 0 |
 
-The trial that preceded it ran on noderedpi4 through 2026-09-01 with the
-awards UI reshaped mid-flight after Manoj rejected the first cut — the
-entries below record both the shape and the four first-run fixes.
+**The award reference files are noderedpi4's alone**, and that is correct,
+not an incomplete deploy: `pi-deploy.sh --no-seed` ships no data, and the
+FCC table is a ~200 MB download that must stay each admin's own deliberate
+act (Server › Reference data). The four other hosts can tick IOTA/WAS/VUCC
+on Awards, but their island and state levels stay quiet until their own
+admin downloads the files. Grid (VUCC) works everywhere immediately — it
+needs no reference data.
+
+The Windows box's `cty_entities: 0` is unchanged and still the known,
+accepted state — do not re-raise it.
+
+Bringing the three WireGuard tunnels up needs a sudo password, so it is
+**Manoj's step, not an automatable one**: `sudo wg-quick up Adersh_vu2cpl`
+/ `Shaji_vu2wj` / `vu2cpl_Ranjith`, bare names from
+`/opt/homebrew/etc/wireguard/`. All three ran up together with the shack
+LAN, as designed since the AllowedIPs narrowing.
 
 **All five hosts ran v2.16.0 as of 2026-08-30**, and four still do —
 noderedpi4 is the only one on v2.17.0 so far. `adersh@192.168.1.151` was the
