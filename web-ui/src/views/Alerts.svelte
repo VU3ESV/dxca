@@ -144,8 +144,8 @@
           <span class="para">
             This is the <b>Telegram</b> gate. It narrows, it never widens: a
             level only pings if <b>Settings › My station › Awards</b> allows
-            your log to flag it in the first place — and an award you are not
-            chasing there has no rows here at all.
+            your log to flag it in the first place — and an award not ticked
+            there has no rows here at all.
           </span>
           <span class="para">
             Nothing here touches the Spots feed — untick a level and you will

@@ -643,10 +643,10 @@ for it. Design in [`docs/AWARDS.md`](docs/AWARDS.md).
 
 Three awards beyond DXCC, each with its own New/`?` level pair
 (`docs/AWARDS.md` phases 2–4). **Settings › My station › Awards** is where
-you pick what you chase: the DXCC ladder at the top (it moved here from
-the ClubLog page), then a *Chasing IOTA / WAS / VUCC* tick per award that
-reveals its pair. **An award you are not chasing does not exist anywhere
-in the app** — no chips on Spots, no rows in the Alerts ladder, nothing on
+you pick your awards: the DXCC ladder at the top (it moved here from
+the ClubLog page), then one tick per award — **IOTA**, **WAS**, **VUCC**
+— that reveals its New/`?` pair. **An award left unticked does not exist
+anywhere in the app** — no chips on Spots, no rows in the Alerts ladder, nothing on
 Stats — so an operator who never opts in keeps exactly the classic
 eight-level screen. Chased levels behave like any others: row tints and
 chips on Spots, "Ping me for" narrowing on Alerts, colours on the

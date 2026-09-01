@@ -140,7 +140,7 @@
       Other awards
       <HelpTip label="Other awards">
         <span class="para">
-          Chasing an award is what makes its levels exist: an award left
+          Ticking an award is what makes its levels exist: an award left
           unticked adds no chips, no ladder rows and no pings anywhere —
           the app stays exactly as compact as before.
         </span>
@@ -157,7 +157,7 @@
       <div class="award">
         <label class="chase">
           <input type="checkbox" checked={chasing(a)} onchange={() => toggle(a)} />
-          <b>Chasing {a.name}</b>
+          <b>{a.name}</b>
         </label>
         <p class="hint what">{a.what}</p>
         {#if chasing(a)}
