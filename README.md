@@ -25,6 +25,17 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.20.3** (2026-09-01): **the Awards help tips said "confirmed" always
+means LoTW, which is false for WAZ.** Manoj, reading the tab: *"why 2 zones
+worked and confirmed"*. The pair is right — the tip explaining it was not.
+Zones score off the ClubLog export alone: **worked** is any credited QSO
+carrying a `CQZ`, **confirmed** is one whose record has a QSL flag
+(`LOTW_QSL_RCVD`, `QSL_RCVD`, `EQSL_QSL_RCVD` or `APP_CLUBLOG_QSO_QSL`), and
+`merge_lotw_confirmed` never touches zones. Only **IOTA, WAS and VUCC** need
+the LoTW login. The Awards-tab tip and the Awards settings tip now split the
+rule per award instead of claiming LoTW for all of them. Text only — no
+count, score or setting changes.
+
 **v2.20.2** (2026-09-01): **one type scale on the Awards tab, and WAZ shows
 worked / confirmed everywhere.** Each section had grown its own size — counts
 at 1.05rem, mono lists at the body size, table cells at whatever they

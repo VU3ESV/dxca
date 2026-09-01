@@ -2,22 +2,8 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-09-01 · **Status:**
-**v2.20.2 — one type scale on the Awards tab** (Manoj: *"each portion has
-different font sizes"*). He was right, and the first fix was wrong: I
-added a `--fs-value` token, when `app.css` states its four-role scale is
-declared once **"so a screen cannot invent a fifth size"**. Data now takes
-the existing `--fs-item`, and the section headings are the plain `<h2>`
-the app already uses for a second heading inside a card — my `.sub` class
-had been re-implementing that badly at a magic 0.62rem. Two dead rules
-(`.sub`, `.tally*`) went with it.
-
-WAZ by-band and by-mode also carry **both** numbers now: unlike WAS, where
-worked and confirmed cannot differ (only LoTW writes states), zones come
-from the ClubLog log and do — his 60M is 26 worked / 24 confirmed, 10M is
-39 / 38, and that gap is the chase.
-
-**On main, unreleased — the Awards help tips claimed confirmed always means
-LoTW, which is false for WAZ** (Manoj: *"why 2 zones worked and
+**v2.20.3 — the Awards help tips claimed confirmed always means LoTW,
+which is false for WAZ** (Manoj: *"why 2 zones worked and
 confirmed"*). Both zone numbers come from the ClubLog export and nowhere
 else: worked is any credited QSO carrying a `CQZ`, confirmed is one whose
 record has a QSL flag — `LOTW_QSL_RCVD`, `QSL_RCVD`, `EQSL_QSL_RCVD` or
@@ -40,9 +26,24 @@ cluster node reconnected: 9/9 on noderedpi4, 4/4, 2/2, 2/2, 2/2. Windows
 still reads `cty_entities: 0` — the known, accepted state from 2026-08-30,
 not a deploy fault.
 
-**Every host still reports 2.20.2**, released or this build, so the fleet
-sweep cannot tell them apart until the next tag moves the number. Nothing
-but text differs, which is why that was acceptable.
+**All five hosts still report 2.20.2**: they were built and shipped before
+the bump, so they serve this change under the old number. The fix is one
+redeploy round per host — nothing but the version string differs, so it can
+wait for whatever ships next.
+
+**v2.20.2 — one type scale on the Awards tab** (Manoj: *"each portion has
+different font sizes"*). He was right, and the first fix was wrong: I
+added a `--fs-value` token, when `app.css` states its four-role scale is
+declared once **"so a screen cannot invent a fifth size"**. Data now takes
+the existing `--fs-item`, and the section headings are the plain `<h2>`
+the app already uses for a second heading inside a card — my `.sub` class
+had been re-implementing that badly at a magic 0.62rem. Two dead rules
+(`.sub`, `.tally*`) went with it.
+
+WAZ by-band and by-mode also carry **both** numbers now: unlike WAS, where
+worked and confirmed cannot differ (only LoTW writes states), zones come
+from the ClubLog log and do — his 60M is 26 worked / 24 confirmed, 10M is
+39 / 38, and that gap is the chase.
 
 **v2.20.1 — WAZ gains a mode split and an honest confirmed count.** Manoj:
 *"waz doesnt have modewise split ... and it doesnt show mixed waz numbers,
