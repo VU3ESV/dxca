@@ -40,25 +40,61 @@ pub enum AlertLevel {
     UnconfSlot,
     #[serde(rename = "unconfDXCC")]
     UnconfDxcc,
+    // The award axes (docs/AWARDS.md phases 2–4), declared after the
+    // original eight so every stored serde value keeps its meaning. Rank is
+    // FLAGGABLE's business, not declaration order's.
+    #[serde(rename = "newGrid")]
+    NewGrid,
+    #[serde(rename = "newState")]
+    NewState,
+    #[serde(rename = "newIOTA")]
+    NewIota,
+    #[serde(rename = "unconfGrid")]
+    UnconfGrid,
+    #[serde(rename = "unconfState")]
+    UnconfState,
+    #[serde(rename = "unconfIOTA")]
+    UnconfIota,
 }
 
 impl AlertLevel {
     /// Every level a spot can be flagged as, rarest first — the one order
     /// the UI, the Telegram labels and the config screens all read from, so
-    /// a level cannot rank differently in two places.
-    pub const FLAGGABLE: [AlertLevel; 8] = [
+    /// a level cannot rank differently in two places. **This order is also
+    /// the tiebreak** when a spot qualifies for several levels at once (a
+    /// New DXCC that is also a New Grid flags as New DXCC): the award axes
+    /// rank above the generic band/mode rungs because they are named gaps
+    /// in a named award, and below the entity itself.
+    pub const FLAGGABLE: [AlertLevel; 14] = [
         AlertLevel::NewDxcc,
+        AlertLevel::NewIota,
+        AlertLevel::NewState,
+        AlertLevel::NewGrid,
         AlertLevel::NewBand,
         AlertLevel::NewMode,
         AlertLevel::NewSlot,
         AlertLevel::UnconfDxcc,
+        AlertLevel::UnconfIota,
+        AlertLevel::UnconfState,
+        AlertLevel::UnconfGrid,
         AlertLevel::UnconfBand,
         AlertLevel::UnconfMode,
         AlertLevel::UnconfSlot,
     ];
 
-    /// The confirmation-hunting half of the ladder — the four `?` levels.
-    /// The `docs/AWARDS.md` phase-1 gate applies to exactly these.
+    /// FLAGGABLE rank, for picking among simultaneous candidates. Worked
+    /// and None rank below everything flaggable.
+    fn rank(self) -> usize {
+        AlertLevel::FLAGGABLE
+            .iter()
+            .position(|l| *l == self)
+            .unwrap_or(usize::MAX)
+    }
+
+    /// The confirmation-hunting half of the ladder — the `?` levels.
+    /// The `docs/AWARDS.md` phase-1 gate applies to exactly these, the
+    /// award `?` levels included: a `? Grid` ping for a non-QSLer is the
+    /// same wasted call a `? DXCC` ping is.
     pub fn is_unconfirmed(self) -> bool {
         matches!(
             self,
@@ -66,6 +102,9 @@ impl AlertLevel {
                 | AlertLevel::UnconfBand
                 | AlertLevel::UnconfMode
                 | AlertLevel::UnconfSlot
+                | AlertLevel::UnconfGrid
+                | AlertLevel::UnconfState
+                | AlertLevel::UnconfIota
         )
     }
 
@@ -82,6 +121,12 @@ impl AlertLevel {
             AlertLevel::UnconfBand => "unconfBand",
             AlertLevel::UnconfSlot => "unconfSlot",
             AlertLevel::UnconfDxcc => "unconfDXCC",
+            AlertLevel::NewGrid => "newGrid",
+            AlertLevel::NewState => "newState",
+            AlertLevel::NewIota => "newIOTA",
+            AlertLevel::UnconfGrid => "unconfGrid",
+            AlertLevel::UnconfState => "unconfState",
+            AlertLevel::UnconfIota => "unconfIOTA",
         }
     }
 
@@ -98,6 +143,12 @@ impl AlertLevel {
             AlertLevel::UnconfBand => "? Band",
             AlertLevel::UnconfSlot => "? Slot",
             AlertLevel::UnconfDxcc => "? DXCC",
+            AlertLevel::NewGrid => "New Grid",
+            AlertLevel::NewState => "New State",
+            AlertLevel::NewIota => "New IOTA",
+            AlertLevel::UnconfGrid => "? Grid",
+            AlertLevel::UnconfState => "? State",
+            AlertLevel::UnconfIota => "? IOTA",
         }
     }
 }
@@ -117,6 +168,16 @@ pub struct AlertConfig {
     pub alert_unconf_slot: bool,
     pub alert_unconf_band: bool,
     pub alert_unconf_mode: bool,
+    // docs/AWARDS.md phases 2–4: the award axes, all off by default. A pair
+    // ticked here IS the award selector — there is no separate "enable
+    // VUCC" switch, because a level that can never be flagged and an award
+    // that is off are the same fact.
+    pub alert_new_grid: bool,
+    pub alert_unconf_grid: bool,
+    pub alert_new_state: bool,
+    pub alert_unconf_state: bool,
+    pub alert_new_iota: bool,
+    pub alert_unconf_iota: bool,
 }
 
 impl Default for AlertConfig {
@@ -130,8 +191,35 @@ impl Default for AlertConfig {
             alert_unconf_slot: false,
             alert_unconf_band: false,
             alert_unconf_mode: false,
+            alert_new_grid: false,
+            alert_unconf_grid: false,
+            alert_new_state: false,
+            alert_unconf_state: false,
+            alert_new_iota: false,
+            alert_unconf_iota: false,
         }
     }
+}
+
+/// The spot-side award facts a classifier can rank — what the wire carried
+/// (grid, IOTA ref) and what the server looked up (state). All optional;
+/// [`AwardRefs::NONE`] classifies exactly as before the awards existed.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct AwardRefs<'a> {
+    /// The DX station's locator, 4 or 6 characters.
+    pub grid: Option<&'a str>,
+    /// IOTA reference as extracted (normalized again internally).
+    pub iota: Option<&'a str>,
+    /// Two-letter state from the FCC table, already normalized.
+    pub state: Option<&'a str>,
+}
+
+impl AwardRefs<'static> {
+    pub const NONE: AwardRefs<'static> = AwardRefs {
+        grid: None,
+        iota: None,
+        state: None,
+    };
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -141,6 +229,9 @@ pub struct Classification {
     pub dxcc_name: Option<String>,
     pub band: Option<&'static str>,
     pub is_beacon: bool,
+    /// The award key that fired, when `level` is an award level — the grid
+    /// square, state, or IOTA reference. What the alert names as the catch.
+    pub award_ref: Option<String>,
 }
 
 impl Classification {
@@ -151,6 +242,7 @@ impl Classification {
             dxcc_name: None,
             band: None,
             is_beacon: false,
+            award_ref: None,
         }
     }
 }
@@ -162,9 +254,28 @@ pub struct AlertClassifier<'a> {
 }
 
 impl AlertClassifier<'_> {
+    /// Classify a spot with no award facts — the pre-phase-2 behaviour,
+    /// kept for callers (and tests) that have nothing but call/freq/mode.
+    pub fn classify(&self, callsign: &str, frequency_mhz: f64, mode: &str) -> Classification {
+        self.classify_spot(callsign, frequency_mhz, mode, &AwardRefs::NONE)
+    }
+
     /// Classify a spot. `None`-level when data is missing (no matrix entry
     /// needed — that's New DXCC — but no resolver, band, or DXCC id).
-    pub fn classify(&self, callsign: &str, frequency_mhz: f64, mode: &str) -> Classification {
+    ///
+    /// A spot can qualify for several levels at once — a station in a new
+    /// grid can be a New DXCC too. One spot carries one level, so the
+    /// candidates are ranked by [`AlertLevel::FLAGGABLE`] and the rarest
+    /// wins; a level the operator switched off simply never becomes a
+    /// candidate, so switching NEW DXCC off makes the same spot flag as
+    /// its next-rarest truth rather than vanish.
+    pub fn classify_spot(
+        &self,
+        callsign: &str,
+        frequency_mhz: f64,
+        mode: &str,
+        refs: &AwardRefs,
+    ) -> Classification {
         if callsign.is_empty() || !self.resolver.is_loaded() {
             return Classification::none();
         }
@@ -172,7 +283,7 @@ impl AlertClassifier<'_> {
         let band = bands::band_from_mhz(frequency_mhz);
 
         // Beacons / satellites / gateways (ClubLog adif=0, or our own
-        // beacon database): label them, never alert.
+        // beacon database): label them, never alert — no award either.
         let known_beacon = beacons::display_name(callsign);
         if self.resolver.is_non_dx_operation(callsign) || known_beacon.is_some() {
             return Classification {
@@ -181,6 +292,7 @@ impl AlertClassifier<'_> {
                 dxcc_name: Some(known_beacon.unwrap_or_else(|| "Beacon".to_string())),
                 band,
                 is_beacon: true,
+                award_ref: None,
             };
         }
 
@@ -194,24 +306,79 @@ impl AlertClassifier<'_> {
         // nodes used to be credited to digital slots.
         let normalized_mode = modes::canonical_opt(mode);
 
+        // Award candidates need only a band, not an entity — a call the
+        // resolver cannot place can still hand you a grid square.
+        let award = band.and_then(|b| self.best_award(refs, b));
+
         let (Some(dxcc), Some(bnd)) = (dxcc_id, band) else {
+            let (level, award_ref) = match award {
+                Some((l, r)) => (l, Some(r)),
+                None => (AlertLevel::None, None),
+            };
             return Classification {
-                level: AlertLevel::None,
+                level,
                 dxcc_id,
                 dxcc_name,
                 band,
                 is_beacon: false,
+                award_ref,
             };
         };
 
-        let raw = self.raw_level(dxcc, bnd, normalized_mode);
+        let dxcc_level = self.apply_filter(self.raw_level(dxcc, bnd, normalized_mode));
+        let (level, award_ref) = match award {
+            Some((l, r)) if l.rank() < dxcc_level.rank() => (l, Some(r)),
+            _ => (dxcc_level, None),
+        };
         Classification {
-            level: self.apply_filter(raw),
+            level,
             dxcc_id: Some(dxcc),
             dxcc_name,
             band: Some(bnd),
             is_beacon: false,
+            award_ref,
         }
+    }
+
+    /// The rarest enabled award gap this spot fills, with the key that
+    /// fills it. Grid is per band (VUCC scores each band separately, and
+    /// only 50 MHz+); state and IOTA are key-level — worked at all, then
+    /// confirmed on any band.
+    fn best_award(&self, refs: &AwardRefs, band: &str) -> Option<(AlertLevel, String)> {
+        let mut cands: Vec<(AlertLevel, String)> = Vec::new();
+
+        if bands::is_vucc_band(band)
+            && let Some(g4) = refs.grid.and_then(crate::grid::grid4)
+        {
+            let raw = match self.matrix.by_grid.get(&g4) {
+                Some(s) if s.confirmed_bands.contains(band) => AlertLevel::Worked,
+                Some(s) if s.bands.contains(band) => AlertLevel::UnconfGrid,
+                _ => AlertLevel::NewGrid,
+            };
+            cands.push((raw, g4));
+        }
+        if let Some(st) = refs.state.and_then(crate::awards::normalize_state) {
+            let raw = match self.matrix.by_state.get(st) {
+                Some(s) if s.is_confirmed() => AlertLevel::Worked,
+                Some(_) => AlertLevel::UnconfState,
+                None => AlertLevel::NewState,
+            };
+            cands.push((raw, st.to_string()));
+        }
+        if let Some(r) = refs.iota.and_then(crate::awards::normalize_iota) {
+            let raw = match self.matrix.by_iota.get(&r) {
+                Some(s) if s.is_confirmed() => AlertLevel::Worked,
+                Some(_) => AlertLevel::UnconfIota,
+                None => AlertLevel::NewIota,
+            };
+            cands.push((raw, r));
+        }
+
+        cands
+            .into_iter()
+            .map(|(raw, key)| (self.apply_filter(raw), key))
+            .filter(|(l, _)| !matches!(l, AlertLevel::Worked | AlertLevel::None))
+            .min_by_key(|(l, _)| l.rank())
     }
 
     /// The ladder, rarest gap first. Two passes over the same entity: the
@@ -290,6 +457,12 @@ impl AlertClassifier<'_> {
             AlertLevel::UnconfSlot => self.config.alert_unconf_slot,
             AlertLevel::UnconfBand => self.config.alert_unconf_band,
             AlertLevel::UnconfMode => self.config.alert_unconf_mode,
+            AlertLevel::NewGrid => self.config.alert_new_grid,
+            AlertLevel::UnconfGrid => self.config.alert_unconf_grid,
+            AlertLevel::NewState => self.config.alert_new_state,
+            AlertLevel::UnconfState => self.config.alert_unconf_state,
+            AlertLevel::NewIota => self.config.alert_new_iota,
+            AlertLevel::UnconfIota => self.config.alert_unconf_iota,
             AlertLevel::Worked | AlertLevel::None => return level,
         };
         if keep { level } else { AlertLevel::Worked }
@@ -382,6 +555,176 @@ mod tests {
         }
         assert!(!AlertLevel::Worked.is_unconfirmed());
         assert!(!AlertLevel::None.is_unconfirmed());
+    }
+
+    /// All awards on, all levels on — the widest config for award tests.
+    fn awards_config() -> AlertConfig {
+        AlertConfig {
+            alert_unconf_dxcc: true,
+            alert_unconf_slot: true,
+            alert_unconf_band: true,
+            alert_unconf_mode: true,
+            alert_new_grid: true,
+            alert_unconf_grid: true,
+            alert_new_state: true,
+            alert_unconf_state: true,
+            alert_new_iota: true,
+            alert_unconf_iota: true,
+            ..AlertConfig::default()
+        }
+    }
+
+    fn classify_refs(
+        m: &LogMatrix,
+        call: &str,
+        mhz: f64,
+        config: &AlertConfig,
+        refs: AwardRefs,
+    ) -> Classification {
+        let r = resolver();
+        AlertClassifier {
+            matrix: m,
+            resolver: &r,
+            config,
+        }
+        .classify_spot(call, mhz, "FT8", &refs)
+    }
+
+    #[test]
+    fn award_ladder_grid_is_per_band_and_vucc_only() {
+        let cfg = awards_config();
+        let mut m = matrix();
+        // India worked+confirmed on 6M-DATA too, so the DXCC ladder is
+        // satisfied there and the grid axis has the floor. (Without this
+        // the 6M spots flag New Band — rank says an unworked band beats a
+        // grid gap, which is its own test below.)
+        m.record(324, "6M", "DATA", "VU2CCC", true);
+        m.record_grid("MK83", "6M", false);
+
+        let grid = |g| AwardRefs {
+            grid: Some(g),
+            ..AwardRefs::NONE
+        };
+        // 6M, unknown square → New Grid, and the ref names the square.
+        let c = classify_refs(&m, "VU2XYZ", 50.313, &cfg, grid("MK97FK"));
+        assert_eq!(c.level, AlertLevel::NewGrid);
+        assert_eq!(c.award_ref.as_deref(), Some("MK97"));
+        // Same square, worked on 6M but unconfirmed → ? Grid.
+        let c = classify_refs(&m, "VU2XYZ", 50.313, &cfg, grid("MK83VA"));
+        assert_eq!(c.level, AlertLevel::UnconfGrid);
+        // Worked square, DIFFERENT VUCC band → New Grid again (per band).
+        let c = classify_refs(&m, "VU2XYZ", 144.174, &cfg, grid("MK83"));
+        assert_eq!(c.level, AlertLevel::NewGrid);
+        // The same grid on 20M scores nothing: VUCC is 50 MHz+.
+        let c = classify_refs(&m, "VU2XYZ", 14.074, &cfg, grid("MK97"));
+        assert_ne!(c.level, AlertLevel::NewGrid);
+        // RR73 is a sign-off, not a square.
+        let c = classify_refs(&m, "VU2XYZ", 50.313, &cfg, grid("RR73"));
+        assert_ne!(c.level, AlertLevel::NewGrid);
+    }
+
+    #[test]
+    fn award_ladder_state_and_iota_are_key_level() {
+        let cfg = awards_config();
+        let mut m = matrix();
+        // The US worked+confirmed on 20M-DATA, so a K call on 20M FT8
+        // leaves the DXCC ladder quiet and the state axis decides.
+        m.record(291, "20M", "DATA", "K9XX", true);
+        m.record_state("OH", "20M", false);
+        m.record_state("CA", "20M", true);
+        m.record_iota("AS-003", "15M", false);
+
+        let c = classify_refs(
+            &m,
+            "K1ABC",
+            14.074,
+            &cfg,
+            AwardRefs {
+                state: Some("TX"),
+                ..AwardRefs::NONE
+            },
+        );
+        assert_eq!(c.level, AlertLevel::NewState);
+        assert_eq!(c.award_ref.as_deref(), Some("TX"));
+        let unconf = classify_refs(
+            &m,
+            "K1ABC",
+            14.074,
+            &cfg,
+            AwardRefs {
+                state: Some("OH"),
+                ..AwardRefs::NONE
+            },
+        );
+        assert_eq!(unconf.level, AlertLevel::UnconfState);
+        let done = classify_refs(
+            &m,
+            "K1ABC",
+            14.074,
+            &cfg,
+            AwardRefs {
+                state: Some("CA"),
+                ..AwardRefs::NONE
+            },
+        );
+        assert_ne!(done.level, AlertLevel::NewState);
+        assert_ne!(done.level, AlertLevel::UnconfState);
+
+        let iota = classify_refs(
+            &m,
+            "VU2ABC",
+            14.074,
+            &cfg,
+            AwardRefs {
+                iota: Some("as-153"),
+                ..AwardRefs::NONE
+            },
+        );
+        assert_eq!(iota.level, AlertLevel::NewIota);
+        assert_eq!(iota.award_ref.as_deref(), Some("AS-153"));
+        let unconf_iota = classify_refs(
+            &m,
+            "VU2ABC",
+            14.074,
+            &cfg,
+            AwardRefs {
+                iota: Some("AS-003"),
+                ..AwardRefs::NONE
+            },
+        );
+        assert_eq!(unconf_iota.level, AlertLevel::UnconfIota);
+    }
+
+    #[test]
+    fn the_rarest_candidate_wins_and_filters_shift_the_pick() {
+        let cfg = awards_config();
+        let m = matrix(); // K* (US) never worked → NEW DXCC
+        let refs = AwardRefs {
+            state: Some("TX"),
+            ..AwardRefs::NONE
+        };
+        // New DXCC outranks New State.
+        let c = classify_refs(&m, "K1ABC", 14.074, &cfg, refs);
+        assert_eq!(c.level, AlertLevel::NewDxcc);
+        assert_eq!(c.award_ref, None, "the DXCC pick names no award key");
+        // NEW DXCC switched off: the same spot flags as its next truth
+        // rather than vanishing.
+        let mut no_dxcc = awards_config();
+        no_dxcc.alert_new_dxcc = false;
+        let c = classify_refs(&m, "K1ABC", 14.074, &no_dxcc, refs);
+        assert_eq!(c.level, AlertLevel::NewState);
+        // Award levels off (the default config): refs are inert.
+        let c = classify_refs(
+            &m,
+            "VU2XYZ",
+            50.313,
+            &AlertConfig::default(),
+            AwardRefs {
+                grid: Some("MK97"),
+                ..AwardRefs::NONE
+            },
+        );
+        assert_ne!(c.level, AlertLevel::NewGrid);
     }
 
     #[test]

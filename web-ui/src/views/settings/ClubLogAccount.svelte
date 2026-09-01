@@ -46,13 +46,23 @@
     unconfBand: 'alert_unconf_band',
     unconfMode: 'alert_unconf_mode',
     unconfSlot: 'alert_unconf_slot',
+    newIOTA: 'alert_new_iota',
+    newState: 'alert_new_state',
+    newGrid: 'alert_new_grid',
+    unconfIOTA: 'alert_unconf_iota',
+    unconfState: 'alert_unconf_state',
+    unconfGrid: 'alert_unconf_grid',
   };
 
   let cfg = $state<any>({
     callsign: '', email: '', app_password: '', refresh_hours: 24,
+    lotw_login: '', lotw_password: '',
     alert_new_dxcc: true, alert_new_band: true, alert_new_mode: true, alert_new_slot: true,
     alert_unconf_dxcc: false, alert_unconf_band: false,
     alert_unconf_mode: false, alert_unconf_slot: false,
+    // The award axes (docs/AWARDS.md): a ticked pair IS the award selector.
+    alert_new_iota: false, alert_new_state: false, alert_new_grid: false,
+    alert_unconf_iota: false, alert_unconf_state: false, alert_unconf_grid: false,
   });
   let message = $state('');
   let error = $state('');
@@ -127,6 +137,25 @@
         <option value={hours}>{label}</option>
       {/each}
     </select>
+    <span class="label">
+      LoTW username
+      <HelpTip label="LoTW username">
+        <span class="para">
+          Optional, for the <b>IOTA / State / Grid</b> awards below: your
+          LoTW QSL report is the one source that says which state, grid and
+          island your confirmations came from — ClubLog's export cannot
+          carry those fields.
+        </span>
+        <span class="para">
+          Your LoTW <b>website</b> login, sent only to lotw.arrl.org, stored
+          like the ClubLog credentials above (README §Secrets). Leave both
+          blank and the three awards track worked-only.
+        </span>
+      </HelpTip>
+    </span>
+    <input bind:value={cfg.lotw_login} autocapitalize="characters" />
+    <span class="label">LoTW password</span>
+    <input type="password" bind:value={cfg.lotw_password} />
   </div>
 
   <h2>
@@ -146,12 +175,17 @@
       </span>
     </HelpTip>
   </h2>
-  <!-- Column-major over four rows, so the server's FLAGGABLE order (the four
-       New levels, then the four ? ones) lands as PAIRS: New DXCC beside ? DXCC,
-       New Band beside ? Band. Reading across a row then compares the two rungs
-       of the same axis, which is the comparison the operator actually makes.
-       Row-major would have put New Band next to New DXCC — tidy, but it pairs
-       nothing. -->
+  <!-- Column-major over seven rows, so the server's FLAGGABLE order (the
+       seven New levels, then the seven ? ones) lands as PAIRS: New DXCC
+       beside ? DXCC, New Grid beside ? Grid. Reading across a row then
+       compares the two rungs of the same axis, which is the comparison the
+       operator actually makes. Row-major would have put New Band next to
+       New DXCC — tidy, but it pairs nothing.
+
+       The IOTA / State / Grid pairs are also the award selector: tick a
+       pair and that award classifies, spot data allowing (grids ride the
+       feed already; State needs the FCC table under Server › Reference
+       data; IOTA reads cluster comments). -->
   <div class="levels">
     {#each levels() as l (l.key)}
       <label data-level={l.key}>
@@ -176,7 +210,7 @@
   .levels {
     display: grid;
     grid-auto-flow: column;
-    grid-template-rows: repeat(4, auto);
+    grid-template-rows: repeat(7, auto);
     grid-template-columns: repeat(2, minmax(8.5rem, 1fr));
     gap: 0.35rem 1rem;
     max-width: 24rem;

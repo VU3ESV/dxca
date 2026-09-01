@@ -77,6 +77,18 @@ pub struct Spot {
     /// which have no spotter at all.
     #[serde(default)]
     pub is_skimmer: bool,
+    /// The **DX station's** Maidenhead locator, when the spot carried one —
+    /// a cluster comment's trailing grid (parsed by `wire.rs` and, until
+    /// `docs/AWARDS.md` phase 2, dropped on this crate's doorstep), or the
+    /// grid an FT8 CQ announces ([`grid_from_message`]). Uppercased, 4 or 6
+    /// characters. This is what the VUCC classifier runs on.
+    #[serde(default)]
+    pub grid: Option<String>,
+    /// The IOTA reference the spot announces (`AS-153`), normalized —
+    /// extracted from a cluster comment by `awards::find_iota_ref`. Decoder
+    /// spots never carry one: nothing in an FT8 exchange names an island.
+    #[serde(default)]
+    pub iota: Option<String>,
 }
 
 impl Spot {
@@ -142,6 +154,54 @@ impl Spot {
 /// text — a synthesised cluster message can only ever say yes.
 pub fn message_is_cq(message: &str) -> bool {
     message.to_uppercase().starts_with("CQ ")
+}
+
+/// The **transmitting station's** grid from decoded message text — the
+/// trailing locator of `CQ K1JT FN20` or `K1ABC VU2XYZ MK83`. In both
+/// standard forms the last token is sent by the transmitter, which is the
+/// station [`Spot::dx_callsign`] extracts, so the grid belongs to the call.
+///
+/// `None` for reports, sign-offs and anything else: `grid::is_grid` refuses
+/// `RR73` outright, and a message with no extractable callsign yields no
+/// grid either — an award fact with no station to pin it on is noise.
+pub fn grid_from_message(message: &str) -> Option<String> {
+    let parts: Vec<&str> = message.split(' ').filter(|p| !p.is_empty()).collect();
+    if parts.len() < 2 {
+        return None;
+    }
+    let last = parts[parts.len() - 1];
+    if !crate::grid::is_grid(last) {
+        return None;
+    }
+    let probe = Spot {
+        message: message.to_string(),
+        ..blank_spot()
+    };
+    probe.dx_callsign().map(|_| last.to_ascii_uppercase())
+}
+
+/// A structurally valid spot with nothing in it — the base for
+/// [`grid_from_message`]'s parse probe and the test constructors.
+fn blank_spot() -> Spot {
+    Spot {
+        time_unix: 0,
+        snr_db: 0,
+        delta_time_s: 0.0,
+        delta_frequency_hz: 0,
+        mode: String::new(),
+        mode_inferred: false,
+        message: String::new(),
+        is_cq: false,
+        comment: String::new(),
+        low_confidence: false,
+        off_air: false,
+        dial_frequency_hz: 0,
+        source_name: String::new(),
+        spotter: None,
+        is_skimmer: false,
+        grid: None,
+        iota: None,
+    }
 }
 
 /// Map a WSJT-X decode time (ms since midnight UTC) onto today's UTC date —
@@ -218,13 +278,9 @@ mod tests {
             mode_inferred: false,
             message: message.into(),
             is_cq: true,
-            comment: String::new(),
-            low_confidence: false,
-            off_air: false,
             dial_frequency_hz: 14_074_000,
             source_name: "JTDX".into(),
-            spotter: None,
-            is_skimmer: false,
+            ..super::blank_spot()
         }
     }
 
@@ -246,6 +302,23 @@ mod tests {
         ];
         for (msg, want) in cases {
             assert_eq!(spot(msg).dx_callsign().as_deref(), want, "message: {msg:?}");
+        }
+    }
+
+    #[test]
+    fn message_grids_belong_to_the_transmitter() {
+        let cases = [
+            ("CQ P5DX PM95", Some("PM95")),
+            ("CQ NA K1JT FN20", Some("FN20")),
+            ("K1ABC VU2XYZ MK83", Some("MK83")), // std msg: grid is the sender's
+            ("K1ABC VU2XYZ mk83va", Some("MK83VA")), // 6-char, uppercased
+            ("VU2CPL K1JT RR73", None),          // sign-off, never a grid
+            ("K1JT VU2CPL -15", None),           // report
+            ("CQ TEST", None),                   // no extractable callsign
+            ("CQ P5DX", None),                   // no grid at all
+        ];
+        for (msg, want) in cases {
+            assert_eq!(grid_from_message(msg).as_deref(), want, "message: {msg:?}");
         }
     }
 

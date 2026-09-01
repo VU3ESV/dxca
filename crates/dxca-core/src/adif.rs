@@ -41,6 +41,19 @@ impl Record {
         self.upper("GRIDSQUARE")
     }
 
+    /// The contacted station's US state (`STATE`), as uploaded. ClubLog's
+    /// export never carries this (verified 2026-09-01); LoTW's QSL report
+    /// does, which is where the WAS matrix actually gets it.
+    pub fn state(&self) -> Option<String> {
+        self.upper("STATE")
+    }
+
+    /// The contacted station's IOTA reference (`IOTA`) — same provenance
+    /// story as [`state`](Self::state).
+    pub fn iota(&self) -> Option<String> {
+        self.upper("IOTA")
+    }
+
     pub fn qso_date(&self) -> Option<&str> {
         self.fields.get("QSO_DATE").map(String::as_str)
     }

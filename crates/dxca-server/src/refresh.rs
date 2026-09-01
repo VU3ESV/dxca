@@ -49,6 +49,14 @@ const CTY_ATTEMPT_KEY: &str = "cty_last_attempt_unix";
 /// Written by `UserService::refresh_cty` on success, same arrangement.
 pub const CTY_OK_KEY: &str = "cty_last_refresh_unix";
 
+const IOTA_ATTEMPT_KEY: &str = "iota_last_attempt_unix";
+/// Written by `UserService::refresh_iota` on success, same arrangement.
+pub const IOTA_OK_KEY: &str = "iota_last_refresh_unix";
+
+const FCC_ATTEMPT_KEY: &str = "fcc_last_attempt_unix";
+/// Written by `UserService::refresh_fcc` on success, same arrangement.
+pub const FCC_OK_KEY: &str = "fcc_last_refresh_unix";
+
 fn clublog_attempt_key(user_id: i64) -> String {
     format!("clublog_last_attempt_unix:{user_id}")
 }
@@ -75,7 +83,13 @@ fn is_due(now: i64, last_ok: i64, last_attempt: i64, interval_secs: i64) -> bool
 
 /// Spawn the refresh loop. A `*_days` of 0 disables that shared job; each
 /// user's `refresh_hours` of 0 disables theirs.
-pub fn spawn(users: Arc<UserService>, cty_refresh_days: u64, lotw_refresh_days: u64) {
+pub fn spawn(
+    users: Arc<UserService>,
+    cty_refresh_days: u64,
+    lotw_refresh_days: u64,
+    iota_refresh_days: u64,
+    fcc_refresh_days: u64,
+) {
     tokio::spawn(async move {
         let mut ticker = tokio::time::interval(TICK);
         // The first tick fires immediately; skip it so a restart doesn't
@@ -87,12 +101,16 @@ pub fn spawn(users: Arc<UserService>, cty_refresh_days: u64, lotw_refresh_days: 
             // One job per tick, shared resources before per-user ones: cty
             // and the LoTW list are read by every account, and cty in
             // particular gates classification — a user log rebuilt against a
-            // stale resolver is worse than one rebuilt an hour later.
+            // stale resolver is worse than one rebuilt an hour later. The
+            // award reference files rank after those two — nothing gates on
+            // them — and before the per-user logs, being shared.
             let did_shared = tokio::task::spawn_blocking({
                 let users = users.clone();
                 move || {
                     run_cty_if_due(&users, cty_refresh_days)
                         || run_lotw_if_due(&users, lotw_refresh_days)
+                        || run_iota_if_due(&users, iota_refresh_days)
+                        || run_fcc_if_due(&users, fcc_refresh_days)
                 }
             })
             .await
@@ -103,6 +121,49 @@ pub fn spawn(users: Arc<UserService>, cty_refresh_days: u64, lotw_refresh_days: 
             let _ = tokio::task::spawn_blocking(move || run_one_clublog_if_due(&users)).await;
         }
     });
+}
+
+/// True when an IOTA directory download was attempted this tick.
+fn run_iota_if_due(users: &UserService, days: u64) -> bool {
+    let now = now_unix();
+    if !is_due(
+        now,
+        users.db.meta_unix(IOTA_OK_KEY),
+        users.db.meta_unix(IOTA_ATTEMPT_KEY),
+        days as i64 * 86_400,
+    ) {
+        return false;
+    }
+    let _ = users.db.meta_set_now(IOTA_ATTEMPT_KEY);
+    match users.refresh_iota() {
+        Ok(count) => println!("dxca: auto-refresh: IOTA directory updated, {count} groups"),
+        Err(e) => eprintln!("dxca: auto-refresh: IOTA failed: {e}"),
+    }
+    true
+}
+
+/// True when an FCC download was attempted this tick. Runs only after an
+/// admin has pulled the table once by hand: the ~200 MB download must
+/// never be a surprise a config default springs on a Pi.
+fn run_fcc_if_due(users: &UserService, days: u64) -> bool {
+    if users.fcc_count() == 0 {
+        return false;
+    }
+    let now = now_unix();
+    if !is_due(
+        now,
+        users.db.meta_unix(FCC_OK_KEY),
+        users.db.meta_unix(FCC_ATTEMPT_KEY),
+        days as i64 * 86_400,
+    ) {
+        return false;
+    }
+    let _ = users.db.meta_set_now(FCC_ATTEMPT_KEY);
+    match users.refresh_fcc() {
+        Ok(count) => println!("dxca: auto-refresh: FCC state table updated, {count} calls"),
+        Err(e) => eprintln!("dxca: auto-refresh: FCC failed: {e}"),
+    }
+    true
 }
 
 /// True when a cty.xml download was attempted this tick.

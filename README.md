@@ -48,13 +48,14 @@ honest-status graft) feed one pipeline into the telnet server, the RUMlog
 passthrough, and a WebSocket-streamed spots dashboard — station card with
 worked/confirmed DXCC, DXCC Challenge and slot totals, status pills,
 live sortable table,
-per-user alert row tints, LoTW markers. Spots are flagged across **eight
-alert levels** — New DXCC/Band/Mode/Slot for never worked, and ? DXCC/Band/
-Mode/Slot for worked-but-unconfirmed — each independently switchable, and
-narrowable by level, mode class (CW/Phone/Data) and band (160m–70cm) both
-on screen and, separately, for Telegram — where the `?` levels can further
-be held to calls new to your log and/or on LoTW, the stations that can
-still turn an entity green. The shell is **three tabs — Spots,
+per-user alert row tints, LoTW markers. Spots are flagged across **fourteen
+alert levels** — New and `?` (worked-but-unconfirmed) pairs for
+DXCC/Band/Mode/Slot, plus opt-in pairs for the **IOTA, WAS and VUCC**
+awards (island reference, US state, grid square — see the awards section) —
+each independently switchable, and narrowable by level, mode class
+(CW/Phone/Data) and band (160m–70cm) both on screen and, separately, for
+Telegram — where the `?` levels can further be held to calls new to your
+log and/or on LoTW, the stations that can still turn an entity green. The shell is **three tabs — Spots,
 Alerts, Stats — and a gear** (2026-08-29): what you watch is a tab, everything
 you set up lives behind the gear in **Settings**, grouped by whose it is (My
 station / Server / Access) and searchable by topic. Both feeds are laid out on
@@ -636,8 +637,47 @@ ping — a station that can be worked *and* will confirm. Both narrow the
 ticks, because an ATNO is worth working whatever the QSL prospects. Like
 every other narrowing here it gates Telegram and the panadapters, never
 the screen — the spot still shows with its tint; you are just not woken
-for it. Design and the award phases that follow it in
-[`docs/AWARDS.md`](docs/AWARDS.md).
+for it. Design in [`docs/AWARDS.md`](docs/AWARDS.md).
+
+### IOTA, WAS and VUCC (optional, off by default)
+
+Three awards beyond DXCC, each with its own New/`?` level pair on the same
+ladder (`docs/AWARDS.md` phases 2–4). **Ticking a pair under Settings › My
+station › ClubLog account is what switches an award on** — there is no
+separate selector, because a level that can never be flagged and an award
+that is off are the same fact. Their levels then behave like any others:
+row tints and chips on Spots, "Ping me for" narrowing on Alerts, colours
+on the panadapters, and the alert names the catch — *New Grid MK83*,
+*? State OH*, *New IOTA AS-153*.
+
+What each level runs on, spot side:
+
+- **VUCC (grid)** — the DX station's locator, from the cluster comment or
+  an FT8 CQ. Counts 4-character squares **per band, 50 MHz and up only**
+  (6m, 2m, 1.25m, 70cm, 33cm, 23cm — the ARRL rule; `RR73` is always a
+  sign-off, never a square).
+- **WAS (state)** — which US state the call is licensed in, looked up in
+  the FCC amateur database. An admin downloads that once under **Settings
+  › Server › Reference data** (~200 MB, distilled to ~8 MB on the spot);
+  until then the State levels stay quiet. Honesty note: the FCC knows the
+  *license* address, so a W6 living in Ohio spots as California — every
+  logger that offers WAS spotting shares this. DC counts as Maryland, per
+  the WAS rules.
+- **IOTA (island)** — the reference a cluster spot's comment announces
+  (`AS-153`), validated against the IOTA directory, which downloads from
+  iota-world.org on the same Reference data page (their terms are personal
+  non-commercial use, so it is fetched at runtime, never bundled). FT8
+  decodes never name an island, so IOTA levels ride cluster spots only.
+
+Log side, **worked** comes from your ClubLog download: grids ride its
+`GRIDSQUARE` field; states and islands appear only if your uploads carried
+them. **Confirmed** is where LoTW comes in: ClubLog's export carries no
+state, island or QSL detail at all, so the ClubLog account page takes an
+optional **LoTW username and password** — your LoTW QSL report is then
+merged at every log refresh (downloaded weekly, cached in `data/`), and it
+is the authoritative source for confirmed states, grids and islands.
+Totals live on **Stats › My ClubLog**: IOTA and WAS counts with the
+missing-states chase list, and grids per VUCC band.
 
 ### Stats
 

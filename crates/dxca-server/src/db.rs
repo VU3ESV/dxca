@@ -31,6 +31,15 @@ pub struct ClubLogUserConfig {
     /// credentials — unlike the LoTW list, which is one shared file.
     #[serde(default = "default_refresh_hours")]
     pub refresh_hours: i64,
+    // docs/AWARDS.md phase 3: the LoTW **web login**, for the QSL report
+    // that carries STATE/GRIDSQUARE/IOTA — the confirmed side of WAS, VUCC
+    // and IOTA, which ClubLog's export cannot provide. Log credentials, so
+    // they live with the other log credentials (README §Secrets). Both
+    // empty = no LoTW report, and the three awards run worked-side only.
+    #[serde(default)]
+    pub lotw_login: String,
+    #[serde(default)]
+    pub lotw_password: String,
     #[serde(flatten)]
     pub alerts: AlertConfigOpt,
 }
@@ -40,6 +49,12 @@ pub struct ClubLogUserConfig {
 /// export is not something to pull much harder than this.
 fn default_refresh_hours() -> i64 {
     24
+}
+
+/// For serde defaults on fields that must read `true` when a stored row
+/// predates them — a plain `#[serde(default)]` would read `false`.
+fn default_true() -> bool {
+    true
 }
 
 // Hand-written rather than derived: `Default` is what a brand-new account
@@ -53,6 +68,8 @@ impl Default for ClubLogUserConfig {
             email: String::new(),
             app_password: String::new(),
             refresh_hours: default_refresh_hours(),
+            lotw_login: String::new(),
+            lotw_password: String::new(),
             alerts: AlertConfigOpt::default(),
         }
     }
@@ -78,6 +95,15 @@ pub struct AlertConfigOpt {
     pub alert_unconf_slot: bool,
     pub alert_unconf_band: bool,
     pub alert_unconf_mode: bool,
+    // docs/AWARDS.md phases 2–4: the award axes. A pair ticked here IS the
+    // award selector — off by default, so nothing classifies differently
+    // until an operator opts an award in.
+    pub alert_new_grid: bool,
+    pub alert_unconf_grid: bool,
+    pub alert_new_state: bool,
+    pub alert_unconf_state: bool,
+    pub alert_new_iota: bool,
+    pub alert_unconf_iota: bool,
 }
 
 impl Default for AlertConfigOpt {
@@ -92,6 +118,12 @@ impl Default for AlertConfigOpt {
             alert_unconf_slot: d.alert_unconf_slot,
             alert_unconf_band: d.alert_unconf_band,
             alert_unconf_mode: d.alert_unconf_mode,
+            alert_new_grid: d.alert_new_grid,
+            alert_unconf_grid: d.alert_unconf_grid,
+            alert_new_state: d.alert_new_state,
+            alert_unconf_state: d.alert_unconf_state,
+            alert_new_iota: d.alert_new_iota,
+            alert_unconf_iota: d.alert_unconf_iota,
         }
     }
 }
@@ -107,6 +139,12 @@ impl From<&AlertConfigOpt> for AlertConfig {
             alert_unconf_slot: o.alert_unconf_slot,
             alert_unconf_band: o.alert_unconf_band,
             alert_unconf_mode: o.alert_unconf_mode,
+            alert_new_grid: o.alert_new_grid,
+            alert_unconf_grid: o.alert_unconf_grid,
+            alert_new_state: o.alert_new_state,
+            alert_unconf_state: o.alert_unconf_state,
+            alert_new_iota: o.alert_new_iota,
+            alert_unconf_iota: o.alert_unconf_iota,
         }
     }
 }
@@ -216,6 +254,22 @@ pub struct NotifyUserConfig {
     pub notify_unconf_slot: bool,
     pub notify_unconf_band: bool,
     pub notify_unconf_mode: bool,
+    // docs/AWARDS.md phases 2–4: the award levels' Telegram narrowing.
+    // Default ON, unlike their classifier flags: the classifier pair is the
+    // award selector, and an operator who has just opted an award in wants
+    // its pings — narrowing them away again is a second, separate choice.
+    #[serde(default = "default_true")]
+    pub notify_new_grid: bool,
+    #[serde(default = "default_true")]
+    pub notify_unconf_grid: bool,
+    #[serde(default = "default_true")]
+    pub notify_new_state: bool,
+    #[serde(default = "default_true")]
+    pub notify_unconf_state: bool,
+    #[serde(default = "default_true")]
+    pub notify_new_iota: bool,
+    #[serde(default = "default_true")]
+    pub notify_unconf_iota: bool,
     // docs/AWARDS.md phase 1: the confirmation-path gate on the four `?`
     // levels. An unconfirmed entity otherwise pings for every spot —
     // including the very station that never QSLed the first QSO. Some
@@ -387,6 +441,12 @@ impl Default for NotifyUserConfig {
             notify_unconf_slot: false,
             notify_unconf_band: false,
             notify_unconf_mode: false,
+            notify_new_grid: true,
+            notify_unconf_grid: true,
+            notify_new_state: true,
+            notify_unconf_state: true,
+            notify_new_iota: true,
+            notify_unconf_iota: true,
             notify_unconf_skip_worked: false,
             notify_unconf_lotw_only: false,
             notify_bands: Vec::new(),
@@ -479,7 +539,7 @@ impl NotifyUserConfig {
         true
     }
 
-    /// Whether this level is wanted, over all eight flaggable levels.
+    /// Whether this level is wanted, over all fourteen flaggable levels.
     pub fn wants_level(&self, level: AlertLevel) -> bool {
         match level {
             AlertLevel::NewDxcc => self.notify_new_dxcc,
@@ -490,6 +550,12 @@ impl NotifyUserConfig {
             AlertLevel::UnconfSlot => self.notify_unconf_slot,
             AlertLevel::UnconfBand => self.notify_unconf_band,
             AlertLevel::UnconfMode => self.notify_unconf_mode,
+            AlertLevel::NewGrid => self.notify_new_grid,
+            AlertLevel::UnconfGrid => self.notify_unconf_grid,
+            AlertLevel::NewState => self.notify_new_state,
+            AlertLevel::UnconfState => self.notify_unconf_state,
+            AlertLevel::NewIota => self.notify_new_iota,
+            AlertLevel::UnconfIota => self.notify_unconf_iota,
             AlertLevel::Worked | AlertLevel::None => false,
         }
     }
@@ -543,6 +609,11 @@ pub struct SentAlert {
     /// would put a plausible lie in the history; `None` renders as an em dash.
     #[serde(default)]
     pub snr_db: Option<i64>,
+    /// The award key an award-level alert fired on — the grid square, state
+    /// or IOTA reference. Empty for the DXCC levels and for rows written
+    /// before the award axes existed.
+    #[serde(default)]
+    pub award_ref: String,
     pub delivered: bool,
     /// Telegram's complaint when `delivered` is false; empty otherwise.
     pub error: String,
@@ -611,7 +682,8 @@ CREATE TABLE IF NOT EXISTS alerts_sent (
     delivered INTEGER NOT NULL,
     error TEXT NOT NULL DEFAULT '',
     spotter TEXT NOT NULL DEFAULT '',
-    snr_db INTEGER
+    snr_db INTEGER,
+    award_ref TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS alerts_sent_user_time
     ON alerts_sent (user_id, time_unix DESC);
@@ -654,6 +726,13 @@ const ADDED_COLUMNS: &[(&str, &str, &str)] = &[
     // `DEFAULT 0` would silently claim every historical alert was a 0 dB
     // report.
     ("alerts_sent", "snr_db", "snr_db INTEGER"),
+    // Empty for every historical row — the DXCC levels never carry a key,
+    // so '' is the truthful backfill, unlike snr_db's NULL above.
+    (
+        "alerts_sent",
+        "award_ref",
+        "award_ref TEXT NOT NULL DEFAULT ''",
+    ),
 ];
 
 /// Bring an existing database up to the current shape. Runs on every open;
@@ -889,8 +968,9 @@ impl Db {
         conn.execute(
             "INSERT INTO alerts_sent
                (user_id, time_unix, callsign, frequency_hz, mode, band,
-                dxcc_name, level, source, spotter, snr_db, delivered, error)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                dxcc_name, level, source, spotter, snr_db, award_ref,
+                delivered, error)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             params![
                 user_id,
                 a.time_unix,
@@ -903,6 +983,7 @@ impl Db {
                 a.source,
                 a.spotter,
                 a.snr_db,
+                a.award_ref,
                 a.delivered as i64,
                 a.error,
             ],
@@ -925,7 +1006,7 @@ impl Db {
         let mut stmt = conn
             .prepare(
                 "SELECT time_unix, callsign, frequency_hz, mode, band,
-                        dxcc_name, level, source, spotter, snr_db,
+                        dxcc_name, level, source, spotter, snr_db, award_ref,
                         delivered, error
                  FROM alerts_sent WHERE user_id = ?1
                  ORDER BY time_unix DESC, id DESC LIMIT ?2",
@@ -944,8 +1025,9 @@ impl Db {
                     source: r.get(7)?,
                     spotter: r.get(8)?,
                     snr_db: r.get(9)?,
-                    delivered: r.get::<_, i64>(10)? != 0,
-                    error: r.get(11)?,
+                    award_ref: r.get(10)?,
+                    delivered: r.get::<_, i64>(11)? != 0,
+                    error: r.get(12)?,
                 })
             })
             .map_err(db_err)?;
@@ -1583,6 +1665,7 @@ mod tests {
                 source: "N2WQ-2".into(),
                 spotter: "VU2XYZ".into(),
                 snr_db: Some(-11),
+                award_ref: String::new(),
                 delivered: true,
                 error: String::new(),
             },
@@ -1617,6 +1700,7 @@ mod tests {
             source: "VU2OY".into(),
             spotter: String::new(),
             snr_db: Some(-7),
+            award_ref: String::new(),
             delivered,
             error: error.into(),
         };

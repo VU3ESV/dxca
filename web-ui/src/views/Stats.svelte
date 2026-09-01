@@ -264,6 +264,69 @@
       </dl>
     </div>
 
+    {#if station.award_stats}
+      <div class="card">
+        <h2>
+          IOTA · WAS · VUCC
+          <HelpTip label="IOTA · WAS · VUCC">
+            <span class="para">
+              The non-DXCC awards (<code>docs/AWARDS.md</code>). Opt in under
+              <b>Settings › My station › ClubLog account</b> — ticking an
+              award's New/? pair is what switches it on. Worked comes from
+              your ClubLog log; <b>confirmed needs the LoTW credentials</b>
+              on the same page, because ClubLog's export carries no state,
+              island or QSL detail.
+            </span>
+            <span class="para">
+              <b>VUCC</b> counts 4-character grid squares per band, 50 MHz
+              and up only. <b>WAS</b> counts the fifty states, any band or
+              mode; DC counts as Maryland. <b>IOTA</b> counts island groups.
+            </span>
+          </HelpTip>
+        </h2>
+        <dl class="stats">
+          <div><dt>IOTA worked</dt><dd class="num">{station.award_stats.iota_worked}</dd></div>
+          <div>
+            <dt>IOTA confirmed</dt>
+            <dd class="num ok-num">{station.award_stats.iota_confirmed}</dd>
+          </div>
+          <div><dt>States worked</dt><dd class="num">{station.award_stats.was_worked}</dd></div>
+          <div>
+            <dt>States confirmed</dt>
+            <dd class="num ok-num">{station.award_stats.was_confirmed}</dd>
+          </div>
+        </dl>
+        {#if station.award_stats.was_missing.length && station.award_stats.was_missing.length < 50}
+          <!-- The chase list — fifty minus worked is short for anyone actually
+               after WAS, and "which ones" is the question the number raises. -->
+          <p class="hint">
+            Missing states:
+            <span class="mono">{station.award_stats.was_missing.join(' ')}</span>
+          </p>
+        {/if}
+        {#if station.award_stats.vucc.length}
+          <!-- Same table dress as the feed slices — three narrow columns,
+               numbers right-aligned, no new CSS to drift. -->
+          <table class="slices">
+            <thead>
+              <tr><th>VUCC band</th><th>Grids worked</th><th>Confirmed</th></tr>
+            </thead>
+            <tbody>
+              {#each station.award_stats.vucc as v (v.band)}
+                <tr>
+                  <td>{v.band}</td>
+                  <td class="num">{v.worked}</td>
+                  <td class="num ok-num">{v.confirmed}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        {:else}
+          <p class="hint">No 50 MHz+ grids in the log yet — VUCC counts from 6M up.</p>
+        {/if}
+      </div>
+    {/if}
+
     {#if shownBandMode}
       <div class="card">
         <h2>

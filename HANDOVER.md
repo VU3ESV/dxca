@@ -26,8 +26,24 @@ whatever the screen was set to. DXCA now predicts the frame's clock pick at
 iframe load and counter-flips with CSS `invert(1) hue-rotate(180deg)` when
 it disagrees with `currentTheme()` — `Stats.svelte`, comment block has the
 full reasoning. If ClubLog ever honours `prefers-color-scheme` or grows a
-theme parameter, delete the flip and use that. The wider award design
-(VUCC / IOTA / WAS) is drafted in `docs/AWARDS.md`, phases 2–4 unbuilt.
+theme parameter, delete the flip and use that.
+
+**ON MAIN, NOT RELEASED — the IOTA / WAS / VUCC award axes** (2026-09-01,
+`docs/AWARDS.md` phases 2–4, built on Manoj's "complete the 2-4"): the
+ladder is now **fourteen levels** — New/`?` pairs for Grid, State and IOTA
+after the classic eight — with ticking a pair on the ClubLog-account page
+acting as the award selector (all default off; nothing classifies
+differently until an operator opts in). Spot side: cluster-comment grids
+finally survive `synthetic_spot`, FT8 CQ grids are parsed from message
+text (`RR73` refused), IOTA refs are read from comments, states come from
+a new FCC call→state table. Log side: ClubLog's `GRIDSQUARE` (verified
+exported, 98% of records) plus an optional per-user **LoTW QSL report**
+(new credentials on the ClubLog page; weekly-cached in `data/`) for
+confirmed states/grids/islands — ClubLog's export carries none of those.
+Two new admin downloads under Reference data (IOTA directory ~290 KB
+auto-monthly; FCC ~200 MB → 7.9 MB distilled, **manual first pull
+required** before its schedule arms). Stats grows an IOTA · WAS · VUCC
+card with the missing-states chase list. Full map in the Open-items entry.
 
 **MERGED, NOT RELEASED — a fourth Destinations tab: TCI (ExpertSDR3
 panorama).** `vu2cpl/dxca` PR #1 from VU3ESV, merged to `main` on 2026-09-01.
@@ -969,6 +985,83 @@ What has to happen in that pass, in this order:
 Follow-ups 2 and 3 in the entry below — the idle-drain comment overclaiming,
 and the direct `tungstenite` pin — are comment-and-`Cargo.toml` scale. Worth
 taking in the same pass while it is open; neither blocks a tag on its own.
+
+### DONE (on main, unreleased): IOTA / WAS / VUCC — docs/AWARDS.md phases 2–4
+
+Built 2026-09-01 in one pass on Manoj's "complete the 2-4". The design doc
+carries the reasoning; this entry is the implementation map a future
+session needs.
+
+**Core (`dxca-core`):**
+
+* `awards.rs` (new) — `US_STATES` (50, DC→MD per WAS rule 6),
+  `normalize_state`, `normalize_iota`, `find_iota_ref` (comment scanning),
+  and `StateTable`: the 7.9 MB distilled FCC file binary-searched in place
+  instead of a ~90 MB HashMap, with the lotw-style slash ladder.
+* `Spot` gains `grid` and `iota` (serde-defaulted; **state is looked up,
+  not stored** — a deliberate refinement of the design doc, since the FCC
+  answer is a server-side fact like `is_lotw`). `grid_from_message` reads
+  the trailing locator of an FT8 CQ/exchange; `grid::is_grid` refuses
+  `RR73` everywhere, `grid::grid4` folds to the VUCC square.
+* `LogMatrix` gains `by_grid` / `by_state` / `by_iota`
+  (`AwardStatus` = bands + confirmedBands; serde-defaulted, so every
+  stored matrix_json and 1.x matrix.json still loads). Build records
+  awards inside the same credit-gated loop (an invalid operation earns no
+  grid either); `merge_lotw_confirmed` layers the LoTW QSL report on top,
+  additive, never touching by_dxcc. `award_stats()` totals per VUCC band
+  plus WAS/IOTA counts and the missing-states list.
+* `AlertLevel` grows the six award levels; **FLAGGABLE (now 14) is also
+  the tiebreak** — a spot qualifying for several levels flags as the
+  rarest, and a level switched off simply stops being a candidate, so
+  disabling NEW DXCC lets the same spot flag as New State instead of
+  vanishing. `classify_spot(…, AwardRefs)` extends `classify`;
+  `Classification.award_ref` names the key that fired. Grid is per band
+  and `VUCC_BANDS` only (6M up, no 4M — no US allocation); state and IOTA
+  are key-level.
+
+**Connect (`dxca-connect`):** `iota.rs` (groups.json download + directory,
+refuses <500 groups), `fcc.rs` (zip download → HD.dat active filter →
+EN.dat distill, refuses <100k calls; new `zip` crate, deflate-only),
+`lotwreport.rs` (full `lotwreport.adi`, `qso_qsl=yes&qso_qsldetail=yes`;
+detects LoTW's HTML-with-HTTP-200 login failure). Always a FULL report:
+the matrix rebuilds from scratch, so an incremental pull would shed old
+confirmations — the weekly `data/lotw-report-<id>.adi` cache is what keeps
+fullness from hammering ARRL, and a failed download falls back to the
+stale cache.
+
+**Server:** classify gathers `AwardRefs` (state only when the user's
+config could rank it); `synthetic_spot` stops dropping the parsed grid and
+scans comments for IOTA; the decode path parses message grids. Six new
+`alert_*` classifier flags (the award selector, default off) and six
+`notify_*` flags (**default ON** — the classifier pair is the opt-in, so
+notify must not be a second gate to find). The phase-1 unconf gate covers
+the new `?` levels automatically via `is_unconfirmed`. New admin routes
+`/api/iota/refresh` + `/api/fcc/refresh`; `iota_groups`/`fcc_calls` in
+status; `award_ref` on annotated spots and in `alerts_sent` (column
+migration, `''` backfill); `award_stats` in the station payload. Refresh
+scheduler: IOTA monthly by default; **FCC refuses to schedule until the
+table exists** — the ~200 MB first pull is always a person's act
+(`config/dxca.example.toml` documents both).
+
+**UI:** the 14-level ladder flows everywhere from `/api/reference` (Alerts
++ ClubLog-account FIELD maps extended, level grid now 7×2 pairs); three
+new hues (`--alert-iota/state/grid`, GitHub purple/pink/teal) with the
+same 58% `?` wash; LoTW credentials on the ClubLog page; IOTA/FCC rows on
+Reference data; the IOTA · WAS · VUCC card on Stats; Telegram titles name
+the catch ("🟢 New Grid MK83: …"), history rows show the ref.
+
+**Verified:** `just gate` green (275 Rust tests), and a scratch-config
+smoke run served 14 levels and loaded the real reference files
+(1,178 IOTA groups, 816,973 FCC calls). The §2.6 data checks are resolved
+inline in the design doc — ClubLog's export DOES carry GRIDSQUARE (98% of
+records), groups.json suffices over fulllist.json, and the FCC numbers
+above are from a real distillation.
+
+**Known limits, stated where users meet them:** FCC = license address,
+not operating QTH (README, tooltip); IOTA rides cluster comments only;
+WAS band/mode endorsements and satellite VUCC deferred; the iota-world
+"accepted activations" list (call→ref tagging without a comment mention)
+deliberately not consumed — it is a PDF.
 
 ### DONE (on main, unreleased): the confirmation-path gate — docs/AWARDS.md phase 1
 

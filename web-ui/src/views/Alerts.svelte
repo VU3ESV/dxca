@@ -44,6 +44,12 @@
     unconfBand: 'notify_unconf_band',
     unconfMode: 'notify_unconf_mode',
     unconfSlot: 'notify_unconf_slot',
+    newIOTA: 'notify_new_iota',
+    newState: 'notify_new_state',
+    newGrid: 'notify_new_grid',
+    unconfIOTA: 'notify_unconf_iota',
+    unconfState: 'notify_unconf_state',
+    unconfGrid: 'notify_unconf_grid',
   };
 
   let cfg = $state<any>({
@@ -53,6 +59,10 @@
     notify_new_band: true, notify_new_mode: true,
     notify_unconf_dxcc: false, notify_unconf_slot: false,
     notify_unconf_band: false, notify_unconf_mode: false,
+    // The award levels default ON here (their classifier flags are the
+    // award selector — see Settings › ClubLog account).
+    notify_new_iota: true, notify_new_state: true, notify_new_grid: true,
+    notify_unconf_iota: true, notify_unconf_state: true, notify_unconf_grid: true,
     notify_unconf_skip_worked: false, notify_unconf_lotw_only: false,
     notify_bands: [], notify_modes: [],
     notify_manual_only: false,
@@ -297,7 +307,9 @@
                 <td class="mono">{a.snr_db ?? '—'}</td>
                 <td>{a.band}</td>
                 <td title={a.dxcc_name}>{a.dxcc_name}</td>
-                <td class="alert">{levelLabel(a.level)}</td>
+                <td class="alert"
+                  >{levelLabel(a.level)}{a.award_ref ? ` ${a.award_ref}` : ''}</td
+                >
                 <!-- Shown either way, not just on failure: a column that is
                      blank on a good row cannot be told from a column that is
                      broken, and "did it actually go out" is the question this

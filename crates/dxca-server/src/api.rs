@@ -55,6 +55,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/config/global", get(get_global).put(put_global))
         .route("/api/telegram/test", post(telegram_test))
         .route("/api/lotw/refresh", post(lotw_refresh))
+        .route("/api/iota/refresh", post(iota_refresh))
+        .route("/api/fcc/refresh", post(fcc_refresh))
         .route("/api/cty/refresh", post(cty_refresh))
         .route("/api/users", get(list_users).post(create_user))
         .route("/api/users/{id}", patch(update_user).delete(delete_user))
@@ -109,6 +111,8 @@ fn status_json(app: &AppState) -> serde_json::Value {
         "cty_loaded": app.users.resolver_loaded(),
         "cty_entities": app.users.entity_count(),
         "lotw_users": app.users.lotw_count(),
+        "iota_groups": app.users.iota_count(),
+        "fcc_calls": app.users.fcc_count(),
         "telnet_clients": app.pipeline.telnet.client_count(),
         "spots_per_source": *app.pipeline.source_counts.lock().unwrap(),
         "cluster_nodes": app.nodes.statuses(),
@@ -173,6 +177,11 @@ fn annotate_spot(
         v["alert"] = serde_json::to_value(c.level).unwrap();
         v["dxcc_name"] = serde_json::to_value(&c.dxcc_name).unwrap();
         v["is_beacon"] = serde_json::Value::Bool(c.is_beacon);
+        // The award key an award-level pick fired on ("MK83", "OH",
+        // "AS-153") — what the row's tooltip names as the catch.
+        if let Some(r) = &c.award_ref {
+            v["award_ref"] = serde_json::to_value(r).unwrap();
+        }
     }
     v
 }
@@ -644,6 +653,9 @@ async fn station(State(app): State<AppState>, headers: HeaderMap) -> Response {
         // the entity map and no extra storage.
         "by_band_mode": app.users.band_mode_stats(user.id),
         "by_band_mode_current": app.users.band_mode_stats_current(user.id),
+        // The non-DXCC award totals (docs/AWARDS.md phases 2–4). No
+        // "_current" twin: the deleted-entities list is a DXCC concept.
+        "award_stats": app.users.award_stats(user.id),
         "qso_count": meta.map(|m| m.0),
         "last_refresh_unix": meta.map(|m| m.1),
     }))
@@ -1028,6 +1040,8 @@ async fn get_global(State(app): State<AppState>, headers: HeaderMap) -> Response
             "data_dir": cfg.data_dir,
             "cty_refresh_days": cfg.cty_refresh_days,
             "lotw_refresh_days": cfg.lotw_refresh_days,
+            "iota_refresh_days": cfg.iota_refresh_days,
+            "fcc_refresh_days": cfg.fcc_refresh_days,
         },
         // Server-wide, admin-only, stored in the 0600 database rather than
         // the 0644 config file.
@@ -1036,6 +1050,8 @@ async fn get_global(State(app): State<AppState>, headers: HeaderMap) -> Response
         // When the shared LoTW list was last actually downloaded — 0 = never
         // recorded, which is what a list seeded from a file cache looks like.
         "lotw_last_refresh_unix": app.users.db.meta_unix(crate::refresh::LOTW_OK_KEY),
+        "iota_last_refresh_unix": app.users.db.meta_unix(crate::refresh::IOTA_OK_KEY),
+        "fcc_last_refresh_unix": app.users.db.meta_unix(crate::refresh::FCC_OK_KEY),
     }))
     .into_response()
 }
@@ -1190,6 +1206,35 @@ async fn lotw_refresh(State(app): State<AppState>, headers: HeaderMap) -> Respon
             .await;
     match result {
         Ok(Ok(count)) => Json(serde_json::json!({"lotw_users": count})).into_response(),
+        Ok(Err(e)) => err(StatusCode::BAD_GATEWAY, e),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, format!("join: {e}")),
+    }
+}
+
+async fn iota_refresh(State(app): State<AppState>, headers: HeaderMap) -> Response {
+    if let Err(resp) = require_admin(&app, &headers) {
+        return resp;
+    }
+    let service = app.users.clone();
+    let result = tokio::task::spawn_blocking(move || service.refresh_iota()).await;
+    match result {
+        Ok(Ok(count)) => Json(serde_json::json!({"iota_groups": count})).into_response(),
+        Ok(Err(e)) => err(StatusCode::BAD_GATEWAY, e),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, format!("join: {e}")),
+    }
+}
+
+/// The FCC pull is ~200 MB and minutes of work — still one admin POST, on a
+/// blocking task like the others, because "an admin decides when" is the
+/// entire safety story (`fcc.rs` module docs).
+async fn fcc_refresh(State(app): State<AppState>, headers: HeaderMap) -> Response {
+    if let Err(resp) = require_admin(&app, &headers) {
+        return resp;
+    }
+    let service = app.users.clone();
+    let result = tokio::task::spawn_blocking(move || service.refresh_fcc()).await;
+    match result {
+        Ok(Ok(count)) => Json(serde_json::json!({"fcc_calls": count})).into_response(),
         Ok(Err(e)) => err(StatusCode::BAD_GATEWAY, e),
         Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, format!("join: {e}")),
     }

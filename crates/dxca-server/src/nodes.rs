@@ -331,6 +331,17 @@ fn synthetic_spot(node_name: &str, p: &ParsedSpot) -> Spot {
         // left the UI unable to tell a skimmer catch from a hand-typed spot
         // — especially once the `-#` marker had been stripped off the call.
         is_skimmer: p.spotter_is_skimmer,
+        // The parser has extracted the DX grid from the comment's tail all
+        // along; until docs/AWARDS.md phase 2 it was dropped right here.
+        // Uppercased for the matrix; RR73 refused (grid::is_grid).
+        grid: p
+            .grid
+            .as_deref()
+            .filter(|g| dxca_core::grid::is_grid(g))
+            .map(str::to_ascii_uppercase),
+        // "CQ IOTA AS-153"-style comments name the island group being
+        // activated — the one spot-side source IOTA has (phase 3).
+        iota: dxca_core::awards::find_iota_ref(&p.comment),
     }
 }
 

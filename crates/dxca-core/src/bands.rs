@@ -121,6 +121,23 @@ pub fn is_challenge_band(band: &str) -> bool {
     CHALLENGE_BANDS.contains(&band)
 }
 
+/// The bands that score for **ARRL VUCC**: 50 MHz and above, each band its
+/// own award (decided 2026-09-01, `docs/AWARDS.md` phase 2).
+///
+/// **4M is deliberately absent** — the resolver emits it, but there is no US
+/// 4 m allocation and no ARRL award counts it, so a 70 MHz grid credits
+/// nothing here. Satellite VUCC is its own award and out of scope with the
+/// rest of `Sat` (HANDOVER).
+#[rustfmt::skip]
+pub const VUCC_BANDS: &[&str] = &[
+    "6M", "2M", "1.25M", "70CM", "33CM", "23CM",
+];
+
+/// Does a band score for VUCC?
+pub fn is_vucc_band(band: &str) -> bool {
+    VUCC_BANDS.contains(&band)
+}
+
 // --- mode inference from frequency ---------------------------------------
 //
 // Cluster nodes like DB0SUE and N2WQ relay human spots whose comment is free

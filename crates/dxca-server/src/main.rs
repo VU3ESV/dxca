@@ -97,7 +97,13 @@ async fn main() {
     }
 
     // Automatic cty / ClubLog / LoTW re-download (PLAN §5's "refresh schedule").
-    dxca_server::refresh::spawn(users.clone(), cfg.cty_refresh_days, cfg.lotw_refresh_days);
+    dxca_server::refresh::spawn(
+        users.clone(),
+        cfg.cty_refresh_days,
+        cfg.lotw_refresh_days,
+        cfg.iota_refresh_days,
+        cfg.fcc_refresh_days,
+    );
     // Feed-health alerts. Silent unless an account sets a threshold, and
     // powerless if this host is what failed — see the module docs.
     dxca_server::health::spawn(users.clone(), pipeline_state.clone(), manager.clone());

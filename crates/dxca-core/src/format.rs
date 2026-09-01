@@ -77,6 +77,8 @@ mod tests {
             source_name: "MSHV 2333".into(),
             spotter: None,
             is_skimmer: false, // space must be stripped
+            grid: None,
+            iota: None,
         };
         let line = format(&s);
         assert_eq!(
@@ -106,6 +108,8 @@ mod tests {
             source_name: "JTDX".into(),
             spotter: None,
             is_skimmer: false,
+            grid: None,
+            iota: None,
         };
         assert!(format(&s).contains("UNKNOWN"));
     }
@@ -142,6 +146,8 @@ mod source_name_reaches_the_wire {
             source_name: "MSHV".into(),
             spotter: None,
             is_skimmer: false,
+            grid: None,
+            iota: None,
         };
         assert!(format(&s).contains("MSHV:"), "the ordinary case");
 

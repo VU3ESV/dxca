@@ -48,6 +48,18 @@ cty_refresh_days = 7
 # account in the web UI (My ClubLog → Auto-refresh).
 lotw_refresh_days = 7
 
+# How often to re-download the IOTA directory (groups.json from
+# iota-world.org, ~290 KB), in days; 0 = manual only. Validates the island
+# references cluster spots announce, for the IOTA award levels.
+iota_refresh_days = 30
+
+# How often to re-download the FCC amateur database (~200 MB, distilled to
+# an ~8 MB call→state table), in days; 0 = manual only. Powers the WAS
+# (state) award levels. Whatever this says, the schedule only runs AFTER an
+# admin has downloaded the table once by hand (Server → Reference data) —
+# a download that size must never be a config default's surprise.
+fcc_refresh_days = 30
+
 # WSJT-X/JTDX/MSHV source listeners — point each decoder's UDP server at
 # its own port here (DXCA is the sole listener on every port).
 [[udp_sources]]

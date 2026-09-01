@@ -53,6 +53,30 @@
       await loadServerConfig(true);
     } else { message = ''; error = r.json?.error ?? `HTTP ${r.status}`; }
   }
+
+  async function refreshIota() {
+    busy = true; message = 'Downloading IOTA directory…'; error = '';
+    const r = await api('POST', '/api/iota/refresh');
+    busy = false;
+    if (r.status === 200) {
+      message = `IOTA directory refreshed: ${r.json.iota_groups} groups.`;
+      await refreshStatus();
+      await loadServerConfig(true);
+    } else { message = ''; error = r.json?.error ?? `HTTP ${r.status}`; }
+  }
+
+  async function refreshFcc() {
+    busy = true;
+    message = 'Downloading the FCC amateur database — ~200 MB, this takes minutes…';
+    error = '';
+    const r = await api('POST', '/api/fcc/refresh');
+    busy = false;
+    if (r.status === 200) {
+      message = `FCC table refreshed: ${r.json.fcc_calls} calls.`;
+      await refreshStatus();
+      await loadServerConfig(true);
+    } else { message = ''; error = r.json?.error ?? `HTTP ${r.status}`; }
+  }
 </script>
 
 {#if s}
@@ -129,6 +153,58 @@
             {/if}
           </td>
           <td><button onclick={refreshLotw} disabled={busy}>Refresh now</button></td>
+        </tr>
+        <tr>
+          <td class="what">
+            IOTA directory<br />
+            <span class="hint">{s?.iota_groups || '—'} groups</span>
+          </td>
+          <td class="when hint">
+            {#if server.cfg.read_only.iota_refresh_days}
+              auto every {server.cfg.read_only.iota_refresh_days}d ·
+            {:else}
+              auto off ·
+            {/if}
+            {#if server.cfg.iota_last_refresh_unix}
+              last {ago(server.cfg.iota_last_refresh_unix)} ago
+            {:else}
+              never downloaded here
+            {/if}
+          </td>
+          <td>
+            <button
+              onclick={refreshIota}
+              disabled={busy}
+              title="groups.json from iota-world.org (~290 KB) — validates spot IOTA references and names the island groups. Their terms are personal non-commercial use, which is why it downloads here rather than shipping with DXCA."
+              >Refresh now</button
+            >
+          </td>
+        </tr>
+        <tr>
+          <td class="what">
+            FCC call→state<br />
+            <span class="hint">{s?.fcc_calls || '—'} calls</span>
+          </td>
+          <td class="when hint">
+            {#if server.cfg.read_only.fcc_refresh_days}
+              auto every {server.cfg.read_only.fcc_refresh_days}d ·
+            {:else}
+              auto off ·
+            {/if}
+            {#if server.cfg.fcc_last_refresh_unix}
+              last {ago(server.cfg.fcc_last_refresh_unix)} ago
+            {:else}
+              never downloaded here — State alerts stay quiet until it is
+            {/if}
+          </td>
+          <td>
+            <button
+              onclick={refreshFcc}
+              disabled={busy}
+              title="The FCC amateur database (~200 MB download, distilled here to ~8 MB) — which US state a call is licensed in, the data behind New State / ? State. The schedule only re-runs after this first manual pull; a licensee operating away from their license address will still read as their license state."
+              >Download now</button
+            >
+          </td>
         </tr>
       </tbody>
     </table>

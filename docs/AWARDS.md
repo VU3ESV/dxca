@@ -1,9 +1,12 @@
 # Award filters and the unconfirmed-alert gate
 
-**Status:** phase 1 (the unconfirmed-alert gate) **built and under trial
-on noderedpi4 since 2026-09-01**, alongside the TCI destination, unreleased
-— the release pass covers both. Phases 2–4 (VUCC / IOTA / WAS) remain
-design only · **Drafted:** 2026-09-01 · **Targets:** dxca ≥ 2.16
+**Status:** **all four phases built** (2026-09-01) — the unconfirmed-alert
+gate (phase 1) plus the VUCC / IOTA / WAS award axes (phases 2–4): fourteen
+alert levels, the LoTW QSL-report client, the iota-world.org directory and
+FCC call→state downloads, award totals on Stats. Unreleased; trialling on
+noderedpi4 alongside the TCI destination, one release pass covers all of
+it. The §2.6 verification items below were all resolved during the build —
+results inline · **Drafted:** 2026-09-01 · **Targets:** dxca ≥ 2.16
 
 Two related feature requests from VU2CPL, 2026-09-01:
 
@@ -152,11 +155,17 @@ identically.
 | 3 | IOTA: directory download, comment parsing, LoTW report client | iota-world.org JSONs; LoTW credentials |
 | 4 | WAS: state matrix, call→state table | FCC ULS distillation (size/cadence to be decided — the weekly full dump is ~200 MB raw; distilled call→state is a few MB) |
 
-### 2.6 To verify before building
+### 2.6 To verify before building — all three resolved (2026-09-01)
 
-1. One real `getadif.php` download → does the export include
-   `GRIDSQUARE`? (Club Log stores it; storing ≠ exporting.)
-2. Eyeball `fulllist.json` against its structure PDF.
-3. FCC ULS distillation: produce the call→state file once by hand,
-   measure size, then decide refresh cadence and where it runs (the Pi
-   should not download 200 MB weekly).
+1. One real `getadif.php` download → **`GRIDSQUARE` IS exported**: 55,870
+   of 56,845 records (98%), 6-char grids. `CQZ` too (a WAZ door, unused);
+   still no `STATE`/`IOTA`, and confirmation collapses to `QSL_RCVD`.
+2. `groups.json` (287 KB) turned out to carry everything needed —
+   `refno` + `name` per group, 1,178 groups — so the 1.3 MB `fulllist.json`
+   is not downloaded at all.
+3. FCC distillation measured: 823,953 active licenses → **816,973
+   call→state entries, 7.9 MB** sorted text, binary-searched in place
+   (`awards::StateTable`) rather than held as a ~90 MB HashMap. Cadence
+   answer: monthly default, **and the schedule refuses to run until an
+   admin has pulled the table once by hand** — the honest fix for "the Pi
+   should not download 200 MB as a surprise".
