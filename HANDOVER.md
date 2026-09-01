@@ -2,6 +2,16 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-09-01 · **Status:**
+**v2.19.2 — the Awards tab reads as sections** (Manoj, on the second look:
+*"still bad"*). The real fault was not spacing but **vocabulary**: `.sub`
+was bold body text at 0.95rem, so "Still needed" and "States per band"
+read as sentences among the numbers instead of as dividers. They now use
+the app's own section-heading style — uppercase, 0.62rem, letterspaced,
+muted — with a hairline rule and real space above, and the first one in a
+card takes the space without the rule. The band runs also became the same
+label-over-value `dl.stats` the mode counts use, so the card counts things
+one way rather than two.
+
 **v2.19.1 — the Awards tab is tidied** (Manoj: *"needs uncluttering
 only"*). The "still needed" list was a `display: grid` with
 `grid-template-columns: auto 1fr` being fed **wrapper `<div>`s**, so each

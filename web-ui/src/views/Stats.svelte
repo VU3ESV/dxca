@@ -297,6 +297,7 @@
           </h2>
 
           {#if wasModeData}
+            <h3 class="sub">By mode</h3>
             <dl class="stats">
               {#each station.award_stats.was_by_mode as r (r.key)}
                 <div><dt>{r.key}</dt><dd class="num">{r.confirmed} / 50</dd></div>
@@ -329,12 +330,12 @@
           {/if}
 
           {#if station.award_stats.was_by_band.length}
-            <h3 class="sub">States per band</h3>
-            <div class="tally">
+            <h3 class="sub">By band</h3>
+            <dl class="stats">
               {#each station.award_stats.was_by_band as r (r.key)}
-                <span class="tallyitem"><b>{r.key}</b> {r.confirmed}</span>
+                <div><dt>{r.key}</dt><dd class="num">{r.confirmed}</dd></div>
               {/each}
-            </div>
+            </dl>
           {/if}
         </div>
       {/if}
@@ -366,12 +367,12 @@
             <p class="hint">All forty zones worked.</p>
           {/if}
           {#if station.award_stats.waz_by_band.length}
-            <h3 class="sub">Zones per band</h3>
-            <div class="tally">
+            <h3 class="sub">By band</h3>
+            <dl class="stats">
               {#each station.award_stats.waz_by_band as r (r.key)}
-                <span class="tallyitem"><b>{r.key}</b> {r.confirmed}</span>
+                <div><dt>{r.key}</dt><dd class="num">{r.confirmed}</dd></div>
               {/each}
-            </div>
+            </dl>
           {/if}
         </div>
       {/if}
@@ -857,9 +858,28 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* The card's own heading vocabulary — uppercase, letterspaced, muted, the
+     same as `.rail-head` and the card titles. It was bold body text at
+     0.95rem, which read as a sentence in the middle of the numbers rather
+     than as a divider between sections. The rule and the space above it are
+     what actually separate the three groups. */
   .sub {
-    margin: 1.1rem 0 0.4rem;
-    font-size: 0.95rem;
+    margin: 1.3rem 0 0.5rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.62rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.11em;
+    color: var(--muted);
+  }
+
+  /* The first section in a card needs the space but not the rule — there is
+     nothing above it to divide from. */
+  .sub:first-of-type {
+    border-top: none;
+    padding-top: 0;
+    margin-top: 0.9rem;
   }
 
   /* One row per mode: the label in the gutter, the states wrapping beside
@@ -885,20 +905,6 @@
     margin: 0;
     line-height: 1.6;
     word-spacing: 0.15em;
-  }
-
-  /* Band tallies read as a run of small facts, not a three-column table
-     whose second column would repeat the third. */
-  .tally {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.3rem 1.1rem;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .tallyitem b {
-    color: var(--muted);
-    font-weight: 500;
   }
 
   .slices {

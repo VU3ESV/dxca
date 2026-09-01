@@ -25,6 +25,13 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.19.2** (2026-09-01): **the Awards tab reads as sections.** Its
+subheadings were bold body text wedged against the numbers above them, so
+three groups ran together as one block; they now wear the card heading
+style used everywhere else — uppercase, letterspaced, muted, with a rule
+and real space above. Counts are shown one way instead of two: label over
+value, for modes and bands alike.
+
 **v2.19.1** (2026-09-01): **the Awards tab is tidied.** "Triple Play still
 needs" was laid out in a two-column grid that put two modes on one row and
 orphaned the third; each mode now gets its own row, in the CW/Phone/Data
