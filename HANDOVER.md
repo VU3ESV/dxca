@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-09-03 · **Status:**
+**Created:** 2026-08-26 · **Last updated:** 2026-09-10 · **Status:**
 **v2.21.0 — a fresh install needs no ClubLog API key, and a 403 is no longer
 retried.** The key ClubLog issue per *application* now ships inside the
 binary (injected at build time, never committed — they delete keys found in
@@ -581,6 +581,16 @@ and the web GUI's design system from the same repo's
 `web-ui/default/src/` (app.css + the theme module and switcher).
 **Production runs on noderedpi4 (192.168.1.169) since the 2026-08-27
 cutover**; the 1.x macOS app is the retained fallback (maintenance mode).
+
+## Session 2026-09-10 — the UI mock server is in the repo
+
+`scripts/dxca-mock-server.py` had been sitting untracked since the shell
+rework: a throwaway stand-in for `dxca-server` so the rebuilt UI can be
+driven without building the Rust workspace or touching the production Pi.
+Read-only in spirit — every write returns ok and changes nothing. Committed
+as a tool, per the shack rule that tools live in the project, not beside
+it; run it, point the UI at it, and nothing on the Pi is at risk. Found by
+the 2026-09-10 repo sweep.
 
 ## Session 2026-09-03 — the ClubLog API key ships in the binary
 
