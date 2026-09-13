@@ -1,7 +1,7 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-09-10 · **Status:**
+**Created:** 2026-08-26 · **Last updated:** 2026-09-14 · **Status:**
 **v2.21.0 — a fresh install needs no ClubLog API key, and a 403 is no longer
 retried.** The key ClubLog issue per *application* now ships inside the
 binary (injected at build time, never committed — they delete keys found in
@@ -582,6 +582,35 @@ and the web GUI's design system from the same repo's
 **Production runs on noderedpi4 (192.168.1.169) since the 2026-08-27
 cutover**; the 1.x macOS app is the retained fallback (maintenance mode).
 
+## Session 2026-09-13 — the Mac agent was back, sending its own alerts
+
+Manoj: *"i am getting 2m new band alerts, but in alerts its off"* — then,
+after saving an HF + 6M band list on the Pi, *"dont think its working"*. The
+save had worked. Every 2M / 70CM ping came from a **second DXCA on this
+Mac**: the launchd agent the 2026-08-27 cutover "stopped" with `launchctl
+bootout` only. `bootout` does not survive a login, and `RunAtLoad` brought it
+back — up since 2026-09-10, still on v2.20.4 because no fleet sweep covers
+it. Its VU2CPL account carried the same Telegram bot and chat as the Pi and a
+pre-2.1 `notify_json` with no `notify_bands` (empty means all), so it pinged
+every band via N2WQ-2 and doubled every HF alert the Pi also sent — 126 of
+its ~240 alerts that week were 2M.
+
+Stopped (`launchctl bootout`), then **disabled** by Manoj (`launchctl disable
+gui/$(id -u)/com.vu2cpl.dxca`), which does persist; the plist and `data/` are
+untouched. The other boxes were swept for a third sender the same day: .170
+(Windows) has only the test accounts, Telegram unset and zero `alerts_sent`;
+.109 (`ubersdr`) has no DXCA; .107 was not on the LAN. **noderedpi4 is the
+only sender.**
+
+Worth keeping:
+- **When alerts ignore saved settings, first find which host sent them** —
+  `alerts_sent` in each DB — before debugging the filter.
+- With an empty band list, every My Alerts band chip is unlit and only `All`
+  is on, styled as a quiet default — it reads as "off" though it means all.
+  A UI change (chips lit under All, an HF-only shortcut) was offered; no
+  decision yet.
+- `install.sh macos` never runs `launchctl enable` — see Open items.
+
 ## Session 2026-09-10 — the UI mock server is in the repo
 
 `scripts/dxca-mock-server.py` had been sitting untracked since the shell
@@ -1016,9 +1045,12 @@ Manoj executed the checklist the same evening: decoders repointed at
 192.168.1.169 (all three counting on the Pi), the five nodes enabled via
 the System tab (four proven Live immediately, VE7CC honest-yellow as
 usual), RUMlog connected to the Pi's telnet server, passthrough to the
-Mac's RUMlog clean (0 failures). The Mac launchd agent is stopped; its
-plist remains in ~/Library/LaunchAgents (rollback = `./install.sh macos`
-or just `launchctl bootstrap`). **Production DXCA = the Pi.** The Mac
+Mac's RUMlog clean (0 failures). The Mac launchd agent was stopped with
+`bootout` only, which does not survive a login — it was back by 2026-09-10
+and double-sending Telegram alerts until it was **disabled on 2026-09-13**
+(session entry above). Its plist remains in ~/Library/LaunchAgents
+(rollback = `launchctl enable gui/$(id -u)/com.vu2cpl.dxca` first, then
+`./install.sh macos` or `launchctl bootstrap`). **Production DXCA = the Pi.** The Mac
 databases are now historical; the Pi's /opt/dxca/data/dxca.db is
 canonical.
 
@@ -1038,15 +1070,17 @@ When ready to make the Pi the production aggregator:
    tick the five nodes' **On** boxes → Apply & save.
 3. **Mac**: stop the local instance so it releases the cluster logins:
    `launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.vu2cpl.dxca.plist`
-   (and delete the plist if permanent).
+   then `launchctl disable gui/$(id -u)/com.vu2cpl.dxca` — `bootout` alone
+   comes back at the next login (it did; see 2026-09-13).
 4. **RUMlogNG**: DX Cluster tab → connect to `192.168.1.169:7575`
    (Data Port 2237 needs no change — the Pi's passthrough already
    targets the Mac).
 5. Verify on the Pi dashboard: sources counting, nodes Live,
    click-to-fill in RUMlog.
 
-Rollback = reverse: decoders back to 127.0.0.1, re-bootstrap the Mac
-agent (`./install.sh macos`), disable the Pi's nodes (or
+Rollback = reverse: decoders back to 127.0.0.1, re-enable and re-bootstrap
+the Mac agent (`launchctl enable gui/$(id -u)/com.vu2cpl.dxca`, then
+`./install.sh macos`), disable the Pi's nodes (or
 `sudo systemctl stop dxca` on the Pi).
 
 ## M5 progress
@@ -1479,6 +1513,16 @@ the cross-build exists to avoid. Notes should cover everything since the
 last *published* release, because tags can outrun releases.
 
 ## Open items → next session
+
+### OPEN: `install.sh macos` cannot start a disabled agent (2026-09-13)
+
+It runs `bootout` then `bootstrap` and never `enable`, so on a Mac where the
+agent was disabled — this one, since 2026-09-13 — the bootstrap is expected
+to fail (not tried, to keep the agent off) until `launchctl enable
+gui/$(id -u)/com.vu2cpl.dxca` is run by hand. One `launchctl enable` before
+the bootstrap (~`install.sh:359`) would fix it, but would also silently undo
+a deliberate disable on reinstall — decide which is wanted before changing
+it.
 
 ### DONE in v2.17.0: the TCI reconnect defect, fixed before the tag
 

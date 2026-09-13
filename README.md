@@ -418,6 +418,17 @@ The log is at `~/Library/Logs/dxca.log`. To stop it:
 launchctl bootout "gui/$(id -u)" ~/Library/LaunchAgents/com.vu2cpl.dxca.plist
 ```
 
+That lasts only until you next log in — the agent loads itself again. To keep
+it off, also disable it (this persists, and leaves the plist and your data
+alone):
+
+```sh
+launchctl disable "gui/$(id -u)/com.vu2cpl.dxca"
+```
+
+`launchctl enable "gui/$(id -u)/com.vu2cpl.dxca"` undoes that; run it before
+`./install.sh` if you reinstall later.
+
 ### Other Linux (x86-64 or ARM)
 
 Identical to the Pi, with your own package manager for step 1 — the
