@@ -5,7 +5,9 @@
 **On main, unreleased and not deployed (2026-09-21): a destination's
 sources are picked, not typed** — the free-text CSV box on the UDP and MQTT
 destination tabs is now the same All-or-pick chip row as the Spots rail and
-My Alerts. Web UI only; see *Session 2026-09-21*. Last release:
+My Alerts, **and the FlexRadio and TCI tabs gained the same pick** (two new
+`notify_json` lists, empty = all; no migration). See *Session 2026-09-21*.
+Last release:
 **v2.21.0 — a fresh install needs no ClubLog API key, and a 403 is no longer
 retried.** The key ClubLog issue per *application* now ships inside the
 binary (injected at build time, never committed — they delete keys found in
@@ -633,10 +635,45 @@ captured `PUT /api/config/global` carried the expected lists with the other
 three fields intact. `pnpm -C web-ui build` clean; no Rust touched, so
 `cargo test` was not re-run.
 
-**Not done, on purpose:** FlexRadio and TCI have no source filter at all.
-Adding one is a server change (a new field in the account's notify row and
-the send paths), not a UI one, so it was asked rather than built — see Open
-items.
+**Then the radios, on Manoj's yes** (*"yes, add source filter for flex and
+tci too"*). FlexRadio and TCI had no source filter at all — `fan_out` gated
+them by level and the account's Telegram narrowing, never by the feed that
+carried the spot — so this half IS a server change, kept as small as the
+pattern allows:
+
+- **Two lists on `NotifyUserConfig`** (`db.rs`): `flex_sources` and
+  `tci_sources`, `#[serde(default)]`, **empty = all** like every other list
+  on the row. Separate rather than shared, for the reason the lifetimes
+  are: two radios are two displays. No migration — the row is JSON, and an
+  account saved before the fields existed reads back with both empty and
+  keeps every mark it had (tested against a hand-written old row).
+- **`flex_wants_source` / `tci_wants_source`** over one `source_allowed`
+  — the same rule as `broadcast.rs` and `mqtt.rs`, exact match. Folded into
+  `wants_flex` / `wants_tci` at the TOP of `fan_out`, not at the push, so
+  a spot no sink wants is never classified: an account running only a
+  radio held to one feed would otherwise classify the whole stream to mark
+  a fraction of it.
+- **UI**: a **Sources** section on each radio tab, between Radios and How
+  long spots stay, using `ChipGroup` and `sourceChoices()` exactly as the
+  UDP rows do. The tabs call `loadServerConfig()` for the names — fine,
+  Destinations is admin-only. Both tabs' help tips and the two `db.rs` doc
+  comments that said Telegram's narrowing alone governs the radios now
+  name the pick.
+- `put_notify` deserialises the whole struct and every page on the row
+  loads-then-writes the whole object, so the lists ride through Telegram,
+  Alerts and the other radio tab's saves untouched.
+
+Four `db.rs` tests: empty = all, the two lists are independent and exact,
+an old row marks every feed, a round trip keeps order. Full gate green
+(`cargo fmt`, clippy `-D warnings`, every workspace test, `pnpm build`).
+Browser-checked against the scratch mock at 1440px and phone width: on
+Flex, unticking the stale name removes it, the Save carries
+`flex_sources: ["MSHV","VE7CC"]` with devices, lifetimes, Telegram and
+bands intact and `tci_sources: []` riding along, All writes `[]`; on TCI,
+a fresh row shows All lit, a pick writes in chip order, and the Flex list
+rides through untouched. Telegram deliberately did **not** get a source pick
+— not asked, and its narrowing is the account's "what wakes me", not a
+destination's.
 
 ## Session 2026-09-13 — the Mac agent was back, sending its own alerts
 
@@ -1574,20 +1611,19 @@ Status section led with v2.20.4 for eighteen days (backfilled 2026-09-21).
 
 ## Open items → next session
 
-### OPEN: ship the destination source picker (2026-09-21)
+### OPEN: ship the destination source picker, all four tabs (2026-09-21)
 
-On main since 2026-09-21, not tagged, not on any host. Web-UI-only, so the
-deploy is the ordinary binary swap; nothing to migrate. Fold into the next
-release.
+On main since 2026-09-21, not tagged, not on any host: the UDP/MQTT chip
+picker (UI only) and the FlexRadio/TCI source pick (two new `notify_json`
+lists, empty = all). Nothing to migrate — an old row reads as All. The
+deploy is the ordinary binary swap. Fold into the next release; both halves
+are one feature and should ship together.
 
-### OPEN: source filter for FlexRadio and TCI? (2026-09-21)
+### DONE (on main, unreleased): source filter for FlexRadio and TCI (2026-09-21)
 
-Raised by the source-picker request. UDP and MQTT destinations carry a
-`sources` allowlist; the FlexRadio panadapter and the TCI panorama do not —
-`UserService::fan_out` (`users.rs`) gates them by alert level and the
-account's other alert settings, never by the feed that carried the spot.
-Adding it means a field in the notify row plus a check before `push_flex` /
-`push_tci`, i.e. a server change. Asked, not built; waiting on Manoj.
+Raised by the source-picker request, asked rather than assumed because it
+was a server change, built the same day on Manoj's yes. See *Session
+2026-09-21*.
 
 ### OPEN: `install.sh macos` cannot start a disabled agent (2026-09-13)
 

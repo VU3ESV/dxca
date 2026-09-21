@@ -667,10 +667,18 @@ impl UserService {
             // same alerts, and any one alone is a reasonable way to run — so
             // the gate asks whether ANY of them wants this account's alerts,
             // not whether Telegram does.
+            //
+            // Each radio's own source pick is folded in HERE rather than at
+            // its push below, so that "wants" means wants THIS spot: an
+            // account running only a radio held to one feed would otherwise
+            // classify the whole stream to mark a fraction of it.
             let wants_telegram = notify.telegram_enabled;
-            let wants_flex =
-                notify.flex_enabled && !notify.flex_targets(flex::DEFAULT_PORT).is_empty();
-            let wants_tci = notify.tci_enabled && !notify.tci_targets(tci::DEFAULT_PORT).is_empty();
+            let wants_flex = notify.flex_enabled
+                && !notify.flex_targets(flex::DEFAULT_PORT).is_empty()
+                && notify.flex_wants_source(&spot.source_name);
+            let wants_tci = notify.tci_enabled
+                && !notify.tci_targets(tci::DEFAULT_PORT).is_empty()
+                && notify.tci_wants_source(&spot.source_name);
             if !wants_telegram && !wants_flex && !wants_tci {
                 continue;
             }

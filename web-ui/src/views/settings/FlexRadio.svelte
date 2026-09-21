@@ -18,6 +18,10 @@
   import { api } from '../../lib/api';
   import { onMount } from 'svelte';
   import HelpTip from '../../lib/HelpTip.svelte';
+  import ChipGroup from '../../lib/ChipGroup.svelte';
+  // Only for the source NAMES the picker offers — the pick itself is saved
+  // in this account's notify row with everything else on this page.
+  import { loadServerConfig, sourceChoices } from '../../lib/serverconfig.svelte';
 
   const DEFAULT_PORT = 4992;
 
@@ -26,6 +30,7 @@
     flex_host: '',
     flex_port: DEFAULT_PORT,
     flex_devices: [],
+    flex_sources: [],
     flex_life_dxcc_minutes: 60,
     flex_life_band_mode_minutes: 15,
     flex_life_other_minutes: 1,
@@ -34,7 +39,17 @@
   let error = $state('');
   let busy = $state(false);
 
+  // The chips on offer: every configured UDP source and cluster node, plus
+  // any name this account's list still holds after its source went away —
+  // lit, with a tooltip, so a stale pick is seen rather than silently
+  // narrowing the radio to a feed that cannot send.
+  let opts = $derived(sourceChoices(cfg.flex_sources ?? []));
+
   onMount(async () => {
+    // For the Sources chips: the names come from the server config, which
+    // this tab can read because Destinations is admin-only. A no-op when
+    // another Settings page already loaded it.
+    loadServerConfig();
     const r = await api('GET', '/api/config/me/notifications');
     if (r.status === 200 && r.json) {
       cfg = { ...cfg, ...r.json };
@@ -92,6 +107,7 @@
     const r = await api('PUT', '/api/config/me/notifications', {
       ...cfg,
       flex_devices: devices,
+      flex_sources: cfg.flex_sources ?? [],
       // Kept in step with the first radio so a row stays readable by a DXCA
       // that predates the list. The server does this too; sending it here
       // keeps the object we hold identical to the one it stores.
@@ -121,7 +137,8 @@
       point: the alert level comes from your ClubLog log, which nothing else
       on the network can see. Everything that narrows Telegram narrows this
       too — levels, bands, modes, spotter kind, band mask, cooldown — and it
-      works whether or not Telegram itself is switched on.
+      works whether or not Telegram itself is switched on. <b>Sources</b>,
+      below, is the one pick that is this radio's own.
       <br /><br />
       <b>If something else already feeds the radio every cluster spot,
       disconnect it first</b>, or each alert will arrive twice.
@@ -177,6 +194,29 @@
   <div class="add">
     <button onclick={addDevice}>Add radio</button>
   </div>
+
+  <h3>
+    Sources
+    <HelpTip label="Sources">
+      Which feeds may put a mark on the panadapter. <b>All</b> is every
+      decoder and cluster node; pick names to mark only spots that arrived by
+      those.
+      <br /><br />
+      The same pick each UDP and MQTT destination has, and separate from the
+      TCI tab's — two radios are two displays. Levels, bands, modes and the
+      rest of the Telegram narrowing still apply on top of it.
+    </HelpTip>
+  </h3>
+  <!-- The same All-or-pick chips as the Spots rail; empty is All, the
+       convention the server's own list follows. Written back in chip order
+       so the stored row does not reshuffle on every click. -->
+  <ChipGroup
+    options={opts}
+    bind:selected={
+      () => new Set(cfg.flex_sources ?? []),
+      (v) => (cfg.flex_sources = opts.map((o) => o.key).filter((k) => v.has(k)))
+    }
+  />
 
   <h3>
     How long spots stay

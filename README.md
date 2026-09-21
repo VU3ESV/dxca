@@ -824,16 +824,20 @@ passthrough → RUMlog **2237**.
 Per-user settings (ClubLog credentials, alert preferences, Telegram) are
 managed in the web GUI per account, not in the file.
 
-Each UDP and MQTT destination can be held to particular sources: under
-**Settings › Server › Destinations**, the **Sources** line beneath each row
-is the same **All**-or-pick chip row as the Spots filter. **All** (the
-default, stored as `sources = []`) sends every decoder and cluster node;
-pick chips to send only those. A **passthrough** destination offers the UDP
-decoders only — it relays their raw datagrams and nothing else, so a
-cluster node's spot never reaches it. A name the list still holds after its
-source was renamed or deleted stays on the line, lit, until it is unticked.
-(On main after v2.21.0; releases up to v2.21.0 take the same list as a
-comma-separated text box.)
+Every destination can be held to particular sources — each UDP and MQTT
+row, and the FlexRadio and TCI tabs: under **Settings › Server ›
+Destinations**, the **Sources** line beneath each UDP or MQTT row, and the
+**Sources** section on each radio tab, is the same **All**-or-pick chip row
+as the Spots filter. **All** (the default, stored as an empty list) sends
+every decoder and cluster node; pick chips to send only those. A
+**passthrough** destination offers the UDP decoders only — it relays their
+raw datagrams and nothing else, so a cluster node's spot never reaches it.
+A name the list still holds after its source was renamed or deleted stays
+on the line, lit, until it is unticked. The UDP and MQTT lists are the
+destination's (`config/dxca.toml`, the MQTT table); the two radio lists are
+the account's, saved with its other radio settings, and each radio has its
+own. (On main after v2.21.0; releases up to v2.21.0 take the UDP and MQTT
+lists as a comma-separated text box and have no radio pick at all.)
 
 ### Who spotted it
 
@@ -1183,7 +1187,10 @@ has, so this is the one route by which a panadapter can show *New DXCC*
 rather than *a spot*. Everything that narrows Telegram narrows this too:
 levels, bands, modes, spotter kind, band mask and the cooldown. It is
 independent of `telegram_enabled`, so spots on the radio without a phone
-buzzing is a perfectly good way to run.
+buzzing is a perfectly good way to run. The one pick that is the radio's own
+is **Sources** on its tab — which feeds may mark it, **All** by default — the
+same per-destination pick the UDP and MQTT rows have (see
+[Configuration](#configuration)).
 
 **If something else already feeds the radio, disconnect it first.** A client
 pushing every cluster spot plus DXCA pushing alerts means each alert lands
@@ -1227,10 +1234,11 @@ ExpertSDR3 drives — on WebSocket **40001**. Set the radio's IP under
 
 Everything in the FlexRadio section above applies unchanged: the same colour
 palette, the same lifetime ladder and its defaults, the same per-account
-settings, the same "only alerts, never the whole feed", and the same warning
-about a second client already feeding the display. The two are independent in
-every direction — a station can run one, the other, both, or neither, and
-either without Telegram.
+settings, a **Sources** pick of its own (separate from the Flex tab's — two
+radios are two displays), the same "only alerts, never the whole feed", and
+the same warning about a second client already feeding the display. The two
+are independent in every direction — a station can run one, the other, both,
+or neither, and either without Telegram.
 
 **More than one radio is allowed.** The TCI tab holds a list rather than a
 single address: **Add radio** for each ExpertSDR3 you want marked — a second

@@ -419,7 +419,8 @@ pub struct NotifyUserConfig {
     /// same alerts, and wanting spots on the radio without a phone buzzing
     /// is an entirely reasonable way to run. Everything that narrows
     /// Telegram — levels, bands, modes, spotter kind, band mask, cooldown —
-    /// narrows this too, so one set of choices governs both.
+    /// narrows this too, so one set of choices governs both; on top of that
+    /// the radio has a source pick of its own, `flex_sources`.
     #[serde(default)]
     pub flex_enabled: bool,
     /// The radio's address. Empty switches the sink off however
@@ -439,6 +440,21 @@ pub struct NotifyUserConfig {
     /// adopted into it by `notify_config`.
     #[serde(default)]
     pub flex_devices: Vec<RadioDevice>,
+
+    /// Which feeds may put a mark on the panadapter — source names, the
+    /// same `Spot::source_name` a UDP destination's `sources` matches on.
+    /// **Empty means ALL**, the convention every other list here follows
+    /// and the reason an account saved before this field existed keeps
+    /// every alert it had.
+    ///
+    /// The one narrowing that is the radio's own rather than Telegram's.
+    /// Telegram's bands, modes and spotter kind carry over because an
+    /// operator wants waking for the same things they want marked; which
+    /// *feed* a spot came by is a question about the destination, not the
+    /// alert — and the UDP and MQTT destinations already ask it per row. A
+    /// radio is a destination like any other, so it gets the same pick.
+    #[serde(default)]
+    pub flex_sources: Vec<String>,
 
     // How long a spot stays on the panadapter, per level. 0 means the
     // default shown against each.
@@ -471,7 +487,8 @@ pub struct NotifyUserConfig {
     /// of them in every direction: a station can run one, the other, both,
     /// or neither, and either without Telegram. Everything that narrows
     /// Telegram — levels, bands, modes, spotter kind, band mask, cooldown —
-    /// narrows this too, so one set of choices governs all three sinks.
+    /// narrows this too, so one set of choices governs all three sinks; the
+    /// source pick, `tci_sources`, is this radio's own.
     #[serde(default)]
     pub tci_enabled: bool,
     /// The radio's address. Empty switches the sink off however
@@ -495,6 +512,14 @@ pub struct NotifyUserConfig {
     /// one.
     #[serde(default)]
     pub tci_devices: Vec<RadioDevice>,
+
+    /// Which feeds may put a mark on the panorama. The `flex_sources` twin
+    /// — same contract, **empty means ALL** — and kept separate from it for
+    /// the reason the lifetimes are: two radios are two displays, and the
+    /// day one should show only the local skimmer while the other shows
+    /// everything, a shared list would be a migration instead of a pick.
+    #[serde(default)]
+    pub tci_sources: Vec<String>,
 
     // How long a spot stays on the panorama, per level — the same ladder as
     // the Flex fields above, and for the same reason: New Slot and the four
@@ -561,6 +586,7 @@ impl Default for NotifyUserConfig {
             flex_host: String::new(),
             flex_port: 0,
             flex_devices: Vec::new(),
+            flex_sources: Vec::new(),
             flex_life_dxcc_minutes: 0,
             flex_life_band_mode_minutes: 0,
             flex_life_other_minutes: 0,
@@ -568,6 +594,7 @@ impl Default for NotifyUserConfig {
             tci_host: String::new(),
             tci_port: 0,
             tci_devices: Vec::new(),
+            tci_sources: Vec::new(),
             tci_life_dxcc_minutes: 0,
             tci_life_band_mode_minutes: 0,
             tci_life_other_minutes: 0,
@@ -610,6 +637,16 @@ fn radio_targets(devices: &[RadioDevice], default_port: u16) -> Vec<(String, u16
     out
 }
 
+/// The per-destination source rule, as `broadcast.rs` and `mqtt.rs` each
+/// state it: empty admits every feed, otherwise the name must be listed.
+/// One copy for the two radios, so the two cannot drift from each other —
+/// they can still drift from the two in `dxca-connect`, which is accepted:
+/// the rule is one line, and a shared home for it would couple the crate
+/// that talks to radios to the one that stores accounts.
+fn source_allowed(sources: &[String], source_name: &str) -> bool {
+    sources.is_empty() || sources.iter().any(|s| s == source_name)
+}
+
 impl NotifyUserConfig {
     /// Every ExpertSDR3 address this account's alerts should reach.
     ///
@@ -625,6 +662,23 @@ impl NotifyUserConfig {
     /// to.
     pub fn flex_targets(&self, default_port: u16) -> Vec<(String, u16)> {
         radio_targets(&self.flex_devices, default_port)
+    }
+
+    /// May a spot that arrived by `source_name` be marked on the FlexRadio?
+    ///
+    /// The same rule as a UDP destination's `sources` (`broadcast.rs`,
+    /// `source_allowed`): an empty list admits everything, otherwise the
+    /// name must be listed. Exact match, as there — source names are the
+    /// operator's own labels for their feeds, typed once on Settings ›
+    /// Sources and picked from a list everywhere else, so there is no
+    /// spelling to be lenient about.
+    pub fn flex_wants_source(&self, source_name: &str) -> bool {
+        source_allowed(&self.flex_sources, source_name)
+    }
+
+    /// The [`Self::flex_wants_source`] twin for the ExpertSDR3 panorama.
+    pub fn tci_wants_source(&self, source_name: &str) -> bool {
+        source_allowed(&self.tci_sources, source_name)
     }
 
     /// Does this spot's band/mode survive the Telegram narrowing? Empty list
@@ -2163,6 +2217,67 @@ mod tests {
         assert!(!n.passes_band_mode(Some("40M"), "CW"), "band must gate");
         // Band narrowing is on, and this spot has no band at all → excluded.
         assert!(!n.passes_band_mode(None, "CW"));
+    }
+
+    /// The radios' own narrowing, beside Telegram's. Empty means all — the
+    /// convention every list here follows, and what keeps an account saved
+    /// before the field existed marking every alert it did.
+    #[test]
+    fn empty_radio_source_lists_mean_all() {
+        let n = NotifyUserConfig::default();
+        assert!(n.flex_wants_source("MSHV"));
+        assert!(n.tci_wants_source("N2WQ-2"));
+    }
+
+    #[test]
+    fn each_radio_narrows_on_its_own_source_list() {
+        let n = NotifyUserConfig {
+            flex_sources: vec!["MSHV".into()],
+            tci_sources: vec!["N2WQ-2".into(), "VE7CC".into()],
+            ..Default::default()
+        };
+        assert!(n.flex_wants_source("MSHV"));
+        assert!(
+            !n.flex_wants_source("N2WQ-2"),
+            "a feed the Flex list omits must not mark the panadapter"
+        );
+        assert!(n.tci_wants_source("N2WQ-2"));
+        assert!(n.tci_wants_source("VE7CC"));
+        assert!(!n.tci_wants_source("MSHV"), "the two lists are independent");
+        // Exact match: names are picked from a list, never typed here.
+        assert!(!n.flex_wants_source("mshv"));
+    }
+
+    /// A row written before the two lists existed carries neither. It must
+    /// read as "every feed", not as "no feed" — a radio that stopped being
+    /// marked on upgrade is the failure an operator would blame on the radio.
+    #[test]
+    fn a_row_saved_before_radio_sources_existed_marks_every_feed() {
+        let old_row = r#"{"telegram_enabled":false,"flex_enabled":true,
+            "flex_devices":[{"host":"192.168.1.148","port":4992,"enabled":true}],
+            "tci_enabled":true,
+            "tci_devices":[{"host":"192.168.1.60","port":40001,"enabled":true}]}"#;
+        let cfg: NotifyUserConfig = serde_json::from_str(old_row).expect("old row parses");
+        assert!(cfg.flex_sources.is_empty() && cfg.tci_sources.is_empty());
+        assert!(cfg.flex_wants_source("UberSDR CWskim"));
+        assert!(cfg.tci_wants_source("UberSDR CWskim"));
+    }
+
+    #[test]
+    fn radio_source_picks_survive_a_round_trip() {
+        let (db, _p) = temp_db();
+        let uid = db.create_user("VU2CPL", "h", "", "admin").unwrap();
+        let mut cfg = db.notify_config(uid).unwrap();
+        cfg.flex_sources = vec!["MSHV".into()];
+        cfg.tci_sources = vec!["VE7CC".into(), "N2WQ-2".into()];
+        db.set_notify_config(uid, &cfg).unwrap();
+        let back = db.notify_config(uid).unwrap();
+        assert_eq!(back.flex_sources, vec!["MSHV".to_string()]);
+        // Order kept: the UI writes chip order so the stored row is stable.
+        assert_eq!(
+            back.tci_sources,
+            vec!["VE7CC".to_string(), "N2WQ-2".to_string()]
+        );
     }
 
     #[test]
