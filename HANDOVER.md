@@ -684,8 +684,9 @@ the truth first time. Order: release commit `992f97c` + annotated tag →
 binary kept as `dxca.rollback-v2.21.0`) → verified: 2.22.0, service up
 10:26:40 IST, 8/9 nodes — **the same 8/9 as before; UberCW was already
 refusing (attempt 2680)**, not a deploy symptom: **UberCW is switched off**
-(Manoj, 2026-09-21), so 8/9 is the expected reading on noderedpi4 while it
-stays off — telnet client
+(Manoj, 2026-09-21), and at 10:38 he unticked its **On** box, so noderedpi4
+now reads **8/8 Live** with no reconnect loop; re-tick it when UberCW comes
+back — telnet client
 reconnected, config md5 unchanged, journal clean, served bundle
 `index-XGoUzPeG.js` carrying `flex_sources` / `tci_sources` →
 `win-bundle.sh` → `gh release create` with `dxca-2.22.0-windows-x64.zip`
