@@ -1,10 +1,11 @@
 <script lang="ts">
   // A pick-any-subset row of chips, with All / None shortcuts.
   //
-  // Deliberately shared by the Spots screen (an ephemeral display narrowing)
-  // and My Alerts (a persisted Telegram narrowing): the two mean different
-  // things but they ASK the same question, and the band list in particular is
-  // long enough that two hand-rolled versions would drift.
+  // Deliberately shared by the Spots screen (an ephemeral display narrowing),
+  // My Alerts (a persisted Telegram narrowing) and the destination source
+  // pickers in Settings › Destinations: they mean different things but they
+  // ASK the same question, and the band list in particular is long enough
+  // that hand-rolled versions would drift.
   //
   // The empty set means EVERYTHING, matching the server's own
   // `notify_bands` / `notify_modes` convention — so a fresh account is not
@@ -12,7 +13,9 @@
   // (which would silently stop tracking the band list if it ever grew).
 
   let {
-    label,
+    // Optional: a table cell already has its column header, and a second
+    // "Sources" beside the chips only pushes All onto a ragged line.
+    label = '',
     options,
     selected = $bindable(),
     // Optional per-option colour token, used by the level picker so a chip
@@ -23,8 +26,10 @@
     // the chips wrap after two.
     stacked = false,
   }: {
-    label: string;
-    options: { key: string; label: string }[];
+    label?: string;
+    // `title` is an optional per-chip tooltip, for a chip that needs to say
+    // why it is there (a destination still naming a source that has gone).
+    options: { key: string; label: string; title?: string }[];
     selected: Set<string>;
     levelKeys?: boolean;
     stacked?: boolean;
@@ -41,7 +46,7 @@
 </script>
 
 <div class="chipgroup" class:stacked>
-  <span class="grouplabel">{label}</span>
+  {#if label}<span class="grouplabel">{label}</span>{/if}
   <button
     class="filter-chip all"
     class:on={allOn}
@@ -62,6 +67,7 @@
         class:on={selected.has(o.key)}
         aria-pressed={selected.has(o.key)}
         data-level={levelKeys ? o.key : undefined}
+        title={o.title}
         onclick={() => toggle(o.key)}
       >
         {#if levelKeys}<span class="level-dot"></span>{/if}

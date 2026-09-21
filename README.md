@@ -799,6 +799,17 @@ passthrough → RUMlog **2237**.
 Per-user settings (ClubLog credentials, alert preferences, Telegram) are
 managed in the web GUI per account, not in the file.
 
+Each UDP and MQTT destination can be held to particular sources: under
+**Settings › Server › Destinations**, the **Sources** line beneath each row
+is the same **All**-or-pick chip row as the Spots filter. **All** (the
+default, stored as `sources = []`) sends every decoder and cluster node;
+pick chips to send only those. A **passthrough** destination offers the UDP
+decoders only — it relays their raw datagrams and nothing else, so a
+cluster node's spot never reaches it. A name the list still holds after its
+source was renamed or deleted stays on the line, lit, until it is unticked.
+(On main after v2.21.0; releases up to v2.21.0 take the same list as a
+comma-separated text box.)
+
 ### Who spotted it
 
 Two different questions, two columns. **Source** is the feed that carried the
@@ -1354,8 +1365,9 @@ for a panadapter — and the cluster line for anything that already parses the
 DX-Spider format. Band is derived from the frequency, so a consumer never has
 to. Publishing both costs one extra small message and locks nobody out.
 
-Destinations honour the same `sources` allowlist and `unfiltered` flag as the
-UDP ones, so MQTT and your logger see one consistent feed. QoS 0: a spot feed
+Destinations honour the same `sources` allowlist (picked on the **Sources**
+line under each row — see [Configuration](#configuration)) and `unfiltered`
+flag as the UDP ones, so MQTT and your logger see one consistent feed. QoS 0: a spot feed
 is a live stream, and dropping one when the queue backs up beats stalling the
 pipeline on a slow broker.
 

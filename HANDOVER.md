@@ -1,7 +1,11 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-09-14 · **Status:**
+**Created:** 2026-08-26 · **Last updated:** 2026-09-21 · **Status:**
+**On main, unreleased and not deployed (2026-09-21): a destination's
+sources are picked, not typed** — the free-text CSV box on the UDP and MQTT
+destination tabs is now the same All-or-pick chip row as the Spots rail and
+My Alerts. Web UI only; see *Session 2026-09-21*. Last release:
 **v2.21.0 — a fresh install needs no ClubLog API key, and a 403 is no longer
 retried.** The key ClubLog issue per *application* now ships inside the
 binary (injected at build time, never committed — they delete keys found in
@@ -581,6 +585,58 @@ and the web GUI's design system from the same repo's
 `web-ui/default/src/` (app.css + the theme module and switcher).
 **Production runs on noderedpi4 (192.168.1.169) since the 2026-08-27
 cutover**; the 1.x macOS app is the retained fallback (maintenance mode).
+
+## Session 2026-09-21 — destination sources are picked, not typed
+
+Manoj: *"add a feature to filter sources to be sent to destinations all, or
+select exactly like in some of our other menus"*. The filter already
+existed end to end — `sources` on every UDP and MQTT destination, empty
+meaning all, enforced by `source_allowed` in `broadcast.rs` and its twin in
+`mqtt.rs` — but the only way to set it was a CSV text box, where a typo or a
+renamed source silently narrowed a destination to nothing. **UI only: no
+server, schema or config change**, so nothing about a running install moves
+until the new bundle is deployed, and an existing `sources` list reads back
+exactly as saved.
+
+- **The control is `ChipGroup`**, the one the Spots rail and My Alerts
+  already use: **All** plus one chip per source, empty = All — the same
+  convention the server had. Two optional additions to the shared
+  component, both inert for its existing callers: `label` may be omitted,
+  and an option may carry a `title` tooltip.
+- **The chips are `sourceChoices()`** in `serverconfig.svelte.ts`: every
+  configured UDP source, then every cluster node, read from the working
+  copy (a source added on Settings › Sources shows up before it is saved).
+  **A passthrough row offers the UDP decoders only** — it relays raw
+  datagrams and nothing else, so a node chip there would be wired to
+  nothing.
+- **A name the list already holds but no longer on offer stays visible**,
+  lit, with a tooltip saying why (source renamed or deleted; node left on a
+  row switched to passthrough). The CSV box showed such names plainly; a
+  picker that hid them would leave a destination silently narrowed to a
+  source that cannot send. Unticking one drops it for good.
+- **Sources moved out of the column row onto a full-width line under each
+  destination** (`tr.srcrow`). As a column it overran the 960px settings
+  pane even as the old 14rem box (the UDP table scrolled by 50px); with a
+  nine-node list the chips made rows five lines tall. The line is
+  `width: 0; min-width: min(100%, 100cqw)` against a `container-type` on
+  `.editor-scroll`, so it fills the row without widening the table and
+  wraps within the *visible* width — which matters on MQTT, whose ten
+  fields alone are 1008px against 878px visible.
+- The save writes names back in chip order, so `config/dxca.toml` does not
+  reshuffle on every click.
+
+**Verified against `scripts/dxca-mock-server.py`** (a scratch copy stocked
+with 3 decoders, 9 nodes, a stale name and a node on a passthrough row) at
+1440px and phone width: toggling, All, untick-to-All, stale removal and a
+format switch all behave, the UDP table no longer scrolls sideways, and the
+captured `PUT /api/config/global` carried the expected lists with the other
+three fields intact. `pnpm -C web-ui build` clean; no Rust touched, so
+`cargo test` was not re-run.
+
+**Not done, on purpose:** FlexRadio and TCI have no source filter at all.
+Adding one is a server change (a new field in the account's notify row and
+the send paths), not a UI one, so it was asked rather than built — see Open
+items.
 
 ## Session 2026-09-13 — the Mac agent was back, sending its own alerts
 
@@ -1513,6 +1569,21 @@ the cross-build exists to avoid. Notes should cover everything since the
 last *published* release, because tags can outrun releases.
 
 ## Open items → next session
+
+### OPEN: ship the destination source picker (2026-09-21)
+
+On main since 2026-09-21, not tagged, not on any host. Web-UI-only, so the
+deploy is the ordinary binary swap; nothing to migrate. Fold into the next
+release.
+
+### OPEN: source filter for FlexRadio and TCI? (2026-09-21)
+
+Raised by the source-picker request. UDP and MQTT destinations carry a
+`sources` allowlist; the FlexRadio panadapter and the TCI panorama do not —
+`UserService::fan_out` (`users.rs`) gates them by alert level and the
+account's other alert settings, never by the feed that carried the spot.
+Adding it means a field in the notify row plus a check before `push_flex` /
+`push_tci`, i.e. a server change. Asked, not built; waiting on Manoj.
 
 ### OPEN: `install.sh macos` cannot start a disabled agent (2026-09-13)
 

@@ -60,6 +60,44 @@ export async function saveServerConfig(): Promise<void> {
 /** Drop a row from one of the three lists. */
 export const drop = (list: any[], i: number) => list.filter((_, idx) => idx !== i);
 
+/** The chips a destination's source picker offers: every configured UDP
+ * source, then every cluster node, in the order Settings › Sources lists them.
+ * Read from the working copy, so a source added on that page shows up here
+ * before it is saved.
+ *
+ * `udpOnly` is for a passthrough destination, which relays the decoders' raw
+ * datagrams and nothing else — a cluster node's spot never reaches it, so a
+ * node chip there would be a control wired to nothing.
+ *
+ * A name the destination already lists but that is no longer on offer (a
+ * source renamed or deleted since, or a node left on a row switched to
+ * passthrough) is kept as a chip, lit, with a tooltip saying why: the CSV box
+ * this replaced showed such names plainly, and a picker that hid them would
+ * leave a destination silently narrowed to a source that cannot send. */
+export function sourceChoices(
+  selected: string[],
+  udpOnly = false,
+): { key: string; label: string; title?: string }[] {
+  const udp: string[] = (server.cfg?.udp_sources ?? []).map((s: any) => s.name);
+  const nodes: string[] = (server.cfg?.cluster_nodes ?? []).map((n: any) => n.name);
+  const offered = [...new Set([...udp, ...(udpOnly ? [] : nodes)])].filter(Boolean);
+  const out: { key: string; label: string; title?: string }[] = offered.map((n) => ({
+    key: n,
+    label: n,
+  }));
+  for (const n of selected) {
+    if (offered.includes(n)) continue;
+    out.push({
+      key: n,
+      label: n,
+      title: nodes.includes(n)
+        ? 'A cluster node — passthrough relays UDP decoders only, so nothing from it arrives here. Untick to drop it.'
+        : 'No source has this name any more — nothing arrives under it. Untick to drop it.',
+    });
+  }
+  return out;
+}
+
 /// A source name is a COLUMN WIDTH in the spots feed: the table is fixed-layout
 /// now, and the Source column is sized to the longest name an operator has
 /// configured. Fourteen characters is what "UberSDR CWskim" needs and what the

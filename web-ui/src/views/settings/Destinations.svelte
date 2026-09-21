@@ -20,10 +20,11 @@
   import HelpTip from '../../lib/HelpTip.svelte';
   import ApplySave from '../../lib/ApplySave.svelte';
   import ConfigGate from '../../lib/ConfigGate.svelte';
+  import ChipGroup from '../../lib/ChipGroup.svelte';
   import Mqtt from './Mqtt.svelte';
   import FlexRadio from './FlexRadio.svelte';
   import Tci from './Tci.svelte';
-  import { server, loadServerConfig, drop } from '../../lib/serverconfig.svelte';
+  import { server, loadServerConfig, drop, sourceChoices } from '../../lib/serverconfig.svelte';
 
   onMount(loadServerConfig);
 
@@ -86,9 +87,11 @@
           logger that way.
         </span>
         <span class="para">
-          <b>Sources</b> empty means every source. <b>Unf</b> bypasses the
-          dedupe window, so the destination sees every copy of a spot rather
-          than the first.
+          <b>Sources</b>: <b>All</b> sends every source; pick names to send
+          only those. A <b>passthrough</b> row offers only the UDP decoders,
+          because a cluster node's spot never reaches it. <b>Unf</b> bypasses
+          the dedupe window, so the destination sees every copy of a spot
+          rather than the first.
         </span>
       </HelpTip>
     </h2>
@@ -96,18 +99,18 @@
       <table class="editor">
         <thead>
           <tr>
-            <!-- Sources is LAST, after the two tickboxes and the delete
-                 button: it is the widest column by far, and in the middle it
-                 pushed Unf / On / ✕ off the right edge on a laptop, so the
-                 controls you actually reach for needed a horizontal scroll.
-                 The narrow, high-traffic controls come first; the free-text
-                 field takes whatever width is left. -->
+            <!-- No Sources column: each destination's sources sit on a line
+                 of their own under its row (see `srcrow` below). As a column
+                 it was the widest thing in the table — last, it still ran
+                 past the 960px settings pane; in the middle it pushed Unf /
+                 On / ✕ off the right edge. -->
             <th>Name</th><th>IP</th><th>Port</th><th>Format</th>
-            <th>Unf</th><th>On</th><th></th><th>Sources (CSV, empty = all)</th>
+            <th>Unf</th><th>On</th><th></th>
           </tr>
         </thead>
         <tbody>
           {#each server.cfg.broadcast_destinations as d, i}
+            {@const opts = sourceChoices(d.sources, d.format === 'passthrough')}
             <tr>
               <td><input bind:value={d.name} /></td>
               <td><input bind:value={d.ip} class="host" /></td>
@@ -126,12 +129,20 @@
                   onclick={() =>
                     (server.cfg.broadcast_destinations = drop(server.cfg.broadcast_destinations, i))}>✕</button>
               </td>
-              <td>
-                <input
-                  class="csv"
-                  value={d.sources.join(', ')}
-                  onchange={(e: any) =>
-                    (d.sources = e.target.value.split(',').map((x: string) => x.trim()).filter(Boolean))}
+            </tr>
+            <!-- The same All-or-pick chips as the Spots rail and My Alerts,
+                 and the same convention the server already had: an empty
+                 list is All. Written back in the order the chips show, so
+                 config/dxca.toml does not reshuffle on every click. -->
+            <tr class="srcrow">
+              <td colspan="7">
+                <ChipGroup
+                  label="Sources"
+                  options={opts}
+                  bind:selected={
+                    () => new Set(d.sources),
+                    (v) => (d.sources = opts.map((o) => o.key).filter((k) => v.has(k)))
+                  }
                 />
               </td>
             </tr>

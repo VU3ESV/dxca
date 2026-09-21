@@ -7,6 +7,10 @@
   import { api } from '../../lib/api';
   import { onMount } from 'svelte';
   import HelpTip from '../../lib/HelpTip.svelte';
+  import ChipGroup from '../../lib/ChipGroup.svelte';
+  // Only for the source NAMES the picker offers — this page still saves to
+  // its own endpoint and never writes the global config.
+  import { sourceChoices } from '../../lib/serverconfig.svelte';
 
   let mqtt = $state<any[]>([]);
   let stats = $state<any>(null);
@@ -80,19 +84,27 @@
         in. Credentials are stored in <code>data/dxca.db</code> (0600), never in
         <code>config/dxca.toml</code>, which is why this page has its own Save.
       </span>
+      <span class="para">
+        <b>Sources</b>: <b>All</b> publishes every source; pick names to
+        publish only those.
+      </span>
     </HelpTip>
   </h2>
   <div class="editor-scroll">
     <table class="editor">
       <thead>
         <tr>
+          <!-- Sources on their own line under each row, as on the UDP tab
+               and for the same reason: as a column they were the widest
+               thing in the table, and pushed Unf / On / ✕ off the edge. -->
           <th>Name</th><th>Broker</th><th>Port</th><th>User</th><th>Password</th>
-          <th>Base topic</th><th>Client ID</th><th>Sources (CSV, empty = all)</th>
+          <th>Base topic</th><th>Client ID</th>
           <th>Unf</th><th>On</th><th></th>
         </tr>
       </thead>
       <tbody>
         {#each mqtt as d, i}
+          {@const opts = sourceChoices(d.sources ?? [])}
           <tr>
             <td><input bind:value={d.name} /></td>
             <td><input bind:value={d.host} class="host" /></td>
@@ -101,17 +113,21 @@
             <td><input type="password" bind:value={d.password} class="port" /></td>
             <td><input bind:value={d.topic} class="host" /></td>
             <td><input bind:value={d.client_id} class="port" /></td>
-            <td>
-              <input
-                class="csv"
-                value={d.sources.join(', ')}
-                onchange={(e: any) =>
-                  (d.sources = e.target.value.split(',').map((x: string) => x.trim()).filter(Boolean))}
-              />
-            </td>
             <td><input type="checkbox" bind:checked={d.unfiltered} title="Unfiltered: bypass dedupe" /></td>
             <td><input type="checkbox" bind:checked={d.enabled} /></td>
             <td><button class="drop" title="Remove" onclick={() => dropRow(i)}>✕</button></td>
+          </tr>
+          <tr class="srcrow">
+            <td colspan="10">
+              <ChipGroup
+                label="Sources"
+                options={opts}
+                bind:selected={
+                  () => new Set(d.sources ?? []),
+                  (v) => (d.sources = opts.map((o) => o.key).filter((k) => v.has(k)))
+                }
+              />
+            </td>
           </tr>
         {/each}
       </tbody>

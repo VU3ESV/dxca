@@ -730,11 +730,16 @@ td.num {
    they are the same surface asked four times. */
 
 /* An editor row wider than the window scrolls inside its own card instead of
-   dragging the whole page sideways. The MQTT row is eleven columns — broker,
-   port, user, password, topic, client id, sources — and comes to roughly
-   77rem, which overflows a 1280px laptop outright. */
+   dragging the whole page sideways. The MQTT row is ten columns — name,
+   broker, port, user, password, topic, client id and three controls — and
+   comes to about 1008px, past the 960px settings pane. (Its sources used to
+   be an eleventh; they now sit on their own line, `.srcrow` below.)
+   `container-type` is what lets that line measure the VISIBLE width of this
+   box. Inline-size containment is free here: the box's width comes from its
+   parent, never from the table inside it. */
 .editor-scroll {
   overflow-x: auto;
+  container-type: inline-size;
 }
 
 /* Sized to its fields, not to the page: at `width: 100%` the table hands all
@@ -758,7 +763,27 @@ td.num {
 .editor td input.port { width: 5rem; }
 .editor td input.host { width: 12rem; }
 .editor td input.call { width: 7rem; }
-.editor td input.csv { width: 14rem; }
+
+/* A destination's source chips, on a full-width line under its row.
+   `width: 0` plus a percentage `min-width` makes the chips FILL the row
+   without WIDENING it: a spanning cell's content otherwise feeds the table's
+   auto layout, and a nine-node list laid out on one line would stretch every
+   column above it.
+   The bottom padding is what groups a row with its sources line — the editor
+   deliberately draws no rule between rows. */
+.editor tr.srcrow td {
+  padding-top: 0;
+  padding-bottom: 0.8rem;
+}
+
+.editor tr.srcrow .chipgroup {
+  width: 0;
+  /* …and no wider than the scroll box's VISIBLE width (`cqw`, from the
+     container on `.editor-scroll`): the MQTT table's fields alone overrun the
+     960px settings pane, and chips laid out to the full table width would
+     wrap behind the horizontal scroll, where nobody sees them. */
+  min-width: min(100%, 100cqw);
+}
 
 /* Square, quiet, and only red on approach — a delete that shouts from rest
    turns every row into a warning. */
