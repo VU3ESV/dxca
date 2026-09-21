@@ -3,8 +3,9 @@
 
 **Created:** 2026-08-26 · **Last updated:** 2026-09-21 · **Status:**
 **v2.22.0 — every destination's sources are picked, not typed, and the
-radios gained the pick (tagged 2026-09-21; deploy record in *Session
-2026-09-21*).** The free-text CSV box on the UDP and MQTT destination tabs
+radios gained the pick. Tagged, released with the Windows zip, and on all
+five hosts, 2026-09-21** (deploy record in *Session 2026-09-21*). The
+free-text CSV box on the UDP and MQTT destination tabs
 is now the same All-or-pick chip row as the Spots rail and My Alerts, and
 the FlexRadio and TCI tabs have a Sources section each (two new
 `notify_json` lists, empty = all; no migration). Previously:
@@ -674,6 +675,32 @@ a fresh row shows All lit, a pick writes in chip order, and the Flex list
 rides through untouched. Telegram deliberately did **not** get a source pick
 — not asked, and its narrowing is the account's "what wakes me", not a
 destination's.
+
+**Released as v2.22.0 and on all five hosts the same morning, one round.**
+Version bumped BEFORE the deploy (the 2026-09-10 lesson), so the sweep told
+the truth first time. Order: release commit `992f97c` + annotated tag →
+**local Pi first** (`pi-deploy.sh vu2cpl@192.168.1.169`, seeded form;
+`data/dxca.db` copied to `dxca.db.pre-v2.22.0`, md5 equal, and the outgoing
+binary kept as `dxca.rollback-v2.21.0`) → verified: 2.22.0, service up
+10:26:40 IST, 8/9 nodes — **the same 8/9 as before; UberCW was already
+refusing (attempt 2680)**, not a deploy symptom — telnet client
+reconnected, config md5 unchanged, journal clean, served bundle
+`index-XGoUzPeG.js` carrying `flex_sources` / `tci_sources` →
+`win-bundle.sh` → `gh release create` with `dxca-2.22.0-windows-x64.zip`
+(5.2 MB) → `win-deploy.sh` to `.170` (2.22.0, 2/2, old exe at
+`dxca.exe.bak`) → Manoj brought the three tunnels up → each remote Pi
+pinged, DB copied to `dxca.db.pre-v2.22.0` with md5 equal, then
+`--no-seed` in turn: adersh 10:29:40 (**5/5 — a fifth node since the last
+sweep**; his config was rewritten 07:39 that morning, before any of this),
+vu2wj 10:29:53 (2/2), vu2oy 10:30:06 (3/3; glibc 2.36 confirmed, target
+unchanged). Every remote config md5 identical before and after, every host
+serving the same bundle, no journal warnings. Final sweep: **2.22.0 on all
+five**, cty 402 everywhere — the Windows box included; the 2.21.0 built-in
+key ended its old `cty_entities: 0` — and `fcc_calls: 0` on Windows only,
+the expected not-shipped state. Also noticed: noderedpi4's
+`config/dxca.toml` mtime reads 2026-09-20 13:29 now, not the 2026-09-01
+recorded on 09-03 — a UI save since, not the installer (md5 unchanged
+across this deploy).
 
 ## Session 2026-09-13 — the Mac agent was back, sending its own alerts
 
@@ -1611,15 +1638,12 @@ Status section led with v2.20.4 for eighteen days (backfilled 2026-09-21).
 
 ## Open items → next session
 
-### OPEN: ship the destination source picker, all four tabs (2026-09-21)
+### DONE in v2.22.0: the destination source picker, all four tabs, on all five hosts (2026-09-21)
 
-On main since 2026-09-21, not tagged, not on any host: the UDP/MQTT chip
-picker (UI only) and the FlexRadio/TCI source pick (two new `notify_json`
-lists, empty = all). Nothing to migrate — an old row reads as All. The
-deploy is the ordinary binary swap. Fold into the next release; both halves
-are one feature and should ship together.
+Both halves — the UDP/MQTT chip picker and the FlexRadio/TCI source pick —
+shipped together the same day they were built. See *Session 2026-09-21*.
 
-### DONE (on main, unreleased): source filter for FlexRadio and TCI (2026-09-21)
+### DONE in v2.22.0: source filter for FlexRadio and TCI (2026-09-21)
 
 Raised by the source-picker request, asked rather than assumed because it
 was a server change, built the same day on Manoj's yes. See *Session
