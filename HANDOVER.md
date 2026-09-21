@@ -683,7 +683,9 @@ the truth first time. Order: release commit `992f97c` + annotated tag →
 `data/dxca.db` copied to `dxca.db.pre-v2.22.0`, md5 equal, and the outgoing
 binary kept as `dxca.rollback-v2.21.0`) → verified: 2.22.0, service up
 10:26:40 IST, 8/9 nodes — **the same 8/9 as before; UberCW was already
-refusing (attempt 2680)**, not a deploy symptom — telnet client
+refusing (attempt 2680)**, not a deploy symptom: **UberCW is switched off**
+(Manoj, 2026-09-21), so 8/9 is the expected reading on noderedpi4 while it
+stays off — telnet client
 reconnected, config md5 unchanged, journal clean, served bundle
 `index-XGoUzPeG.js` carrying `flex_sources` / `tci_sources` →
 `win-bundle.sh` → `gh release create` with `dxca-2.22.0-windows-x64.zip`
