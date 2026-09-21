@@ -25,6 +25,31 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.21.0** (2026-09-03): **a fresh install needs no ClubLog API key, and a
+403 is no longer retried.** cty.xml — the country file every spot is
+resolved against — needs a ClubLog API key to download, and nothing shipped
+one, so a `--no-seed` install arrived with no cty.xml at all: every spot
+resolved to no DXCC, and alerts, awards and highlighting stayed silent until
+an admin requested a key from ClubLog and waited for it to be issued by
+hand. The shack's Windows install had taken in 17,655 spots that way without
+resolving one. ClubLog issue keys per *application*, not per operator, so
+the key is now built into released binaries and cty.xml downloads on the
+first refresh with nothing to register. It is injected at build time and
+**never committed** — ClubLog delete keys found in a Git repository, and this
+one is public; see [Building without a ClubLog
+key](#building-without-a-clublog-key). An admin-set key, now under
+**Settings › Server › Reference data → Advanced**, still wins.
+
+ClubLog also ask that a **403** stop further requests at once: their
+firewall blocks hosts that keep sending bad credentials, which on a shared
+server would cut off every account, not just the wrong one. dxca retried on
+every refresh interval, indefinitely. A 403 now latches against a
+**fingerprint** of the credentials that earned it — the server key and each
+account's log login separately — and Reference data shows **API key
+rejected**. Change the key or the password and the fingerprint stops
+matching, so refreshes resume with no reset button to find. Nothing to do on
+upgrade: no migration, and a key you already set keeps being used.
+
 **v2.20.4** (2026-09-01): **the Zone and Marathon rows in Alerts could not
 be switched off.** Manoj: *"if dx marathon is not selected in alerts, still
 notifications were coming ... have to disable in awards to stop the

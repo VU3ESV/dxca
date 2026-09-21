@@ -1568,6 +1568,10 @@ users have no other route in, since building there needs the MSVC toolchain
 the cross-build exists to avoid. Notes should cover everything since the
 last *published* release, because tags can outrun releases.
 
+**The README `## Status` entry is part of the release too** — bold version +
+date, what changed and why, at the top. v2.21.0 shipped without one and the
+Status section led with v2.20.4 for eighteen days (backfilled 2026-09-21).
+
 ## Open items → next session
 
 ### OPEN: ship the destination source picker (2026-09-21)
