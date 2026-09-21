@@ -112,7 +112,16 @@ ROUTES = {
                                              "notify_unconf_dxcc": False, "notify_unconf_band": False,
                                              "notify_unconf_mode": False, "notify_unconf_slot": False,
                                              "notify_bands": ["20M","15M"], "notify_modes": [],
-                                             "notify_manual_only": True, "notify_respect_band_mask": True},
+                                             "notify_manual_only": True, "notify_respect_band_mask": True,
+                                             # The two radio tabs, so their Sources pickers have something to
+                                             # show: one Flex configured and held to two feeds, one of which no
+                                             # longer exists (the stale-name case); TCI unset, so its tab shows
+                                             # the fresh-row state (All lit, nothing picked).
+                                             "flex_enabled": True, "flex_host": "192.168.1.148", "flex_port": 4992,
+                                             "flex_devices": [{"host": "192.168.1.148", "port": 4992, "enabled": True}],
+                                             "flex_sources": ["MSHV", "OldNode"],
+                                             "tci_enabled": False, "tci_host": "", "tci_port": 0, "tci_devices": [],
+                                             "tci_sources": []},
     "/api/me/alerts": lambda: {"alerts": [
         {"time_unix": NOW - 900, "callsign": "RI1FJL", "frequency_hz": 14074000, "mode": "FT8",
          "band": "20M", "dxcc_name": "FRANZ JOSEF LAND", "level": "newDXCC", "source": "W3LPL",
@@ -128,14 +137,23 @@ ROUTES = {
     "/api/config/global": lambda: {
         "clublog_api_key": "secret",
         "cty_last_refresh_unix": NOW - 200000, "lotw_last_refresh_unix": NOW - 90000,
-        "udp_sources": [{"name": "MSHV", "port": 2336, "enabled": True},
-                        {"name": "UberSDR CWskim", "port": 2337, "enabled": True}],
+        # Three decoders and NINE nodes — the count that forced the Sources
+        # chips off the destination row onto their own line — plus one
+        # destination of each format and a name ("OldNode") no source has,
+        # which is what the picker's stale-chip path exists for.
+        "udp_sources": [{"name": n, "port": 2333 + i, "enabled": True}
+                        for i, n in enumerate(["MSHV", "JTDX", "WSJTX"])],
         "cluster_nodes": [{"name": n, "host": f"{n.lower()}.example.net", "port": 7300,
                            "login_call": "VU2CPL", "password": "", "enabled": True}
-                          for n in ["DB0SUE", "W3LPL", "VU2OY"]],
-        "broadcast_destinations": [{"name": "logger", "ip": "127.0.0.1", "port": 2237,
-                                    "format": "passthrough", "sources": [], "unfiltered": False,
-                                    "enabled": True}],
+                          for n in ["VU2OY", "N2WQ-2", "VE7CC", "UberSDR CWskim", "Meridian",
+                                    "DB0SUE", "W3LPL", "HamAlert", "VU2CPL"]],
+        "broadcast_destinations": [
+            {"name": "RUMlog", "ip": "127.0.0.1", "port": 2237, "format": "passthrough",
+             "sources": [], "unfiltered": False, "enabled": True},
+            {"name": "GridTracker", "ip": "127.0.0.1", "port": 2238, "format": "passthrough",
+             "sources": ["JTDX", "VE7CC"], "unfiltered": False, "enabled": True},
+            {"name": "Logger32", "ip": "192.168.1.170", "port": 12060, "format": "cluster",
+             "sources": ["MSHV", "N2WQ-2", "Meridian", "OldNode"], "unfiltered": False, "enabled": True}],
         "read_only": {"web_bind": "0.0.0.0:80", "telnet_port": 7300, "dedupe_window_secs": 60,
                       "spot_ring_capacity": 5000, "cty_refresh_days": 7, "lotw_refresh_days": 7,
                       "data_dir": "/var/lib/dxca"}},

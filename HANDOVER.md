@@ -705,6 +705,13 @@ the expected not-shipped state. Also noticed: noderedpi4's
 recorded on 09-03 — a UI save since, not the installer (md5 unchanged
 across this deploy).
 
+**`scripts/dxca-mock-server.py` gained the data to drive all four pickers**
+(end-of-session sweep): the notify row now carries the Flex/TCI fields with
+one radio held to a stale name, and the global config serves three decoders,
+nine nodes and one destination per format — the exact cases the picker was
+built and laid out against. The browser checks above were run against this
+data; committed so the next UI session does not rebuild it.
+
 ## Session 2026-09-13 — the Mac agent was back, sending its own alerts
 
 Manoj: *"i am getting 2m new band alerts, but in alerts its off"* — then,
