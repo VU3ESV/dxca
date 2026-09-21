@@ -25,6 +25,23 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.22.0** (2026-09-21): **every destination can be held to particular
+sources — picked, not typed.** Each UDP and MQTT destination already carried
+a source list, but the only way to set it was a comma-separated text box,
+where a typo or a renamed source silently narrowed a destination to nothing.
+The **Sources** line under each row is now the same **All**-or-pick chip row
+as the Spots filter and My Alerts: **All** by default, one chip per
+configured decoder and cluster node, a **passthrough** row offering the
+decoders only (a cluster node's spot never reaches it), and a name whose
+source has since gone staying lit with a tooltip until unticked, rather than
+vanishing. The **FlexRadio** and **TCI** tabs gained the same pick, which
+they never had — both radios were marked for every alert whatever feed
+carried it — each with its own **Sources** section, separate from the
+other's, on top of the Telegram narrowing they already follow. Nothing to do
+on upgrade: an empty list means All, which is what every existing
+destination and account reads back as. See
+[Configuration](#configuration).
+
 **v2.21.0** (2026-09-03): **a fresh install needs no ClubLog API key, and a
 403 is no longer retried.** cty.xml — the country file every spot is
 resolved against — needs a ClubLog API key to download, and nothing shipped
@@ -836,8 +853,8 @@ A name the list still holds after its source was renamed or deleted stays
 on the line, lit, until it is unticked. The UDP and MQTT lists are the
 destination's (`config/dxca.toml`, the MQTT table); the two radio lists are
 the account's, saved with its other radio settings, and each radio has its
-own. (On main after v2.21.0; releases up to v2.21.0 take the UDP and MQTT
-lists as a comma-separated text box and have no radio pick at all.)
+own. (New in v2.22.0; releases up to v2.21.0 take the UDP and MQTT lists as
+a comma-separated text box and have no radio pick at all.)
 
 ### Who spotted it
 

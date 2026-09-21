@@ -2,12 +2,12 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-09-21 · **Status:**
-**On main, unreleased and not deployed (2026-09-21): a destination's
-sources are picked, not typed** — the free-text CSV box on the UDP and MQTT
-destination tabs is now the same All-or-pick chip row as the Spots rail and
-My Alerts, **and the FlexRadio and TCI tabs gained the same pick** (two new
-`notify_json` lists, empty = all; no migration). See *Session 2026-09-21*.
-Last release:
+**v2.22.0 — every destination's sources are picked, not typed, and the
+radios gained the pick (tagged 2026-09-21; deploy record in *Session
+2026-09-21*).** The free-text CSV box on the UDP and MQTT destination tabs
+is now the same All-or-pick chip row as the Spots rail and My Alerts, and
+the FlexRadio and TCI tabs have a Sources section each (two new
+`notify_json` lists, empty = all; no migration). Previously:
 **v2.21.0 — a fresh install needs no ClubLog API key, and a 403 is no longer
 retried.** The key ClubLog issue per *application* now ships inside the
 binary (injected at build time, never committed — they delete keys found in
