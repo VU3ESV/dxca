@@ -1,7 +1,11 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-**Created:** 2026-08-26 · **Last updated:** 2026-09-21 · **Status:**
+**Created:** 2026-08-26 · **Last updated:** 2026-09-22 · **Status:**
+**On main, unreleased (2026-09-22): a `KG4` call with a three-letter suffix
+resolves to the USA, not Guantanamo Bay** (*Session 2026-09-22*). No host
+runs it yet. The fleet is on v2.22.0 and still sends the false Guantanamo
+alerts until a release is cut and deployed. Previously:
 **v2.22.0 — every destination's sources are picked, not typed, and the
 radios gained the pick. Tagged, released with the Windows zip, and on all
 five hosts, 2026-09-21** (deploy record in *Session 2026-09-21*). The
@@ -588,6 +592,85 @@ and the web GUI's design system from the same repo's
 `web-ui/default/src/` (app.css + the theme module and switcher).
 **Production runs on noderedpi4 (192.168.1.169) since the 2026-08-27
 cutover**; the 1.x macOS app is the retained fallback (maintenance mode).
+
+## Session 2026-09-22 — KG4 2×3 calls are the USA, not Guantanamo Bay
+
+Manoj reported a *New Mode* alert for **KG4OJT — GUANTANAMO BAY 20M FT8**
+(VU2OY's RBN, 2026-09-21, 2219Z). KG4OJT is an FCC licensee in Virginia.
+**Only `KG4` + two letters is Guantanamo (ADIF 105); `KG4` + three letters
+is an ordinary US call in area 4.** cty.xml carries one bare `KG4` prefix
+rule → 105 (cqz 8), and KG4OJT has no exception, so
+`DxccResolver::resolve` fell through to that prefix. Nothing in the repo
+knew the suffix-length rule.
+
+**ClubLog applies the rule in code, not in data.** The live cty.xml has 38
+exceptions starting `KG4`, and every 2×3 one sends the call somewhere
+*other* than the USA: `KG4TJS` Alaska, `KG4FJB` Hawaii, `KG4EEG` Puerto
+Rico, `KG4SZC` US Virgin Is. It lists none of the thousands that are simply
+USA. That settles both halves of the fix: the rule belongs in the resolver,
+and exceptions have to keep winning over it.
+
+**What the week looked like on noderedpi4** (read-only copy of `dxca.db`,
+`alerts_sent`, 2026-09-15 → 22): **32 false Guantanamo alerts, all
+`newBand`, from seven calls:** KG4OJT (21, all via VU2OY's RBN, 20 m and
+30 m FT8/FT4), KG4HOT (6, 6 m SSB), KG4EXY, KG4BIG, KG4ZGZ, KG4CRJ,
+KG4ORR. All seven are in `fcc-states.txt` (VA ×3, KY, NC, FL, GA). Every
+one is 2×3. Manoj's matrix has Guantanamo on **10M-PHONE only**, which is
+why every other band fired. Spots themselves are not kept for a week: the
+pipeline ring is 5000 (about an hour), so `alerts_sent` is the only
+week-long record.
+
+**The fix** (`crates/dxca-core/src/dxcc.rs`):
+
+- `is_us_kg4(clean)`: exactly `KG4` + three ASCII letters, tested on the
+  `normalize_call` output. So `KG4OJT/P`, `/4` and `/QRP` qualify.
+  `KG4/KG4OJT` (a US station operating from Guantanamo) normalises to
+  `KG4` and doesn't. `W4/KG4OJT` normalises to `W4` and never reaches the
+  rule. `KG44WW`, a real Guantanamo special-event call, has a digit in its
+  suffix and doesn't qualify.
+- `resolve`: exact exception first (unchanged), then the KG4 rule →
+  `Some(291)`, then the prefix walk. The rule also requires entity 291 to
+  be loaded, so an unloaded resolver still answers `None`.
+- `zone`: after the exact-zone lookup, a KG4 2×3 call **skips the prefix
+  walk** (its longest prefix is `KG4`, zone 8) and falls to the zone of
+  whatever `resolve` returned. That gives the USA's entity zone (5) or the
+  exception's own entity. A cqz-less exception to 105 therefore still
+  reads zone 8, not 5. This skips the prefix walk rather than jumping
+  straight to 291's zone, because the latter would have handed a
+  cqz-less exception the USA's zone.
+- Six tests on a small cty.xml fixture run through `cty::parse`: 2×3 → 291,
+  2×2 → 105, `KG44WW` → 105, the Alaska exception beats the rule (zone 1
+  too), the cqz-less exception keeps its entity's zone, portable forms,
+  and an unloaded resolver. Three of them fail with the rule stubbed out.
+
+**Checked against the Pi's own cty.xml** (dated 2026-09-17, well inside
+`cty_refresh_days = 7`, so the open question of staleness is answered:
+fresh, and staleness was never the cause). All seven calls resolve to 291,
+zone 5. KG4AB → 105; KG4TJS and KG4HZF → Alaska (KG4HZF's Hawaii
+exception closed 2026-03-08 and its Alaska one took over, and the load-time
+activity filter picks the right one). `cargo test --workspace` green;
+`local_parity` (all four ignored real-data tests) green, so 1.x matrix
+parity is untouched: log records carry their own DXCC.
+
+**After the fix, 26 of the 32 have no DXCC reason to alert** (USA already
+worked and confirmed on 20M-CW/DATA, 30M-DATA and 40M-CW). An award alert,
+such as a WAS state, is still possible and would be genuine. **KG4HOT on 6 m SSB will still
+alert, correctly, as *New Slot: USA 6M PHONE*.** That slot isn't in the log.
+Expected, not a regression.
+
+**The blacklist is the wrong stopgap:** exact-match only
+(`Pipeline::is_blacklisted`), new 2×3 KG4 calls appear weekly, and it
+drops the spot from the feed entirely rather than re-labelling it.
+
+**Not changed, on purpose:**
+- **KG4 + one letter (2×1).** cty.xml lists them individually (`KG4W`,
+  `KG4V/1` → USA), so ClubLog's own rule evidently doesn't cover them.
+  Left to the data.
+- **The general form of the zone quirk.** Any exception without `<cqz>`
+  takes the longest prefix's zone even when that prefix is another
+  entity's. Counted in the live file: one case, `VP8CA` (South Georgia,
+  getting the Falklands' zone 13, which is also South Georgia's zone).
+  Harmless, so not generalised.
 
 ## Session 2026-09-21 — destination sources are picked, not typed
 
@@ -1647,6 +1730,21 @@ date, what changed and why, at the top. v2.21.0 shipped without one and the
 Status section led with v2.20.4 for eighteen days (backfilled 2026-09-21).
 
 ## Open items → next session
+
+### OPEN: release and deploy the KG4 fix (2026-09-22)
+
+On main, not in any build. All five hosts run v2.22.0 and keep sending false
+Guantanamo alerts for every `KG4` 2×3 spot until it ships. Bump before the
+deploy (see the deploy-sequence note on version numbers), noderedpi4 first,
+and ship the Windows zip with the release.
+
+### OPEN: the 1.x Swift app has the same KG4 fault (2026-09-22)
+
+`DXCCResolver.swift` in the DXClusterAggregator repo does the same
+exact-then-longest-prefix walk with no suffix-length rule, so the fallback
+app would raise the same false Guantanamo alerts. It is in maintenance mode,
+so this was not fixed here. The Rust `is_us_kg4` and its tests port across
+directly.
 
 ### DONE in v2.22.0: the destination source picker, all four tabs, on all five hosts (2026-09-21)
 

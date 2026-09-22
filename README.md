@@ -1134,6 +1134,24 @@ deleting — a busted decode that got logged will show up in exactly this list.
 Like the deleted list, both depend on cty.xml. A server that has never
 downloaded it applies neither, and totals fall back to the older behaviour.
 
+### KG4: Guantanamo Bay or the USA
+
+*On main, not yet in a release.* Only **`KG4` with a two-letter suffix** is
+Guantanamo Bay (`KG4AB`). The FCC hands out `KG4` with a **three-letter**
+suffix to ordinary stateside amateurs in call area 4: `KG4OJT` is in
+Virginia. cty.xml has one bare `KG4` prefix rule for Guantanamo, and ClubLog
+applies the suffix-length rule in its own code rather than in the data, so a
+plain prefix lookup sent every one of those US calls to Guantanamo. The
+result was a *New Band* or *New Mode* alert on any band or mode where you
+hadn't worked Guantanamo: 32 of them in one week on the shack install, from
+seven different US stations.
+
+DXCA now resolves a `KG4` call with a three-letter suffix to the **USA**, in
+the USA's own CQ zone. Portable forms follow the usual rules: `KG4OJT/P` is
+the USA, and `KG4/KG4OJT` (a US operator actually at Guantanamo) is
+Guantanamo. ClubLog's own exceptions still win, so a 2×3 call that cty.xml
+places somewhere else stays there (`KG4TJS` is in Alaska).
+
 ### Health alerts
 
 Two optional Telegram alerts under **Settings › My station › Telegram**, both
