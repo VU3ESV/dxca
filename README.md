@@ -25,6 +25,17 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.22.1** (2026-09-22): **a `KG4` call with a three-letter suffix is the
+USA, not Guantanamo Bay.** Only `KG4` + two letters is Guantanamo. The FCC
+issues `KG4` + three letters to ordinary stateside amateurs, but cty.xml has
+one bare `KG4` prefix rule, so every one of those calls resolved to
+Guantanamo and raised a *New Band* or *New Mode* alert wherever you hadn't
+worked it. The shack install sent 32 of them in a week, from seven US
+stations. They now resolve to the USA and take the USA's CQ zone.
+ClubLog's own exceptions still win: `KG4TJS` stays in Alaska. Nothing to do
+on upgrade. See [KG4: Guantanamo Bay or the
+USA](#kg4-guantanamo-bay-or-the-usa).
+
 **v2.22.0** (2026-09-21): **every destination can be held to particular
 sources — picked, not typed.** Each UDP and MQTT destination already carried
 a source list, but the only way to set it was a comma-separated text box,
@@ -1136,7 +1147,7 @@ downloaded it applies neither, and totals fall back to the older behaviour.
 
 ### KG4: Guantanamo Bay or the USA
 
-*On main, not yet in a release.* Only **`KG4` with a two-letter suffix** is
+*Since v2.22.1.* Only **`KG4` with a two-letter suffix** is
 Guantanamo Bay (`KG4AB`). The FCC hands out `KG4` with a **three-letter**
 suffix to ordinary stateside amateurs in call area 4: `KG4OJT` is in
 Virginia. cty.xml has one bare `KG4` prefix rule for Guantanamo, and ClubLog

@@ -2,10 +2,9 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-09-22 · **Status:**
-**On main, unreleased (2026-09-22): a `KG4` call with a three-letter suffix
-resolves to the USA, not Guantanamo Bay** (*Session 2026-09-22*). No host
-runs it yet. The fleet is on v2.22.0 and still sends the false Guantanamo
-alerts until a release is cut and deployed. Previously:
+**v2.22.1 — a `KG4` call with a three-letter suffix resolves to the USA,
+not Guantanamo Bay. Tagged and released with the Windows zip, 2026-09-22**
+(*Session 2026-09-22*). Previously:
 **v2.22.0 — every destination's sources are picked, not typed, and the
 radios gained the pick. Tagged, released with the Windows zip, and on all
 five hosts, 2026-09-21** (deploy record in *Session 2026-09-21*). The
@@ -1731,12 +1730,11 @@ Status section led with v2.20.4 for eighteen days (backfilled 2026-09-21).
 
 ## Open items → next session
 
-### OPEN: release and deploy the KG4 fix (2026-09-22)
+### IN PROGRESS: v2.22.1, the KG4 fix, going out to the fleet (2026-09-22)
 
-On main, not in any build. All five hosts run v2.22.0 and keep sending false
-Guantanamo alerts for every `KG4` 2×3 spot until it ships. Bump before the
-deploy (see the deploy-sequence note on version numbers), noderedpi4 first,
-and ship the Windows zip with the release.
+Released as v2.22.1 with the Windows zip, on Manoj's yes. Deploy order:
+noderedpi4 first, then Windows, then the three remote Pis. The deploy record
+goes in *Session 2026-09-22*.
 
 ### OPEN: the 1.x Swift app has the same KG4 fault (2026-09-22)
 
