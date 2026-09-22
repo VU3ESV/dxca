@@ -1763,8 +1763,10 @@ third-party box is; ping each before deploying to it.
 `/api/status` on `192.168.1.109:7580` for the sweep. noderedpi4 now
 answers nothing on :7580, and that's expected. `pi-deploy.sh` still
 **defaults to noderedpi4**, and running it would re-enable dxca there as a
-second sender, so always give it an explicit host. Whether Manoj's "local
-Pi first" rule now means ".109 first" is his call, not yet stated.
+second sender, so always give it an explicit host. **The "local first"
+rule now means .109** (Manoj, 2026-09-22: *"local is 109 now"*). The
+container gets every build first and is verified before any other host
+sees it.
 
 ## The installs (2026-08-28; VU2OY added 2026-08-30; production moved to .109 2026-09-22)
 
