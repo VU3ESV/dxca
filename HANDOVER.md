@@ -3,8 +3,10 @@
 
 **Created:** 2026-08-26 · **Last updated:** 2026-09-22 · **Status:**
 **v2.22.1 — a `KG4` call with a three-letter suffix resolves to the USA,
-not Guantanamo Bay. Tagged and released with the Windows zip, 2026-09-22**
-(*Session 2026-09-22*). Previously:
+not Guantanamo Bay. Tagged and released with the Windows zip, 2026-09-22;
+on noderedpi4 and VU2OY's Pi.** The Windows box and the adersh and vu2wj
+Pis are still on 2.22.0 (see the open item and *Session 2026-09-22*).
+Previously:
 **v2.22.0 — every destination's sources are picked, not typed, and the
 radios gained the pick. Tagged, released with the Windows zip, and on all
 five hosts, 2026-09-21** (deploy record in *Session 2026-09-21*). The
@@ -670,6 +672,30 @@ drops the spot from the feed entirely rather than re-labelling it.
   entity's. Counted in the live file: one case, `VP8CA` (South Georgia,
   getting the Falklands' zone 13, which is also South Georgia's zone).
   Harmless, so not generalised.
+
+**Released as v2.22.1 the same morning, on Manoj's yes.** Version bumped
+before the deploy. Release commit `2824eb6` + annotated tag, pushed. Then:
+
+- **noderedpi4 first** (`pi-deploy.sh vu2cpl@192.168.1.169`, seeded
+  form). `data/dxca.db` copied to `dxca.db.pre-v2.22.1` (md5 equal), and the
+  outgoing binary kept as `dxca.rollback-v2.22.0`. Verified: 2.22.1,
+  service up 07:31:45 IST, **8/8 Live**, telnet client back, config md5
+  unchanged (`3b0f46f2…`), no journal warnings. Its cty.xml had moved to the
+  2026-09-21 edition at 07:25, **before** the deploy: the old 2.22.0 process
+  did that, not the installer. No KG4 spot reached the ring in the minutes
+  after the restart, so the live check is still to come; the tests and the
+  real-cty.xml run cover the logic.
+- **`win-bundle.sh` → `gh release create v2.22.1`** with
+  `dxca-2.22.1-windows-x64.zip` (5.2 MB), published as Latest. The ClubLog
+  key came from `.clublog-api-key` as usual.
+- **`win-deploy.sh` to `.170` was blocked** by Claude Code's auto-mode
+  permission check before it ran. Not attempted another way. Still 2.22.0.
+- **Remote Pis:** all three tunnel routes were up, but only VU2OY's box
+  answered. adersh `.151` and vu2wj `.201` gave no ping and no status, so
+  they were left alone. **vu2oy:** DB copied to `dxca.db.pre-v2.22.1` (md5
+  equal), binary kept as `dxca.rollback-v2.22.0`, then `--no-seed`. Up
+  07:35:34 IST, 2.22.1, 3/3, config md5 unchanged, glibc 2.36 confirmed,
+  no journal warnings.
 
 ## Session 2026-09-21 — destination sources are picked, not typed
 
@@ -1730,11 +1756,18 @@ Status section led with v2.20.4 for eighteen days (backfilled 2026-09-21).
 
 ## Open items → next session
 
-### IN PROGRESS: v2.22.1, the KG4 fix, going out to the fleet (2026-09-22)
+### OPEN: v2.22.1 on three more hosts (2026-09-22)
 
-Released as v2.22.1 with the Windows zip, on Manoj's yes. Deploy order:
-noderedpi4 first, then Windows, then the three remote Pis. The deploy record
-goes in *Session 2026-09-22*.
+Released and on noderedpi4 and VU2OY's Pi. Still on 2.22.0, and so still
+sending false Guantanamo alerts for `KG4` 2×3 spots:
+
+- **Windows `.170`.** Claude Code's auto-mode permission check blocked
+  `deploy/win-deploy.sh`, so it was not run. Either Manoj runs it himself,
+  or he allows it and a session runs it.
+- **adersh `.151` and vu2wj `.201`.** Their tunnel routes were up, but
+  neither answered ping or `/api/status` at deploy time, so the boxes were
+  treated as off. When they're back: ping, copy the DB to
+  `dxca.db.pre-v2.22.1`, then `pi-deploy.sh --no-seed`.
 
 ### OPEN: the 1.x Swift app has the same KG4 fault (2026-09-22)
 
