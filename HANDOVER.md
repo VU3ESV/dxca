@@ -4,8 +4,8 @@
 **Created:** 2026-08-26 · **Last updated:** 2026-09-22 · **Status:**
 **v2.22.1 — a `KG4` call with a three-letter suffix resolves to the USA,
 not Guantanamo Bay. Tagged and released with the Windows zip, 2026-09-22;
-on noderedpi4 and VU2OY's Pi.** The Windows box and the adersh and vu2wj
-Pis are still on 2.22.0 (see the open item and *Session 2026-09-22*).
+on all four Pis.** The Windows box is still on 2.22.0 (see the open item
+and *Session 2026-09-22*).
 Previously:
 **v2.22.0 — every destination's sources are picked, not typed, and the
 radios gained the pick. Tagged, released with the Windows zip, and on all
@@ -696,6 +696,14 @@ before the deploy. Release commit `2824eb6` + annotated tag, pushed. Then:
   equal), binary kept as `dxca.rollback-v2.22.0`, then `--no-seed`. Up
   07:35:34 IST, 2.22.1, 3/3, config md5 unchanged, glibc 2.36 confirmed,
   no journal warnings.
+- **adersh and vu2wj, after Manoj restarted their tunnels** (`wg-quick
+  down` / `up`). Both then answered. The routes had been there all along,
+  so a `/32` route alone does not prove a tunnel works: check `sudo wg show`
+  for a recent handshake. Same drill on each: DB to `dxca.db.pre-v2.22.1`
+  (md5 equal), binary kept as `dxca.rollback-v2.22.0`, then `--no-seed`.
+  **adersh:** up 07:39:27 IST, 5/5. **vu2wj:** up 07:39:46 IST, **3/3**
+  (it had 2 nodes at the v2.22.0 deploy, so its admin has added one since).
+  Both configs' md5s unchanged, no journal warnings.
 
 ## Session 2026-09-21 — destination sources are picked, not typed
 
@@ -1756,18 +1764,12 @@ Status section led with v2.20.4 for eighteen days (backfilled 2026-09-21).
 
 ## Open items → next session
 
-### OPEN: v2.22.1 on three more hosts (2026-09-22)
+### OPEN: v2.22.1 on the Windows box (2026-09-22)
 
-Released and on noderedpi4 and VU2OY's Pi. Still on 2.22.0, and so still
-sending false Guantanamo alerts for `KG4` 2×3 spots:
-
-- **Windows `.170`.** Claude Code's auto-mode permission check blocked
-  `deploy/win-deploy.sh`, so it was not run. Either Manoj runs it himself,
-  or he allows it and a session runs it.
-- **adersh `.151` and vu2wj `.201`.** Their tunnel routes were up, but
-  neither answered ping or `/api/status` at deploy time, so the boxes were
-  treated as off. When they're back: ping, copy the DB to
-  `dxca.db.pre-v2.22.1`, then `pi-deploy.sh --no-seed`.
+On all four Pis. **Windows `.170` is still on 2.22.0**, and so still sends
+false Guantanamo alerts for `KG4` 2×3 spots. Claude Code's auto-mode
+permission check blocked `deploy/win-deploy.sh`, so it was not run. Either
+Manoj runs it himself, or he allows it and a session runs it.
 
 ### OPEN: the 1.x Swift app has the same KG4 fault (2026-09-22)
 
