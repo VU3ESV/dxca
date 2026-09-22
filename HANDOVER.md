@@ -2,10 +2,14 @@
 *For continuation in a new Claude session*
 
 **Created:** 2026-08-26 · **Last updated:** 2026-09-22 · **Status:**
-**v2.22.1 — a `KG4` call with a three-letter suffix resolves to the USA,
-not Guantanamo Bay. Tagged and released with the Windows zip, 2026-09-22;
-on all four Pis.** The Windows box is still on 2.22.0 (see the open item
-and *Session 2026-09-22*).
+**Production moved off noderedpi4 into a Docker container on `ubersdr`
+(192.168.1.109), 2026-09-22, 11:09 IST.** noderedpi4's dxca is stopped and
+disabled, kept as the rollback. The decoders and the Mac's telnet client
+still need pointing at .109 (open items, and *Session 2026-09-22
+(later)*). **v2.22.1 — a `KG4` call with a three-letter suffix resolves to
+the USA, not Guantanamo Bay. Tagged and released with the Windows zip,
+2026-09-22;** running on .109 and the three remote Pis. The Windows box is
+still on 2.22.0 (see the open item and *Session 2026-09-22*).
 Previously:
 **v2.22.0 — every destination's sources are picked, not typed, and the
 radios gained the pick. Tagged, released with the Windows zip, and on all
@@ -591,8 +595,79 @@ Lineage: original concept by Vinod VU3ESV; DX-cluster telnet client
 lifted from `~/projects/meridian` (`crates/meridian-core/src/dxcluster/`),
 and the web GUI's design system from the same repo's
 `web-ui/default/src/` (app.css + the theme module and switcher).
-**Production runs on noderedpi4 (192.168.1.169) since the 2026-08-27
-cutover**; the 1.x macOS app is the retained fallback (maintenance mode).
+**Production runs in a Docker container on `ubersdr` (192.168.1.109) since
+2026-09-22**, having run on noderedpi4 (192.168.1.169) from the 2026-08-27
+cutover. noderedpi4's install is stopped and disabled, kept as the
+rollback. The 1.x macOS app is the retained fallback (maintenance mode).
+
+## Session 2026-09-22 (later) — production moves to a container on .109
+
+Manoj: *"lets create a container image from the .169 dxca and lod in
+ubersdr box 109"*. Asked first whether it should be a staged copy, a move,
+a fresh instance or a second running copy, because a clone that runs
+alongside .169 would log into the clusters under the same callsign (DXSpider
+kicks duplicate logins) and send every Telegram alert twice. That second
+problem is the 2026-09-13 Mac-agent incident. He picked **stage, don't
+start**, then while it built: *"lets stop the .169 and up the new
+container"*.
+
+**The .109 box:** `ubersdr`, **x86-64**, Ubuntu 24.04.5, 16 cores, 15 GiB,
+Docker 29.8.1 already running UberSDR, Meridian, OpenWebRX and Caddy.
+`vu2cpl` has passwordless sudo but is not in the `docker` group. Ports 7580,
+7575 and UDP 2333–2337 were free. The Pi binary cannot run there (aarch64),
+so the image is built from a fresh x86-64 cross-build of the same v2.22.1
+commit, not from .169's binary.
+
+**What was built** (committed): `deploy/Dockerfile` and
+`deploy/docker-deploy.sh`.
+- **No Docker on the Mac and no registry.** The script cross-compiles with
+  zigbuild (`x86_64-unknown-linux-gnu.2.36`, target added via rustup this
+  session), rsyncs the binary and the Dockerfile to `~/dxca-docker` on the
+  host, and runs `docker build` there. Tags `dxca:<version>` and
+  `dxca:latest`.
+- **The image is Debian trixie-slim plus the binary, nothing else.** The UI
+  is embedded, SQLite bundled, and ureq's TLS roots are webpki-roots
+  (checked in `Cargo.lock`), so no ca-certificates. There is no local-time
+  use anywhere, so no TZ either. bash is kept for `docker exec` and the
+  smoke test.
+- **Smoke test** before the real container is touched: a throwaway
+  container with `--network none` and empty config/data, queried over
+  bash's `/dev/tcp` for `/api/status`. It can reach nothing and log in
+  nowhere. It reported 2.22.1.
+- **The container:** `--network host` (UDP ports are edited at runtime in
+  the UI, so a fixed `-p` list would strand new sources),
+  `--restart unless-stopped`, `--user 1001:1001` (the host's `vu2cpl`),
+  bind mounts `/opt/dxca/config` and `/opt/dxca/data`, and json-file logs
+  capped at 3 × 10 MB. **Created, not started** on first run. A re-run
+  restarts it only if it was running. Docker applies the restart policy
+  only after a first start, so a staged container can't come up on its own
+  after a reboot.
+- **It never ships config or data**, same rule as `--no-seed`.
+
+**The cutover, 11:09 IST:**
+1. **Checked first:** .169's `dxca.toml` has no `127.0.0.1`, `localhost`
+   or own-IP references. The DB's `mqtt_destinations` is `[]`, and the two
+   `192.168.1.169` strings in the file sit in unused pages, not live rows.
+   The cluster nodes on `192.168.1.109:7300/7550` are reachable from the
+   host network as before. The RUMlog passthrough goes to the Mac,
+   192.168.10.226:2237.
+2. **Who fed .169:** a 15-second tcpdump showed UDP from the Mac
+   (192.168.10.226 → :2333, MSHV) and from .109 itself (→ :2336, UberSDR).
+   The Mac also held the telnet session on :7575 and the web UI on :7580.
+3. `systemctl stop dxca && systemctl disable dxca` on .169. No WAL or
+   journal files left behind.
+4. `config/dxca.toml` + `data/{cty.xml, dxca.db, fcc-states.txt,
+   iota-groups.json, lotw-report-1.adi, lotw-users.txt}` tarred across
+   (the `dxca.db.pre-*` backups left behind). **md5 identical on all seven.**
+5. `docker start dxca` on .109. **2.22.1, 10/10 nodes Live** (the config
+   gained `Uber Meridian` and `VU24DX` since this morning), 1 user, no
+   setup card, cty 402, FCC 816,280, IOTA 1,178, LoTW 235,747. Listening
+   on :7580, :7575 and UDP 2333–2337, running as 1001:1001 on the host
+   network. .169's :7580 no longer answers.
+
+**Rollback:** `sudo docker stop dxca` on .109, then `sudo systemctl enable
+--now dxca` on .169. The two databases diverge from 11:09, so alerts and
+settings changed after the cutover stay on .109 unless copied back.
 
 ## Session 2026-09-22 — KG4 2×3 calls are the USA, not Guantanamo Bay
 
@@ -1683,11 +1758,20 @@ online himself. So: deploy the shack and the Windows box freely, deploy
 assuming vu2wj is on**. Never treat "the tunnels are up" as proof a
 third-party box is; ping each before deploying to it.
 
-## The installs (2026-08-28; VU2OY added 2026-08-30)
+**Since 2026-09-22 the shack's own install is the `.109` container:**
+`deploy/docker-deploy.sh` (it defaults to `vu2cpl@192.168.1.109`), and
+`/api/status` on `192.168.1.109:7580` for the sweep. noderedpi4 now
+answers nothing on :7580, and that's expected. `pi-deploy.sh` still
+**defaults to noderedpi4**, and running it would re-enable dxca there as a
+second sender, so always give it an explicit host. Whether Manoj's "local
+Pi first" rule now means ".109 first" is his call, not yet stated.
+
+## The installs (2026-08-28; VU2OY added 2026-08-30; production moved to .109 2026-09-22)
 
 | Host | Account | Notes |
 |---|---|---|
-| `noderedpi4.local` / `192.168.1.169` | `vu2cpl` | The shack. Seeded deploys; `telnet_interactive = true`. |
+| `192.168.1.109` (hostname `ubersdr`) | `vu2cpl` | **The shack's production install since 2026-09-22**: the `dxca` Docker container, x86-64 Ubuntu 24.04. `docker-deploy.sh`. Passwordless sudo; `vu2cpl` is not in the `docker` group, so docker runs under sudo. |
+| `noderedpi4.local` / `192.168.1.169` | `vu2cpl` | The shack's production install 2026-08-27 → 2026-09-22. **dxca stopped and disabled there**, install left intact as the rollback. **Do not `pi-deploy.sh` it**: `install.sh` re-enables and starts the service, which makes a second sender. |
 | `192.168.1.170` | `manoj` | The shack's Windows box. `win-deploy.sh`, update only. |
 | `192.168.1.151` | `adersh` | Third party, over the VPN. `--no-seed` always. |
 | `192.168.1.201` (hostname `rpi`) | `vu2wj` | Third party. `--no-seed` always. |
@@ -1763,6 +1847,23 @@ date, what changed and why, at the top. v2.21.0 shipped without one and the
 Status section led with v2.20.4 for eighteen days (backfilled 2026-09-21).
 
 ## Open items → next session
+
+### OPEN: point the feeds at .109 (2026-09-22)
+
+Since the cutover, anything aimed at 192.168.1.169 reaches nothing. Seen on
+.169 just before it was stopped:
+
+- **MSHV on the Mac** → UDP :2333. Change it to `192.168.1.109:2333`.
+- **UberSDR on .109 itself** → UDP :2336. Change it to `127.0.0.1:2336` or
+  `192.168.1.109:2336`. The container is on the host network, so both work.
+- **The telnet client on the Mac** → :7575. Change it to
+  `192.168.1.109:7575`.
+- **The web UI bookmark:** `http://192.168.1.109:7580/`.
+
+JTDX, WSJT-X and SDR Ctrl 705 (:2334, :2335, :2337) were silent during the
+sample. Wherever they run, the same change applies before their next
+session. `udp_sent` and the per-source counts on `/api/status` show each
+feed as it arrives.
 
 ### OPEN: v2.22.1 on the Windows box (2026-09-22)
 

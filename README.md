@@ -488,6 +488,44 @@ Identical to the Pi, with your own package manager for step 1 — the
 installer detects `linux` instead of `pi` and installs the same systemd
 service to `/opt/dxca`. Everything else is the same.
 
+### Docker (a Linux box that already runs containers)
+
+For a host whose services all run in Docker (the shack's UberSDR box is
+one), `deploy/docker-deploy.sh` does the job `pi-deploy.sh` does, run from
+a clone on your Mac:
+
+```sh
+deploy/docker-deploy.sh user@192.168.1.109
+```
+
+It cross-compiles dxca for the host's architecture (x86-64 or ARM64, read
+over ssh) and ships the binary with [`deploy/Dockerfile`](deploy/Dockerfile).
+It then runs `docker build` **on the host**, so the Mac needs no Docker and
+there is no registry. It checks the image in a throwaway container with no
+network at all, then creates a container called `dxca`:
+
+- **Host networking.** UDP source ports are edited in the web UI while the
+  server runs, and a port mapping fixed when the container was created
+  would quietly strand any source added later.
+- **`/opt/dxca/config` and `/opt/dxca/data` bind-mounted from the host,**
+  the same layout as a systemd install, owned by the ssh user, who is also
+  the user the container runs as.
+- **Created, not started, the first time.** Start it with
+  `sudo docker start dxca`. After that, re-running the script upgrades it:
+  a running container comes back up on the new image, and a stopped one
+  stays stopped.
+
+Like `pi-deploy.sh --no-seed`, it **never copies config or data**. A new
+host starts at the first-run card. To move an existing install, stop the
+old one first, then copy its `config/dxca.toml` and `data/` into
+`/opt/dxca` on the new host. Never run two copies with the same config:
+both log into the clusters under one callsign and knock each other off,
+and every alert arrives twice.
+
+Needs, on the Mac: cargo-zigbuild, zig, pnpm and the Rust target for the
+host (`rustup target add x86_64-unknown-linux-gnu` for an x86-64 box). On
+the host: Docker and passwordless sudo.
+
 ### Windows
 
 **Works, but is the least proven of the four platforms.** First built and run
@@ -726,6 +764,7 @@ station's cluster login.
 | `crates/dxca-server` | Composition root: config, axum web API, embedded UI; auth + SQLite in M4. Binary is `dxca`. |
 | `web-ui/` | Svelte 5 + Vite + TypeScript (pnpm). Built `dist/` is embedded into the binary. `src/app.css` is the design system — every colour is derived from CSS system colours, so the UI follows the OS light/dark and the header's toggle can pin either. |
 | `config/dxca.example.toml` | Global config template — copy to `config/dxca.toml`. |
+| `deploy/` | Install and update scripts run from the Mac: `pi-deploy.sh` (systemd on a Pi), `win-deploy.sh` and `win-bundle.sh` (Windows), `docker-deploy.sh` + `Dockerfile` (a Docker host). |
 
 ## Build
 
