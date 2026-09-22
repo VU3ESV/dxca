@@ -1761,9 +1761,12 @@ third-party box is; ping each before deploying to it.
 **Since 2026-09-22 the shack's own install is the `.109` container:**
 `deploy/docker-deploy.sh` (it defaults to `vu2cpl@192.168.1.109`), and
 `/api/status` on `192.168.1.109:7580` for the sweep. noderedpi4 now
-answers nothing on :7580, and that's expected. `pi-deploy.sh` still
-**defaults to noderedpi4**, and running it would re-enable dxca there as a
-second sender, so always give it an explicit host. **The "local first"
+answers nothing on :7580, and that's expected. **`pi-deploy.sh` no longer
+has a default host** (Manoj: *"deploy can ask for the host"*). With no
+argument it asks, and without a terminal it stops with the usage line. The
+old default was noderedpi4, where `install.sh` would have re-enabled dxca as
+a second sender. Pointing it at noderedpi4 explicitly still does that, so
+don't. **The "local first"
 rule now means .109** (Manoj, 2026-09-22: *"local is 109 now"*). The
 container gets every build first and is verified before any other host
 sees it.

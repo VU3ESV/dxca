@@ -873,8 +873,11 @@ To cross-compile on the Mac and ship to a Pi in one step
 (needs cargo-zigbuild + the `aarch64-unknown-linux-gnu` target):
 
 ```sh
-deploy/pi-deploy.sh vu2cpl@noderedpi4.local
+deploy/pi-deploy.sh user@your-pi
 ```
+
+There is no default host. Leave it out and the script asks for one; run
+without a terminal, it stops instead.
 
 The aarch64 binary targets glibc ≥ 2.36 (Raspberry Pi OS Bookworm+,
 64-bit). Existing config and data on the Pi are never clobbered —

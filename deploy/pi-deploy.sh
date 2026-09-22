@@ -4,10 +4,19 @@
 #
 #   deploy/pi-deploy.sh [--no-seed] [user@host]
 #
-#     user@host   default vu2cpl@noderedpi4.local (the shack Pi). Over a VPN
-#                 use the IP — mDNS `.local` names generally do not resolve
-#                 across the tunnel.
+#     user@host   the Pi to deploy to. There is no default: when it's
+#                 omitted the script asks, and without a terminal to ask on
+#                 it stops. Over a VPN use the IP — mDNS `.local` names
+#                 generally do not resolve across the tunnel.
 #     --no-seed   ship ONLY the binary, the service unit and install.sh.
+#
+# WHY THERE IS NO DEFAULT HOST. It used to be vu2cpl@noderedpi4.local, the
+# shack Pi. On 2026-09-22 the shack install moved into a Docker container on
+# another box (docker-deploy.sh), and noderedpi4's dxca was stopped and
+# disabled as the rollback. install.sh re-enables and starts the service, so
+# a bare `pi-deploy.sh` would have quietly brought it back as a second copy
+# of the station: two logins fighting on every cluster node, every alert
+# sent twice.
 #
 # Ships by default: the aarch64 binary, deploy/dxca.service, install.sh, and
 # — only when the Pi doesn't have them yet — config/dxca.toml and the data/
@@ -36,12 +45,19 @@ HOST=""
 for arg in "$@"; do
   case "$arg" in
     --no-seed) NO_SEED=1 ;;
-    -h|--help) sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,39p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) echo "pi-deploy: unknown option '$arg'" >&2; exit 2 ;;
     *) HOST="$arg" ;;
   esac
 done
-HOST="${HOST:-vu2cpl@noderedpi4.local}"
+if [ -z "$HOST" ] && [ -t 0 ]; then
+  printf 'Deploy to which Pi (user@host)? '
+  read -r HOST
+fi
+if [ -z "$HOST" ]; then
+  echo "pi-deploy: no host given. Usage: deploy/pi-deploy.sh [--no-seed] user@host" >&2
+  exit 2
+fi
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO"
