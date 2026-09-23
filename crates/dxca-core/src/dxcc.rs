@@ -89,8 +89,6 @@ impl DxccResolver {
             .sort_by_key(|p| std::cmp::Reverse(p.len()));
     }
 
-    /// Resolve to a DXCC entity id; None when unloaded, unmatched, or the
-    /// call is a ClubLog non-DX operation (exact rule with adif 0).
     /// The **CQ zone** for a callsign — what WAZ and the DX Marathon count.
     ///
     /// Walks the same specificity ladder `resolve` does, because the answer
@@ -98,6 +96,11 @@ impl DxccResolver {
     /// longest matching prefix, then the entity's own zone as the fallback.
     /// That order is the whole feature — `W6` and `W1` are one entity and
     /// two zones, and only the prefix rule knows which.
+    ///
+    /// A US `KG4` 2×3 call ([`is_us_kg4`]) skips the prefix step: the
+    /// longest prefix it matches is Guantanamo's `KG4`, zone 8. It falls
+    /// through to the zone of whatever `resolve` returns instead — the USA's
+    /// own zone, or the entity of an exception that names the call.
     ///
     /// `None` when nothing gives a zone, or when the value is outside 1–40:
     /// a zone we cannot place is not a zone to award.
@@ -108,6 +111,9 @@ impl DxccResolver {
             .get(&clean)
             .copied()
             .or_else(|| {
+                if is_us_kg4(&clean) {
+                    return None;
+                }
                 self.sorted_prefixes
                     .iter()
                     .find(|p| clean.starts_with(p.as_str()))
@@ -121,10 +127,19 @@ impl DxccResolver {
         (1..=40).contains(&z).then_some(z)
     }
 
+    /// Resolve to a DXCC entity id; None when unloaded, unmatched, or the
+    /// call is a ClubLog non-DX operation (exact rule with adif 0).
+    ///
+    /// Exact-call exceptions first, then the one rule cty.xml does not carry
+    /// as data — a `KG4` 2×3 call is the USA, see [`is_us_kg4`] — then the
+    /// longest matching prefix.
     pub fn resolve(&self, callsign: &str) -> Option<i32> {
         let clean = normalize_call(&callsign.to_uppercase());
         if let Some(&adif) = self.exact.get(&clean) {
             return (adif > 0).then_some(adif);
+        }
+        if is_us_kg4(&clean) && self.entities.contains_key(&USA) {
+            return Some(USA);
         }
         for prefix in &self.sorted_prefixes {
             if clean.starts_with(prefix.as_str()) {
@@ -231,6 +246,31 @@ impl DxccResolver {
         self.entity(self.resolve(callsign)?)
             .map(|e| e.name.as_str())
     }
+}
+
+/// ADIF id of the United States.
+const USA: i32 = 291;
+
+/// True for `KG4` plus a **three-letter** suffix — an ordinary US station
+/// in call area 4, not Guantanamo Bay.
+///
+/// Only `KG4` with a two-letter suffix (`KG4AB`) is Guantanamo; the FCC
+/// issues the 2×3 form (`KG4OJT`) sequentially to stateside amateurs. cty.xml
+/// carries a bare `KG4` prefix rule for adif 105, so a plain prefix walk
+/// sends every one of them to Guantanamo — a false *New One* alert. ClubLog
+/// applies the suffix-length rule in its own code rather than in the data:
+/// its exceptions list only the 2×3 `KG4` calls that are somewhere *else*
+/// (`KG4TJS` Alaska, `KG4FJB` Hawaii), never the ones that are simply USA.
+/// Those exceptions still win — both callers check them first.
+///
+/// Takes a [`normalize_call`] result, so `KG4OJT/P` qualifies while
+/// `KG4/KG4OJT` — a US station operating from Guantanamo — normalises to
+/// `KG4` and does not. `KG44WW`, a special-event call, has a digit in its
+/// suffix and does not either.
+fn is_us_kg4(clean: &str) -> bool {
+    clean.len() == 6
+        && clean.starts_with("KG4")
+        && clean.bytes().skip(3).all(|b| b.is_ascii_uppercase())
 }
 
 /// `A/B` → `B/A`, for a call with exactly two parts; `None` otherwise.
@@ -586,5 +626,96 @@ mod tests {
         assert_eq!(r.resolve("K1JT/4"), Some(291)); // call-area drops
         assert_eq!(r.resolve("VP8/K1JT"), Some(141)); // shorter side = location
         assert_eq!(r.resolve("P/VU2CPL"), Some(324)); // leading portable marker
+    }
+
+    /// The shape of the live cty.xml around `KG4`: a bare `KG4` prefix for
+    /// Guantanamo, `K`/`W` for the USA, and exceptions only for the 2×3
+    /// calls that are elsewhere. `KG4TJS` → Alaska is a real one;
+    /// `KG4XYZ` → Guantanamo without a `<cqz>` is invented, to pin that an
+    /// exception decides the zone even when it carries none.
+    const KG4_CTY: &str = r#"<?xml version="1.0"?>
+<clublog date="2026-09-21">
+ <entities>
+  <entity><adif>291</adif><name>UNITED STATES OF AMERICA</name><prefix>K</prefix><deleted>false</deleted><cqz>5</cqz><cont>NA</cont></entity>
+  <entity><adif>105</adif><name>GUANTANAMO BAY</name><prefix>KG4</prefix><deleted>false</deleted><cqz>8</cqz><cont>NA</cont></entity>
+  <entity><adif>6</adif><name>ALASKA</name><prefix>KL</prefix><deleted>false</deleted><cqz>1</cqz><cont>NA</cont></entity>
+ </entities>
+ <exceptions>
+  <exception record="1"><call>KG4TJS</call><entity>ALASKA</entity><adif>6</adif><cqz>1</cqz><start>2014-05-16T00:00:00+00:00</start></exception>
+  <exception record="2"><call>KG4XYZ</call><entity>GUANTANAMO BAY</entity><adif>105</adif></exception>
+ </exceptions>
+ <prefixes>
+  <prefix record="1"><call>K</call><entity>UNITED STATES OF AMERICA</entity><adif>291</adif><cqz>5</cqz></prefix>
+  <prefix record="2"><call>W</call><entity>UNITED STATES OF AMERICA</entity><adif>291</adif><cqz>5</cqz></prefix>
+  <prefix record="3"><call>KG4</call><entity>GUANTANAMO BAY</entity><adif>105</adif><cqz>8</cqz><start>1949-01-01T00:00:00+00:00</start></prefix>
+ </prefixes>
+</clublog>"#;
+
+    fn kg4_resolver() -> DxccResolver {
+        let mut r = DxccResolver::default();
+        let now = crate::cty::parse_iso8601("2026-09-21T22:19:00+00:00").unwrap();
+        r.load(crate::cty::parse(KG4_CTY).expect("fixture parses"), now);
+        r
+    }
+
+    /// KG4OJT, spotted by VU2OY's RBN on 20 m FT8, 2026-09-21 — alerted
+    /// as a New Mode for Guantanamo Bay. It is a stateside call.
+    #[test]
+    fn a_kg4_call_with_a_three_letter_suffix_is_the_usa() {
+        let r = kg4_resolver();
+        assert_eq!(r.resolve("KG4OJT"), Some(291));
+        assert_eq!(r.resolve("kg4ojt"), Some(291), "case-insensitive");
+        assert_eq!(r.entity_name("KG4OJT"), Some("UNITED STATES OF AMERICA"));
+    }
+
+    #[test]
+    fn a_kg4_call_with_a_two_letter_suffix_is_guantanamo() {
+        let r = kg4_resolver();
+        assert_eq!(r.resolve("KG4AB"), Some(105));
+        // A digit in the suffix is not a 2×3 call — KG44WW was a
+        // Guantanamo special-event station.
+        assert_eq!(r.resolve("KG44WW"), Some(105));
+    }
+
+    #[test]
+    fn an_exception_still_beats_the_kg4_rule() {
+        let r = kg4_resolver();
+        assert_eq!(r.resolve("KG4TJS"), Some(6), "ClubLog puts KG4TJS in Alaska");
+        assert_eq!(r.zone("KG4TJS"), Some(1));
+        assert_eq!(r.resolve("KG4XYZ"), Some(105));
+        assert_eq!(
+            r.zone("KG4XYZ"),
+            Some(8),
+            "no <cqz> on the exception: the zone follows its entity, not the USA's"
+        );
+    }
+
+    #[test]
+    fn a_us_kg4_call_takes_a_us_zone() {
+        let r = kg4_resolver();
+        assert_ne!(r.zone("KG4OJT"), Some(8), "zone 8 is Guantanamo's");
+        assert_eq!(r.zone("KG4OJT"), Some(5), "the USA's own zone");
+        assert_eq!(r.zone("KG4AB"), Some(8));
+    }
+
+    #[test]
+    fn kg4_portable_forms_normalise_before_the_rule() {
+        let r = kg4_resolver();
+        assert_eq!(r.resolve("KG4OJT/P"), Some(291));
+        assert_eq!(r.resolve("KG4OJT/4"), Some(291));
+        assert_eq!(r.resolve("KG4OJT/QRP"), Some(291));
+        // Location prefix in front: the shorter side is where they are.
+        assert_eq!(r.resolve("W4/KG4OJT"), Some(291));
+        assert_eq!(r.resolve("KG4/KG4OJT"), Some(105), "operating from Guantanamo");
+        assert_eq!(r.resolve("KG4AB/P"), Some(105));
+        assert_eq!(r.zone("KG4OJT/P"), Some(5));
+    }
+
+    /// The rule must not answer for a resolver with no data behind it.
+    #[test]
+    fn an_unloaded_resolver_places_no_kg4_call() {
+        let r = DxccResolver::default();
+        assert_eq!(r.resolve("KG4OJT"), None);
+        assert_eq!(r.zone("KG4OJT"), None);
     }
 }

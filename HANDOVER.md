@@ -1,99 +1,16 @@
 # DXCA — Project Handover
 *For continuation in a new Claude session*
 
-<details>
-<summary><b>Contents</b> — 86 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
-
-- [What this is](#what-this-is)
-- [Session 2026-09-21 — destination sources are picked, not typed](#session-2026-09-21--destination-sources-are-picked-not-typed)
-- [Session 2026-09-13 — the Mac agent was back, sending its own alerts](#session-2026-09-13--the-mac-agent-was-back-sending-its-own-alerts)
-- [Session 2026-09-10 — the UI mock server is in the repo](#session-2026-09-10--the-ui-mock-server-is-in-the-repo)
-- [Session 2026-09-03 — the ClubLog API key ships in the binary](#session-2026-09-03--the-clublog-api-key-ships-in-the-binary)
-- [Session 2026-08-29 (afternoon) — the shell rework](#session-2026-08-29-afternoon--the-shell-rework)
-  - [What changed](#what-changed)
-  - [Server changes (four Rust files)](#server-changes-four-rust-files)
-  - [Bugs found by looking, not by tests](#bugs-found-by-looking-not-by-tests)
-  - [Decisions worth keeping](#decisions-worth-keeping)
-- [Session 2026-08-27 (afternoon) — the "2.1 wave"](#session-2026-08-27-afternoon--the-21-wave)
-- [M0 groundwork](#m0-groundwork)
-- [Plan §11 decisions resolved at M0](#plan-11-decisions-resolved-at-m0)
-- [Known gotchas](#known-gotchas)
-- [Burn-in log (Mac phase, 2026-08-27 — superseded by the Pi cutover above)](#burn-in-log-mac-phase-2026-08-27--superseded-by-the-pi-cutover-above)
-- [M6 progress](#m6-progress)
-- [Cutover — COMPLETE (2026-08-27)](#cutover--complete-2026-08-27)
-- [The decoder cutover (original checklist, kept for rollback reference)](#the-decoder-cutover-original-checklist-kept-for-rollback-reference)
-- [M5 progress](#m5-progress)
-- [M4 progress](#m4-progress)
-- [M3 progress](#m3-progress)
-- [M2 progress](#m2-progress)
-- [M1 progress](#m1-progress)
-- [Known gotcha: `noderedpi4.local` costs a 5-second mDNS timeout](#known-gotcha-noderedpi4local-costs-a-5-second-mdns-timeout)
-- [Both VPN tunnels and the shack LAN, at once (2026-08-30)](#both-vpn-tunnels-and-the-shack-lan-at-once-2026-08-30)
-- [Deploy sequence (2026-08-29, standing; network half retired 2026-08-30)](#deploy-sequence-2026-08-29-standing-network-half-retired-2026-08-30)
-- [The installs (2026-08-28; VU2OY added 2026-08-30)](#the-installs-2026-08-28-vu2oy-added-2026-08-30)
-- [Release convention (2026-08-28, standing)](#release-convention-2026-08-28-standing)
-- [Open items → next session](#open-items--next-session)
-  - [DONE in v2.22.0: the destination source picker, all four tabs, on all five hosts (2026-09-21)](#done-in-v2220-the-destination-source-picker-all-four-tabs-on-all-five-hosts-2026-09-21)
-  - [DONE in v2.22.0: source filter for FlexRadio and TCI (2026-09-21)](#done-in-v2220-source-filter-for-flexradio-and-tci-2026-09-21)
-  - [OPEN: `install.sh macos` cannot start a disabled agent (2026-09-13)](#open-installsh-macos-cannot-start-a-disabled-agent-2026-09-13)
-  - [DONE in v2.17.0: the TCI reconnect defect, fixed before the tag](#done-in-v2170-the-tci-reconnect-defect-fixed-before-the-tag)
-  - [DONE (on main, unreleased): four fixes from the first real awards run (2026-09-01)](#done-on-main-unreleased-four-fixes-from-the-first-real-awards-run-2026-09-01)
-  - [DONE (on main, unreleased): the Awards settings page + declutter (2026-09-01, same day)](#done-on-main-unreleased-the-awards-settings-page--declutter-2026-09-01-same-day)
-  - [DONE (on main, unreleased): IOTA / WAS / VUCC — docs/AWARDS.md phases 2–4](#done-on-main-unreleased-iota--was--vucc--docsawardsmd-phases-24)
-  - [DONE (on main, unreleased): the confirmation-path gate — docs/AWARDS.md phase 1](#done-on-main-unreleased-the-confirmation-path-gate--docsawardsmd-phase-1)
-  - [DONE (merged, unreleased): alerts on an ExpertSDR3 panorama (TCI) — PR #1](#done-merged-unreleased-alerts-on-an-expertsdr3-panorama-tci--pr-1)
-  - [DONE: Settings is Sources and Destinations — v2.16.0 (2026-08-30)](#done-settings-is-sources-and-destinations--v2160-2026-08-30)
-  - [WITHDRAWN: multi-station per-account feeds (2026-08-30)](#withdrawn-multi-station-per-account-feeds-2026-08-30)
-  - [DONE: the UI cleanup pass (2026-08-29) — see the session entry above](#done-the-ui-cleanup-pass-2026-08-29--see-the-session-entry-above)
-  - [NEXT: ship DXCA's own ClubLog API key (Manoj, 2026-08-29)](#next-ship-dxcas-own-clublog-api-key-manoj-2026-08-29)
-  - [DONE: v2.12.2 on all four hosts, in one pass (2026-08-30)](#done-v2122-on-all-four-hosts-in-one-pass-2026-08-30)
-  - [DONE: the gate passes, for the first time in this project (2026-08-30)](#done-the-gate-passes-for-the-first-time-in-this-project-2026-08-30)
-  - [DONE: Flex settings moved, page renamed, lifetimes per level — v2.15.1](#done-flex-settings-moved-page-renamed-lifetimes-per-level--v2151)
-  - [DONE: alerts on the FlexRadio panadapter — v2.15.0 (2026-08-30)](#done-alerts-on-the-flexradio-panadapter--v2150-2026-08-30)
-  - [DONE: health alerts — v2.14.0 (2026-08-30)](#done-health-alerts--v2140-2026-08-30)
-  - [DONE: the panadapter feed — Aether on the telnet server (2026-08-30)](#done-the-panadapter-feed--aether-on-the-telnet-server-2026-08-30)
-  - [DONE: uncredited contacts are named at refresh time (2026-08-30)](#done-uncredited-contacts-are-named-at-refresh-time-2026-08-30)
-  - [DONE: win-deploy.sh follows %SystemDrive%, not a hardcoded C: (2026-08-30)](#done-win-deploysh-follows-systemdrive-not-a-hardcoded-c-2026-08-30)
-  - [DONE: the entity whitelist — the *actual* 314 vs 313 (2026-08-30)](#done-the-entity-whitelist--the-actual-314-vs-313-2026-08-30)
-  - [DONE: LoTW marker in Telegram alerts (2026-08-30)](#done-lotw-marker-in-telegram-alerts-2026-08-30)
-  - [DONE: ClubLog's invalid-operations list is honoured (2026-08-30)](#done-clublogs-invalid-operations-list-is-honoured-2026-08-30)
-  - [DONE: My ClubLog band × mode grid — v2.13.0 on all four hosts (2026-08-30)](#done-my-clublog-band--mode-grid--v2130-on-all-four-hosts-2026-08-30)
-  - [NEXT: a detailed help file — setup and use (Manoj, 2026-08-29)](#next-a-detailed-help-file--setup-and-use-manoj-2026-08-29)
-  - [Windows: builds, installs, runs (2026-08-28)](#windows-builds-installs-runs-2026-08-28)
-- [DXCC Challenge points (2026-08-27)](#dxcc-challenge-points-2026-08-27)
-- [The ClubLog API key is a SERVER setting (2026-08-27)](#the-clublog-api-key-is-a-server-setting-2026-08-27)
-- [Automatic ClubLog / LoTW refresh (2026-08-27)](#automatic-clublog--lotw-refresh-2026-08-27)
-- [Alert levels 2.1 (2026-08-27)](#alert-levels-21-2026-08-27)
-- [DXSpider bells ate every spot (fixed 2026-08-27)](#dxspider-bells-ate-every-spot-fixed-2026-08-27)
-- [Account editing and deletion (2026-08-27)](#account-editing-and-deletion-2026-08-27)
-- [v2.2.0 (2026-08-28)](#v220-2026-08-28)
-- [v2.1.1 (2026-08-28)](#v211-2026-08-28)
-- [Missing mode on cluster spots — and the DATA default behind it (2026-08-28)](#missing-mode-on-cluster-spots--and-the-data-default-behind-it-2026-08-28)
-  - [What it does now](#what-it-does-now)
-  - [Honest limitation](#honest-limitation)
-- [install.sh now verifies its own work (2026-08-27)](#installsh-now-verifies-its-own-work-2026-08-27)
-- [My Alerts shows what was actually sent (2026-08-28)](#my-alerts-shows-what-was-actually-sent-2026-08-28)
-- [Telegram sends retry once on transport errors (2026-08-28)](#telegram-sends-retry-once-on-transport-errors-2026-08-28)
-- [My ClubLog shows the log's statistics (2026-08-28)](#my-clublog-shows-the-logs-statistics-2026-08-28)
-- [System-tab editors dragged the page sideways (fixed 2026-08-28)](#system-tab-editors-dragged-the-page-sideways-fixed-2026-08-28)
-- [MQTT destinations (2026-08-28)](#mqtt-destinations-2026-08-28)
-- [Blacklist tab (2026-08-28)](#blacklist-tab-2026-08-28)
-- [Status bar boxed by category; Sources became a chip row (2026-08-28)](#status-bar-boxed-by-category-sources-became-a-chip-row-2026-08-28)
-- ["CQ only" filtered nothing (fixed 2026-08-28)](#cq-only-filtered-nothing-fixed-2026-08-28)
-- [Users edit row overflowed the card (fixed 2026-08-28)](#users-edit-row-overflowed-the-card-fixed-2026-08-28)
-- [install.sh does not pull — but it says when you should have (2026-08-28)](#installsh-does-not-pull--but-it-says-when-you-should-have-2026-08-28)
-- [install.sh did not install the web GUI (fixed 2026-08-27)](#installsh-did-not-install-the-web-gui-fixed-2026-08-27)
-- [The rustc floor is 1.88, and install.sh now enforces it (2026-08-27)](#the-rustc-floor-is-188-and-installsh-now-enforces-it-2026-08-27)
-- [Local toolchain wart (2026-08-27)](#local-toolchain-wart-2026-08-27)
-- [Shell gotcha: never put a non-ASCII byte after `$VAR` (2026-08-27)](#shell-gotcha-never-put-a-non-ascii-byte-after-var-2026-08-27)
-- [Deploying to a Pi that is NOT this shack's (2026-08-27)](#deploying-to-a-pi-that-is-not-this-shacks-2026-08-27)
-- [Deploy gotcha (fixed 2026-08-27)](#deploy-gotcha-fixed-2026-08-27)
-- [Web UI look](#web-ui-look)
-- [Conventions (see ~/.claude/CLAUDE.md)](#conventions-see-claudeclaudemd)
-
-</details>
-
-**Created:** 2026-08-26 · **Last updated:** 2026-09-21 · **Status:**
+**Created:** 2026-08-26 · **Last updated:** 2026-09-22 · **Status:**
+**Production moved off noderedpi4 into a Docker container on `ubersdr`
+(192.168.1.109), 2026-09-22, 11:09 IST.** noderedpi4's dxca is stopped and
+disabled, kept as the rollback. The decoders and the Mac's telnet client
+still need pointing at .109 (open items, and *Session 2026-09-22
+(later)*). **v2.22.1 — a `KG4` call with a three-letter suffix resolves to
+the USA, not Guantanamo Bay. Tagged and released with the Windows zip,
+2026-09-22;** running on .109 and the three remote Pis. The Windows box is
+still on 2.22.0 (see the open item and *Session 2026-09-22*).
+Previously:
 **v2.22.0 — every destination's sources are picked, not typed, and the
 radios gained the pick. Tagged, released with the Windows zip, and on all
 five hosts, 2026-09-21** (deploy record in *Session 2026-09-21*). The
@@ -678,8 +595,190 @@ Lineage: original concept by Vinod VU3ESV; DX-cluster telnet client
 lifted from `~/projects/meridian` (`crates/meridian-core/src/dxcluster/`),
 and the web GUI's design system from the same repo's
 `web-ui/default/src/` (app.css + the theme module and switcher).
-**Production runs on noderedpi4 (192.168.1.169) since the 2026-08-27
-cutover**; the 1.x macOS app is the retained fallback (maintenance mode).
+**Production runs in a Docker container on `ubersdr` (192.168.1.109) since
+2026-09-22**, having run on noderedpi4 (192.168.1.169) from the 2026-08-27
+cutover. noderedpi4's install is stopped and disabled, kept as the
+rollback. The 1.x macOS app is the retained fallback (maintenance mode).
+
+## Session 2026-09-22 (later) — production moves to a container on .109
+
+Manoj: *"lets create a container image from the .169 dxca and lod in
+ubersdr box 109"*. Asked first whether it should be a staged copy, a move,
+a fresh instance or a second running copy, because a clone that runs
+alongside .169 would log into the clusters under the same callsign (DXSpider
+kicks duplicate logins) and send every Telegram alert twice. That second
+problem is the 2026-09-13 Mac-agent incident. He picked **stage, don't
+start**, then while it built: *"lets stop the .169 and up the new
+container"*.
+
+**The .109 box:** `ubersdr`, **x86-64**, Ubuntu 24.04.5, 16 cores, 15 GiB,
+Docker 29.8.1 already running UberSDR, Meridian, OpenWebRX and Caddy.
+`vu2cpl` has passwordless sudo but is not in the `docker` group. Ports 7580,
+7575 and UDP 2333–2337 were free. The Pi binary cannot run there (aarch64),
+so the image is built from a fresh x86-64 cross-build of the same v2.22.1
+commit, not from .169's binary.
+
+**What was built** (committed): `deploy/Dockerfile` and
+`deploy/docker-deploy.sh`.
+- **No Docker on the Mac and no registry.** The script cross-compiles with
+  zigbuild (`x86_64-unknown-linux-gnu.2.36`, target added via rustup this
+  session), rsyncs the binary and the Dockerfile to `~/dxca-docker` on the
+  host, and runs `docker build` there. Tags `dxca:<version>` and
+  `dxca:latest`.
+- **The image is Debian trixie-slim plus the binary, nothing else.** The UI
+  is embedded, SQLite bundled, and ureq's TLS roots are webpki-roots
+  (checked in `Cargo.lock`), so no ca-certificates. There is no local-time
+  use anywhere, so no TZ either. bash is kept for `docker exec` and the
+  smoke test.
+- **Smoke test** before the real container is touched: a throwaway
+  container with `--network none` and empty config/data, queried over
+  bash's `/dev/tcp` for `/api/status`. It can reach nothing and log in
+  nowhere. It reported 2.22.1.
+- **The container:** `--network host` (UDP ports are edited at runtime in
+  the UI, so a fixed `-p` list would strand new sources),
+  `--restart unless-stopped`, `--user 1001:1001` (the host's `vu2cpl`),
+  bind mounts `/opt/dxca/config` and `/opt/dxca/data`, and json-file logs
+  capped at 3 × 10 MB. **Created, not started** on first run. A re-run
+  restarts it only if it was running. Docker applies the restart policy
+  only after a first start, so a staged container can't come up on its own
+  after a reboot.
+- **It never ships config or data**, same rule as `--no-seed`.
+
+**The cutover, 11:09 IST:**
+1. **Checked first:** .169's `dxca.toml` has no `127.0.0.1`, `localhost`
+   or own-IP references. The DB's `mqtt_destinations` is `[]`, and the two
+   `192.168.1.169` strings in the file sit in unused pages, not live rows.
+   The cluster nodes on `192.168.1.109:7300/7550` are reachable from the
+   host network as before. The RUMlog passthrough goes to the Mac,
+   192.168.10.226:2237.
+2. **Who fed .169:** a 15-second tcpdump showed UDP from the Mac
+   (192.168.10.226 → :2333, MSHV) and from .109 itself (→ :2336, UberSDR).
+   The Mac also held the telnet session on :7575 and the web UI on :7580.
+3. `systemctl stop dxca && systemctl disable dxca` on .169. No WAL or
+   journal files left behind.
+4. `config/dxca.toml` + `data/{cty.xml, dxca.db, fcc-states.txt,
+   iota-groups.json, lotw-report-1.adi, lotw-users.txt}` tarred across
+   (the `dxca.db.pre-*` backups left behind). **md5 identical on all seven.**
+5. `docker start dxca` on .109. **2.22.1, 10/10 nodes Live** (the config
+   gained `Uber Meridian` and `VU24DX` since this morning), 1 user, no
+   setup card, cty 402, FCC 816,280, IOTA 1,178, LoTW 235,747. Listening
+   on :7580, :7575 and UDP 2333–2337, running as 1001:1001 on the host
+   network. .169's :7580 no longer answers.
+
+**Rollback:** `sudo docker stop dxca` on .109, then `sudo systemctl enable
+--now dxca` on .169. The two databases diverge from 11:09, so alerts and
+settings changed after the cutover stay on .109 unless copied back.
+
+## Session 2026-09-22 — KG4 2×3 calls are the USA, not Guantanamo Bay
+
+Manoj reported a *New Mode* alert for **KG4OJT — GUANTANAMO BAY 20M FT8**
+(VU2OY's RBN, 2026-09-21, 2219Z). KG4OJT is an FCC licensee in Virginia.
+**Only `KG4` + two letters is Guantanamo (ADIF 105); `KG4` + three letters
+is an ordinary US call in area 4.** cty.xml carries one bare `KG4` prefix
+rule → 105 (cqz 8), and KG4OJT has no exception, so
+`DxccResolver::resolve` fell through to that prefix. Nothing in the repo
+knew the suffix-length rule.
+
+**ClubLog applies the rule in code, not in data.** The live cty.xml has 38
+exceptions starting `KG4`, and every 2×3 one sends the call somewhere
+*other* than the USA: `KG4TJS` Alaska, `KG4FJB` Hawaii, `KG4EEG` Puerto
+Rico, `KG4SZC` US Virgin Is. It lists none of the thousands that are simply
+USA. That settles both halves of the fix: the rule belongs in the resolver,
+and exceptions have to keep winning over it.
+
+**What the week looked like on noderedpi4** (read-only copy of `dxca.db`,
+`alerts_sent`, 2026-09-15 → 22): **32 false Guantanamo alerts, all
+`newBand`, from seven calls:** KG4OJT (21, all via VU2OY's RBN, 20 m and
+30 m FT8/FT4), KG4HOT (6, 6 m SSB), KG4EXY, KG4BIG, KG4ZGZ, KG4CRJ,
+KG4ORR. All seven are in `fcc-states.txt` (VA ×3, KY, NC, FL, GA). Every
+one is 2×3. Manoj's matrix has Guantanamo on **10M-PHONE only**, which is
+why every other band fired. Spots themselves are not kept for a week: the
+pipeline ring is 5000 (about an hour), so `alerts_sent` is the only
+week-long record.
+
+**The fix** (`crates/dxca-core/src/dxcc.rs`):
+
+- `is_us_kg4(clean)`: exactly `KG4` + three ASCII letters, tested on the
+  `normalize_call` output. So `KG4OJT/P`, `/4` and `/QRP` qualify.
+  `KG4/KG4OJT` (a US station operating from Guantanamo) normalises to
+  `KG4` and doesn't. `W4/KG4OJT` normalises to `W4` and never reaches the
+  rule. `KG44WW`, a real Guantanamo special-event call, has a digit in its
+  suffix and doesn't qualify.
+- `resolve`: exact exception first (unchanged), then the KG4 rule →
+  `Some(291)`, then the prefix walk. The rule also requires entity 291 to
+  be loaded, so an unloaded resolver still answers `None`.
+- `zone`: after the exact-zone lookup, a KG4 2×3 call **skips the prefix
+  walk** (its longest prefix is `KG4`, zone 8) and falls to the zone of
+  whatever `resolve` returned. That gives the USA's entity zone (5) or the
+  exception's own entity. A cqz-less exception to 105 therefore still
+  reads zone 8, not 5. This skips the prefix walk rather than jumping
+  straight to 291's zone, because the latter would have handed a
+  cqz-less exception the USA's zone.
+- Six tests on a small cty.xml fixture run through `cty::parse`: 2×3 → 291,
+  2×2 → 105, `KG44WW` → 105, the Alaska exception beats the rule (zone 1
+  too), the cqz-less exception keeps its entity's zone, portable forms,
+  and an unloaded resolver. Three of them fail with the rule stubbed out.
+
+**Checked against the Pi's own cty.xml** (dated 2026-09-17, well inside
+`cty_refresh_days = 7`, so the open question of staleness is answered:
+fresh, and staleness was never the cause). All seven calls resolve to 291,
+zone 5. KG4AB → 105; KG4TJS and KG4HZF → Alaska (KG4HZF's Hawaii
+exception closed 2026-03-08 and its Alaska one took over, and the load-time
+activity filter picks the right one). `cargo test --workspace` green;
+`local_parity` (all four ignored real-data tests) green, so 1.x matrix
+parity is untouched: log records carry their own DXCC.
+
+**After the fix, 26 of the 32 have no DXCC reason to alert** (USA already
+worked and confirmed on 20M-CW/DATA, 30M-DATA and 40M-CW). An award alert,
+such as a WAS state, is still possible and would be genuine. **KG4HOT on 6 m SSB will still
+alert, correctly, as *New Slot: USA 6M PHONE*.** That slot isn't in the log.
+Expected, not a regression.
+
+**The blacklist is the wrong stopgap:** exact-match only
+(`Pipeline::is_blacklisted`), new 2×3 KG4 calls appear weekly, and it
+drops the spot from the feed entirely rather than re-labelling it.
+
+**Not changed, on purpose:**
+- **KG4 + one letter (2×1).** cty.xml lists them individually (`KG4W`,
+  `KG4V/1` → USA), so ClubLog's own rule evidently doesn't cover them.
+  Left to the data.
+- **The general form of the zone quirk.** Any exception without `<cqz>`
+  takes the longest prefix's zone even when that prefix is another
+  entity's. Counted in the live file: one case, `VP8CA` (South Georgia,
+  getting the Falklands' zone 13, which is also South Georgia's zone).
+  Harmless, so not generalised.
+
+**Released as v2.22.1 the same morning, on Manoj's yes.** Version bumped
+before the deploy. Release commit `2824eb6` + annotated tag, pushed. Then:
+
+- **noderedpi4 first** (`pi-deploy.sh vu2cpl@192.168.1.169`, seeded
+  form). `data/dxca.db` copied to `dxca.db.pre-v2.22.1` (md5 equal), and the
+  outgoing binary kept as `dxca.rollback-v2.22.0`. Verified: 2.22.1,
+  service up 07:31:45 IST, **8/8 Live**, telnet client back, config md5
+  unchanged (`3b0f46f2…`), no journal warnings. Its cty.xml had moved to the
+  2026-09-21 edition at 07:25, **before** the deploy: the old 2.22.0 process
+  did that, not the installer. No KG4 spot reached the ring in the minutes
+  after the restart, so the live check is still to come; the tests and the
+  real-cty.xml run cover the logic.
+- **`win-bundle.sh` → `gh release create v2.22.1`** with
+  `dxca-2.22.1-windows-x64.zip` (5.2 MB), published as Latest. The ClubLog
+  key came from `.clublog-api-key` as usual.
+- **`win-deploy.sh` to `.170` was blocked** by Claude Code's auto-mode
+  permission check before it ran. Not attempted another way. Still 2.22.0.
+- **Remote Pis:** all three tunnel routes were up, but only VU2OY's box
+  answered. adersh `.151` and vu2wj `.201` gave no ping and no status, so
+  they were left alone. **vu2oy:** DB copied to `dxca.db.pre-v2.22.1` (md5
+  equal), binary kept as `dxca.rollback-v2.22.0`, then `--no-seed`. Up
+  07:35:34 IST, 2.22.1, 3/3, config md5 unchanged, glibc 2.36 confirmed,
+  no journal warnings.
+- **adersh and vu2wj, after Manoj restarted their tunnels** (`wg-quick
+  down` / `up`). Both then answered. The routes had been there all along,
+  so a `/32` route alone does not prove a tunnel works: check `sudo wg show`
+  for a recent handshake. Same drill on each: DB to `dxca.db.pre-v2.22.1`
+  (md5 equal), binary kept as `dxca.rollback-v2.22.0`, then `--no-seed`.
+  **adersh:** up 07:39:27 IST, 5/5. **vu2wj:** up 07:39:46 IST, **3/3**
+  (it had 2 nodes at the v2.22.0 deploy, so its admin has added one since).
+  Both configs' md5s unchanged, no journal warnings.
 
 ## Session 2026-09-21 — destination sources are picked, not typed
 
@@ -1659,11 +1758,25 @@ online himself. So: deploy the shack and the Windows box freely, deploy
 assuming vu2wj is on**. Never treat "the tunnels are up" as proof a
 third-party box is; ping each before deploying to it.
 
-## The installs (2026-08-28; VU2OY added 2026-08-30)
+**Since 2026-09-22 the shack's own install is the `.109` container:**
+`deploy/docker-deploy.sh` (it defaults to `vu2cpl@192.168.1.109`), and
+`/api/status` on `192.168.1.109:7580` for the sweep. noderedpi4 now
+answers nothing on :7580, and that's expected. **`pi-deploy.sh` no longer
+has a default host** (Manoj: *"deploy can ask for the host"*). With no
+argument it asks, and without a terminal it stops with the usage line. The
+old default was noderedpi4, where `install.sh` would have re-enabled dxca as
+a second sender. Pointing it at noderedpi4 explicitly still does that, so
+don't. **The "local first"
+rule now means .109** (Manoj, 2026-09-22: *"local is 109 now"*). The
+container gets every build first and is verified before any other host
+sees it.
+
+## The installs (2026-08-28; VU2OY added 2026-08-30; production moved to .109 2026-09-22)
 
 | Host | Account | Notes |
 |---|---|---|
-| `noderedpi4.local` / `192.168.1.169` | `vu2cpl` | The shack. Seeded deploys; `telnet_interactive = true`. |
+| `192.168.1.109` (hostname `ubersdr`) | `vu2cpl` | **The shack's production install since 2026-09-22**: the `dxca` Docker container, x86-64 Ubuntu 24.04. `docker-deploy.sh`. Passwordless sudo; `vu2cpl` is not in the `docker` group, so docker runs under sudo. |
+| `noderedpi4.local` / `192.168.1.169` | `vu2cpl` | The shack's production install 2026-08-27 → 2026-09-22. **dxca stopped and disabled there**, install left intact as the rollback. **Do not `pi-deploy.sh` it**: `install.sh` re-enables and starts the service, which makes a second sender. |
 | `192.168.1.170` | `manoj` | The shack's Windows box. `win-deploy.sh`, update only. |
 | `192.168.1.151` | `adersh` | Third party, over the VPN. `--no-seed` always. |
 | `192.168.1.201` (hostname `rpi`) | `vu2wj` | Third party. `--no-seed` always. |
@@ -1739,6 +1852,38 @@ date, what changed and why, at the top. v2.21.0 shipped without one and the
 Status section led with v2.20.4 for eighteen days (backfilled 2026-09-21).
 
 ## Open items → next session
+
+### OPEN: point the feeds at .109 (2026-09-22)
+
+Since the cutover, anything aimed at 192.168.1.169 reaches nothing. Seen on
+.169 just before it was stopped:
+
+- **MSHV on the Mac** → UDP :2333. Change it to `192.168.1.109:2333`.
+- **UberSDR on .109 itself** → UDP :2336. Change it to `127.0.0.1:2336` or
+  `192.168.1.109:2336`. The container is on the host network, so both work.
+- **The telnet client on the Mac** → :7575. Change it to
+  `192.168.1.109:7575`.
+- **The web UI bookmark:** `http://192.168.1.109:7580/`.
+
+JTDX, WSJT-X and SDR Ctrl 705 (:2334, :2335, :2337) were silent during the
+sample. Wherever they run, the same change applies before their next
+session. `udp_sent` and the per-source counts on `/api/status` show each
+feed as it arrives.
+
+### OPEN: v2.22.1 on the Windows box (2026-09-22)
+
+On all four Pis. **Windows `.170` is still on 2.22.0**, and so still sends
+false Guantanamo alerts for `KG4` 2×3 spots. Claude Code's auto-mode
+permission check blocked `deploy/win-deploy.sh`, so it was not run. Either
+Manoj runs it himself, or he allows it and a session runs it.
+
+### OPEN: the 1.x Swift app has the same KG4 fault (2026-09-22)
+
+`DXCCResolver.swift` in the DXClusterAggregator repo does the same
+exact-then-longest-prefix walk with no suffix-length rule, so the fallback
+app would raise the same false Guantanamo alerts. It is in maintenance mode,
+so this was not fixed here. The Rust `is_us_kg4` and its tests port across
+directly.
 
 ### DONE in v2.22.0: the destination source picker, all four tabs, on all five hosts (2026-09-21)
 
