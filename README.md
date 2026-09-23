@@ -25,6 +25,17 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.22.1** (2026-09-22): **a `KG4` call with a three-letter suffix is the
+USA, not Guantanamo Bay.** Only `KG4` + two letters is Guantanamo. The FCC
+issues `KG4` + three letters to ordinary stateside amateurs, but cty.xml has
+one bare `KG4` prefix rule, so every one of those calls resolved to
+Guantanamo and raised a *New Band* or *New Mode* alert wherever you hadn't
+worked it. The shack install sent 32 of them in a week, from seven US
+stations. They now resolve to the USA and take the USA's CQ zone.
+ClubLog's own exceptions still win: `KG4TJS` stays in Alaska. Nothing to do
+on upgrade. See [KG4: Guantanamo Bay or the
+USA](#kg4-guantanamo-bay-or-the-usa).
+
 **v2.22.0** (2026-09-21): **every destination can be held to particular
 sources — picked, not typed.** Each UDP and MQTT destination already carried
 a source list, but the only way to set it was a comma-separated text box,
@@ -477,6 +488,44 @@ Identical to the Pi, with your own package manager for step 1 — the
 installer detects `linux` instead of `pi` and installs the same systemd
 service to `/opt/dxca`. Everything else is the same.
 
+### Docker (a Linux box that already runs containers)
+
+For a host whose services all run in Docker (the shack's UberSDR box is
+one), `deploy/docker-deploy.sh` does the job `pi-deploy.sh` does, run from
+a clone on your Mac:
+
+```sh
+deploy/docker-deploy.sh user@192.168.1.109
+```
+
+It cross-compiles dxca for the host's architecture (x86-64 or ARM64, read
+over ssh) and ships the binary with [`deploy/Dockerfile`](deploy/Dockerfile).
+It then runs `docker build` **on the host**, so the Mac needs no Docker and
+there is no registry. It checks the image in a throwaway container with no
+network at all, then creates a container called `dxca`:
+
+- **Host networking.** UDP source ports are edited in the web UI while the
+  server runs, and a port mapping fixed when the container was created
+  would quietly strand any source added later.
+- **`/opt/dxca/config` and `/opt/dxca/data` bind-mounted from the host,**
+  the same layout as a systemd install, owned by the ssh user, who is also
+  the user the container runs as.
+- **Created, not started, the first time.** Start it with
+  `sudo docker start dxca`. After that, re-running the script upgrades it:
+  a running container comes back up on the new image, and a stopped one
+  stays stopped.
+
+Like `pi-deploy.sh --no-seed`, it **never copies config or data**. A new
+host starts at the first-run card. To move an existing install, stop the
+old one first, then copy its `config/dxca.toml` and `data/` into
+`/opt/dxca` on the new host. Never run two copies with the same config:
+both log into the clusters under one callsign and knock each other off,
+and every alert arrives twice.
+
+Needs, on the Mac: cargo-zigbuild, zig, pnpm and the Rust target for the
+host (`rustup target add x86_64-unknown-linux-gnu` for an x86-64 box). On
+the host: Docker and passwordless sudo.
+
 ### Windows
 
 **Works, but is the least proven of the four platforms.** First built and run
@@ -715,6 +764,7 @@ station's cluster login.
 | `crates/dxca-server` | Composition root: config, axum web API, embedded UI; auth + SQLite in M4. Binary is `dxca`. |
 | `web-ui/` | Svelte 5 + Vite + TypeScript (pnpm). Built `dist/` is embedded into the binary. `src/app.css` is the design system — every colour is derived from CSS system colours, so the UI follows the OS light/dark and the header's toggle can pin either. |
 | `config/dxca.example.toml` | Global config template — copy to `config/dxca.toml`. |
+| `deploy/` | Install and update scripts run from the Mac: `pi-deploy.sh` (systemd on a Pi), `win-deploy.sh` and `win-bundle.sh` (Windows), `docker-deploy.sh` + `Dockerfile` (a Docker host). |
 
 ## Build
 
@@ -823,8 +873,11 @@ To cross-compile on the Mac and ship to a Pi in one step
 (needs cargo-zigbuild + the `aarch64-unknown-linux-gnu` target):
 
 ```sh
-deploy/pi-deploy.sh vu2cpl@noderedpi4.local
+deploy/pi-deploy.sh user@your-pi
 ```
+
+There is no default host. Leave it out and the script asks for one; run
+without a terminal, it stops instead.
 
 The aarch64 binary targets glibc ≥ 2.36 (Raspberry Pi OS Bookworm+,
 64-bit). Existing config and data on the Pi are never clobbered —
@@ -1133,6 +1186,24 @@ deleting — a busted decode that got logged will show up in exactly this list.
 
 Like the deleted list, both depend on cty.xml. A server that has never
 downloaded it applies neither, and totals fall back to the older behaviour.
+
+### KG4: Guantanamo Bay or the USA
+
+*Since v2.22.1.* Only **`KG4` with a two-letter suffix** is
+Guantanamo Bay (`KG4AB`). The FCC hands out `KG4` with a **three-letter**
+suffix to ordinary stateside amateurs in call area 4: `KG4OJT` is in
+Virginia. cty.xml has one bare `KG4` prefix rule for Guantanamo, and ClubLog
+applies the suffix-length rule in its own code rather than in the data, so a
+plain prefix lookup sent every one of those US calls to Guantanamo. The
+result was a *New Band* or *New Mode* alert on any band or mode where you
+hadn't worked Guantanamo: 32 of them in one week on the shack install, from
+seven different US stations.
+
+DXCA now resolves a `KG4` call with a three-letter suffix to the **USA**, in
+the USA's own CQ zone. Portable forms follow the usual rules: `KG4OJT/P` is
+the USA, and `KG4/KG4OJT` (a US operator actually at Guantanamo) is
+Guantanamo. ClubLog's own exceptions still win, so a 2×3 call that cty.xml
+places somewhere else stays there (`KG4TJS` is in Alaska).
 
 ### Health alerts
 
