@@ -66,5 +66,6 @@ Deps are added reluctantly and pinned once in the root `[workspace.dependencies]
 ## Where things are written down
 
 `HANDOVER.md` — engineering log, incl. what was tried and rejected, opening with
-a contents index that a new section owes an entry. `README.md` — user-facing
+a contents index that a new section owes an entry —
+`scripts/check-handover-index.py` verifies it. `README.md` — user-facing
 manual. Both are long; grep them, don't read them whole.

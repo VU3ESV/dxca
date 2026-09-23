@@ -742,7 +742,9 @@ Worth keeping:
   re-arms it" is the fact and keeps the warning.
 - **Maintenance this creates:** the index is hand-maintained. A new session
   section means a new entry, in document order, or the map quietly stops
-  matching the territory.
+  matching the territory. `scripts/check-handover-index.py` is that check —
+  every link against the renderer, plus coverage, order and the count in the
+  `<summary>`, and it names the anchor to use when one is wrong.
 
 ## Session 2026-09-22 (later) — production moves to a container on .109
 
