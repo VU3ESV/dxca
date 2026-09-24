@@ -1443,15 +1443,44 @@ operating phone low in 40m can be inferred wrongly.
 
 ### Alert history
 
-**Alerts** lists what actually went to your Telegram — newest first, in
-the same row vocabulary as the Spots feed, with the level tint. Before it
-existed the fan-out was invisible: a spot that was flagged, narrowed away by
-your band/mode chips, held by the per-callsign cooldown, or refused by
-Telegram all looked the same from the UI, which is to say silent.
+**Alerts** lists every alert your account raised — newest first, in the
+same row vocabulary as the Spots feed, with the level tint — and where each
+one went: Telegram, and every FlexRadio and ExpertSDR3 you have set up under
+Destinations. An account that alerts to a radio alone gets a history too.
+Before this page existed the fan-out was invisible: a spot that was flagged,
+narrowed away by your band/mode chips, held by the per-callsign cooldown, or
+refused by Telegram all looked the same from the UI, which is to say silent.
 
-Failed sends are kept and marked, with Telegram's own error on hover — a bad
-chat id otherwise fails quietly forever. History is per account, capped at
-the last 500 alerts, and the list refreshes every 15 seconds.
+**Sent to** carries one chip per channel — `TG`, `Flex`, `TCI` — with a count
+when several radios of one kind took the alert (`TCI ×4`). Hover a chip for
+every address and its verdict. Green is accepted, red is refused, and amber
+means some of that channel's radios accepted and some refused — the case
+worth seeing once an account has several radios. **Status** is ✓ only when
+*every* channel accepted, so one radio that is down turns the row **Failed**
+even though your Telegram arrived; the chips say which one. Alerts recorded
+before this shipped show `—` under Sent to, because which channel they went
+to was not recorded then — their ✓ or Failed is Telegram's alone.
+
+> **A green radio chip means the send queue took the mark, not that the
+> radio drew it.** The queue only refuses once it is full, so a radio that
+> has just been switched off still reads green until the backlog fills.
+> Telling those apart needs the radio's link state fed back into the alert
+> path, which is not built yet.
+
+Failed sends are kept and marked, with the reason on hover — Telegram's own
+error text, or which radio was not reachable. A bad chat id otherwise fails
+quietly forever.
+
+The boxes under the column headings narrow the rows on screen: type part of
+a call, spotter or entity name, or pick a source, mode, band, level, channel
+or status. The lists only offer values that occur in the rows loaded.
+Picking a channel narrows the Sent-to cell to it as well as the rows — pick
+one radio's address to see just what was aimed at it. **Clear filters**
+resets them all, and none of it is saved: the rail on the left edits your
+account, the filters are only a lens on the table. **Show** sets how many
+rows are loaded, 100 by default. History is per account and capped at the
+last 500 alerts, so 500 and All are the same set. The list refreshes every
+15 seconds.
 
 ### MQTT destinations
 
@@ -1513,7 +1542,7 @@ a display filter; the band and mode chips are that.
 > this is usually an empty table: the screen holds the last 500 spots,
 > which at ~100 spots/min is about five minutes, while genuinely new spots
 > arrive a few times an hour. Working as intended, but worth knowing before
-> concluding the highlighting has broken. The Telegram alert history in
+> concluding the highlighting has broken. The alert history in
 > **Alerts** is the reliable record of what was new.
 
 
