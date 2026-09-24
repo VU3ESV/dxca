@@ -49,7 +49,8 @@ Touches seven places; miss one and it looks wired and does nothing:
 
 `dxca-connect/src/<name>.rs` · `dxca-connect/src/lib.rs` (`pub mod`) ·
 `db.rs` (`NotifyUserConfig` fields **+ `Default`**) · `users.rs` (client map,
-`push_<name>`, `fan_out` gate) · `settings/<Name>.svelte` ·
+`push_<name>` returning one `AlertChannel` per target into `channels`, `fan_out`
+gate) · `settings/<Name>.svelte` ·
 `settings/Destinations.svelte` (register tab) · `README.md`
 
 `flex.rs` (TCP) and `tci.rs` (WebSocket) are the two worked examples.

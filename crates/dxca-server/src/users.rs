@@ -3,7 +3,7 @@
 //! (backed by SQLite), per-user classification, the ClubLog refresh flow,
 //! and Telegram alert fan-out with per-user, per-callsign cooldown.
 
-use crate::db::{Db, NotifyUserConfig};
+use crate::db::{AlertChannel, Db, NotifyUserConfig};
 use dxca_connect::clublog::{self, Endpoints};
 use dxca_connect::flex;
 use dxca_connect::iota::IotaDirectory;
@@ -742,22 +742,21 @@ impl UserService {
             }
             // The panadapters first: each is a queue push, never a network
             // round trip, so they cost nothing to do inline and land while
-            // the Telegram is still in flight.
+            // the Telegram is still in flight. Each returns a verdict per
+            // radio, which is what the history column is built from.
+            let mut channels: Vec<AlertChannel> = Vec::new();
             if wants_flex {
-                self.push_flex(&notify, &c, &call, spot);
+                channels.extend(self.push_flex(&notify, &c, &call, spot));
             }
             if wants_tci {
-                self.push_tci(&notify, &c, &call, spot);
+                channels.extend(self.push_tci(&notify, &c, &call, spot));
             }
-            if !wants_telegram {
-                continue;
-            }
-            let text = alert_html(&c, &call, spot, self.is_lotw_user(&call));
-            let telegram = self.telegram.clone();
-            let (token, chat) = (notify.telegram_bot_token, notify.telegram_chat_id);
             // Recorded for the My Alerts history — including failures, which
             // are the rows worth having. Built here where the classification
-            // is still to hand; written after the send, with its verdict.
+            // is still to hand, and **before** the Telegram branch: an
+            // account alerting to a radio alone used to fall out at the
+            // `continue` below and leave no history at all, so its Alerts
+            // page stayed empty while marks were landing on the panadapter.
             let mut record = crate::db::SentAlert {
                 time_unix: spot.time_unix,
                 callsign: call.clone(),
@@ -773,18 +772,48 @@ impl UserService {
                 spotter: spot.spotter.clone().unwrap_or_default(),
                 snr_db: Some(spot.snr_db as i64),
                 award_ref: c.award_ref.clone().unwrap_or_default(),
-                delivered: true,
+                // Both are derived from `channels` by `summarise`, once every
+                // channel has reported. Seeding them here would be a claim
+                // made before the evidence.
+                delivered: false,
                 error: String::new(),
+                channels,
             };
+
+            if !wants_telegram {
+                // No Telegram to wait on, so the verdict is already complete.
+                record.summarise();
+                let this = self.clone();
+                tokio::task::spawn_blocking(move || {
+                    if let Err(e) = this.db.record_sent_alert(user_id, &record) {
+                        eprintln!("dxca: alert history: {e}");
+                    }
+                });
+                continue;
+            }
+
+            let text = alert_html(&c, &call, spot, self.is_lotw_user(&call));
+            let telegram = self.telegram.clone();
+            let (token, chat) = (notify.telegram_bot_token, notify.telegram_chat_id);
             let this = self.clone();
             // Fire-and-forget off the pipeline: a slow Telegram round trip
             // must never stall spot processing.
             tokio::task::spawn_blocking(move || {
+                let mut ch = AlertChannel {
+                    name: "telegram".into(),
+                    // One endpoint per account, and a chat id is not
+                    // something the operator would recognise on a page.
+                    target: String::new(),
+                    ok: true,
+                    error: String::new(),
+                };
                 if let Err(e) = telegram.send(&token, &chat, &text) {
                     eprintln!("dxca: telegram: {e}");
-                    record.delivered = false;
-                    record.error = e;
+                    ch.ok = false;
+                    ch.error = e;
                 }
+                record.channels.push(ch);
+                record.summarise();
                 if let Err(e) = this.db.record_sent_alert(user_id, &record) {
                     eprintln!("dxca: alert history: {e}");
                 }
@@ -865,11 +894,20 @@ impl UserService {
     /// session lives on its own thread. Clients are made on demand and kept,
     /// keyed by address, so several accounts pointing at one radio share a
     /// single connection rather than opening one each.
-    fn push_flex(&self, notify: &NotifyUserConfig, c: &Classification, call: &str, spot: &Spot) {
+    /// Returns one [`AlertChannel`] per radio, for the reason
+    /// [`Self::push_tci`] does.
+    fn push_flex(
+        &self,
+        notify: &NotifyUserConfig,
+        c: &Classification,
+        call: &str,
+        spot: &Spot,
+    ) -> Vec<AlertChannel> {
         // One radio or five, the work per radio is the same queue push, so
         // this is a loop and not a special case — the `push_tci` shape, for
         // the same reason. `flex_targets` has already dropped the disabled,
         // the blank and the duplicates.
+        let mut out = Vec::new();
         for (host, port) in notify.flex_targets(flex::DEFAULT_PORT) {
             let client = {
                 let mut map = self.flex.lock().unwrap();
@@ -877,8 +915,19 @@ impl UserService {
                     .or_insert_with(|| Arc::new(flex::FlexClient::connect(&host, port)))
                     .clone()
             };
-            self.push_flex_one(&client, notify, c, call, spot);
+            let ok = self.push_flex_one(&client, notify, c, call, spot);
+            out.push(AlertChannel {
+                name: "flex".into(),
+                target: format!("{host}:{port}"),
+                ok,
+                error: if ok {
+                    String::new()
+                } else {
+                    "radio not reachable".into()
+                },
+            });
         }
+        out
     }
 
     /// The body of [`Self::push_flex`] for one radio.
@@ -893,7 +942,7 @@ impl UserService {
         c: &Classification,
         call: &str,
         spot: &Spot,
-    ) {
+    ) -> bool {
         // Level plus entity when they fit in the radio's 20 characters, the
         // entity alone when they do not — the colour already says which
         // level it is, so the entity is the half worth keeping.
@@ -913,7 +962,7 @@ impl UserService {
             timestamp_unix: spot.time_unix,
             color: Self::flex_color(c.level),
             lifetime_secs: Self::flex_lifetime_secs(notify, c.level),
-        });
+        })
     }
 
     /// How long each level stays on the ExpertSDR3 panorama.
@@ -940,11 +989,21 @@ impl UserService {
     /// Never blocks, and shares one session per address, exactly as
     /// [`Self::push_flex`] does — see that method for the reasoning, which
     /// is identical.
-    fn push_tci(&self, notify: &NotifyUserConfig, c: &Classification, call: &str, spot: &Spot) {
+    /// Returns one [`AlertChannel`] per radio, so the history can say which
+    /// panadapter got the mark rather than just that "TCI" was involved —
+    /// with four radios configured, "it failed" is not a useful answer.
+    fn push_tci(
+        &self,
+        notify: &NotifyUserConfig,
+        c: &Classification,
+        call: &str,
+        spot: &Spot,
+    ) -> Vec<AlertChannel> {
         // One radio or five, the work per radio is the same queue push, so
         // this is a loop and not a special case. `tci_targets` has already
         // dropped the disabled, the blank and the duplicates, so every
         // address here is one this account genuinely wants a mark on.
+        let mut out = Vec::new();
         for (host, port) in notify.tci_targets(tci::DEFAULT_PORT) {
             let client = {
                 let mut map = self.tci.lock().unwrap();
@@ -952,8 +1011,22 @@ impl UserService {
                     .or_insert_with(|| Arc::new(tci::TciClient::connect(&host, port)))
                     .clone()
             };
-            self.push_tci_one(&client, notify, c, call, spot);
+            let ok = self.push_tci_one(&client, notify, c, call, spot);
+            out.push(AlertChannel {
+                name: "tci".into(),
+                target: format!("{host}:{port}"),
+                ok,
+                // The queue only refuses when it is full, which means the
+                // radio has stopped draining it — say that rather than a
+                // bare false the operator has to interpret.
+                error: if ok {
+                    String::new()
+                } else {
+                    "radio not reachable".into()
+                },
+            });
         }
+        out
     }
 
     /// The body of [`Self::push_tci`] for one radio.
@@ -969,7 +1042,7 @@ impl UserService {
         c: &Classification,
         call: &str,
         spot: &Spot,
-    ) {
+    ) -> bool {
         client.spot(&tci::TciSpot {
             callsign: call.to_string(),
             // TCI wants whole hertz. `frequency_mhz` is the parsed kHz over
@@ -983,7 +1056,7 @@ impl UserService {
             text: tci::text_for(c.level.label(), c.dxcc_name.as_deref()),
             color_argb: Self::alert_argb(c.level),
             lifetime_secs: Self::tci_lifetime_secs(notify, c.level),
-        });
+        })
     }
 
     /// 1.x cooldown: per callsign, clamped 5–60 minutes, with the same

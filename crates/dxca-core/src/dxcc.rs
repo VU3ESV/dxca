@@ -680,7 +680,11 @@ mod tests {
     #[test]
     fn an_exception_still_beats_the_kg4_rule() {
         let r = kg4_resolver();
-        assert_eq!(r.resolve("KG4TJS"), Some(6), "ClubLog puts KG4TJS in Alaska");
+        assert_eq!(
+            r.resolve("KG4TJS"),
+            Some(6),
+            "ClubLog puts KG4TJS in Alaska"
+        );
         assert_eq!(r.zone("KG4TJS"), Some(1));
         assert_eq!(r.resolve("KG4XYZ"), Some(105));
         assert_eq!(
@@ -706,7 +710,11 @@ mod tests {
         assert_eq!(r.resolve("KG4OJT/QRP"), Some(291));
         // Location prefix in front: the shorter side is where they are.
         assert_eq!(r.resolve("W4/KG4OJT"), Some(291));
-        assert_eq!(r.resolve("KG4/KG4OJT"), Some(105), "operating from Guantanamo");
+        assert_eq!(
+            r.resolve("KG4/KG4OJT"),
+            Some(105),
+            "operating from Guantanamo"
+        );
         assert_eq!(r.resolve("KG4AB/P"), Some(105));
         assert_eq!(r.zone("KG4OJT/P"), Some(5));
     }

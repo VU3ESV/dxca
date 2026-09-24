@@ -2,9 +2,10 @@
 *For continuation in a new Claude session*
 
 <details>
-<summary><b>Contents</b> — 92 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
+<summary><b>Contents</b> — 95 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
 
 - [What this is](#what-this-is)
+- [Session 2026-09-25 — alerts are recorded for every channel (PR #8)](#session-2026-09-25--alerts-are-recorded-for-every-channel-pr-8)
 - [Session 2026-09-23 — a CLAUDE.md, and a contents index for this file](#session-2026-09-23--a-claudemd-and-a-contents-index-for-this-file)
 - [Session 2026-09-22 (later) — production moves to a container on .109](#session-2026-09-22-later--production-moves-to-a-container-on-109)
 - [Session 2026-09-22 — KG4 2×3 calls are the USA, not Guantanamo Bay](#session-2026-09-22--kg4-23-calls-are-the-usa-not-guantanamo-bay)
@@ -36,6 +37,8 @@
 - [The installs (2026-08-28; VU2OY added 2026-08-30; production moved to .109 2026-09-22)](#the-installs-2026-08-28-vu2oy-added-2026-08-30-production-moved-to-109-2026-09-22)
 - [Release convention (2026-08-28, standing)](#release-convention-2026-08-28-standing)
 - [Open items → next session](#open-items--next-session)
+  - [OPEN: a green radio chip is the queue, not the radio (2026-09-25)](#open-a-green-radio-chip-is-the-queue-not-the-radio-2026-09-25)
+  - [DONE (merged, unreleased): every alert recorded for every channel — PR #8 (2026-09-25)](#done-merged-unreleased-every-alert-recorded-for-every-channel--pr-8-2026-09-25)
   - [OPEN: point the feeds at .109 (2026-09-22)](#open-point-the-feeds-at-109-2026-09-22)
   - [OPEN: v2.22.1 on the Windows box (2026-09-22)](#open-v2221-on-the-windows-box-2026-09-22)
   - [OPEN: the 1.x Swift app has the same KG4 fault (2026-09-22)](#open-the-1x-swift-app-has-the-same-kg4-fault-2026-09-22)
@@ -99,7 +102,10 @@
 
 </details>
 
-**Created:** 2026-08-26 · **Last updated:** 2026-09-23 · **Status:**
+**Created:** 2026-08-26 · **Last updated:** 2026-09-25 · **Status:**
+**`main` is ahead of v2.22.1: VU3ESV's PR #8 — every alert is recorded for
+every channel it went to, and the Alerts table filters by column —
+squash-merged 2026-09-25, unreleased** (*Session 2026-09-25*). Previously:
 **Production moved off noderedpi4 into a Docker container on `ubersdr`
 (192.168.1.109), 2026-09-22, 11:09 IST.** noderedpi4's dxca is stopped and
 disabled, kept as the rollback. The decoders and the Mac's telnet client
@@ -697,6 +703,82 @@ and the web GUI's design system from the same repo's
 2026-09-22**, having run on noderedpi4 (192.168.1.169) from the 2026-08-27
 cutover. noderedpi4's install is stopped and disabled, kept as the
 rollback. The 1.x macOS app is the retained fallback (maintenance mode).
+
+## Session 2026-09-25 — alerts are recorded for every channel (PR #8)
+
+VU3ESV's PR #8, reviewed against main at v2.22.1 and squash-merged together
+with this entry and the README's *Alert history* rewrite. **No version bump**
+— `Cargo.toml` is still 2.22.1, so there is no tag and it runs on none of the
+five hosts. The code comments already name 2.23 as where it lands.
+
+**The bug.** The My Alerts row was built inside `fan_out`'s Telegram branch,
+after `if !wants_telegram { continue; }`, so an account alerting to a radio
+alone recorded nothing: its Alerts page stayed empty while marks were
+landing on the panadapter. And `delivered` meant "Telegram accepted it" and
+nothing else, which stopped answering the question once v2.20.0 allowed
+several Flex and TCI radios per account.
+
+**What changed:**
+
+- `push_flex` / `push_tci` return one `AlertChannel` per radio — `name`,
+  `target` (`host:port`), `ok`, `error`. The `ok` is the `bool` that
+  `FlexClient::spot` / `TciClient::spot` always returned and the old code
+  threw away.
+- The `SentAlert` is built **before** the Telegram branch and written either
+  way; the Telegram task appends its own channel, then folds.
+  `SentAlert::summarise` does the fold: delivered means every channel that
+  was tried accepted it, and no channel at all counts as a failure. That
+  last branch is defensive only — the `wants_*` gate at the top of the loop
+  means a record always has at least one channel.
+- **Schema:** `alerts_sent.channels TEXT NOT NULL DEFAULT '[]'`, JSON,
+  through `ADDED_COLUMNS` — additive, applied on first open. Old rows read
+  back as "no per-channel detail"; the UI shows `—` under Sent to and keeps
+  their Telegram-only ✓ / Failed.
+- **Alerts page:** a *Sent to* column (chips grouped per channel, `TCI ×4`,
+  green / amber / red for all / some / none accepted), a filter under each
+  heading (client-side, never saved), and *Show* 20 / 50 / 100 / 500 / All.
+
+**What made it safe to take:**
+
+- **The gate on the merged result, not the branch.** This repo has no CI,
+  so nobody but the author had run it. Run on GitHub's test-merge ref (main
+  + PR, in a throwaway worktree with its own target dir, per the
+  `CLAUDE.md` launchd trap): fmt, clippy `-D warnings`, every suite (97 in
+  `dxca-server`'s lib, including the two new tests, run by name), web build.
+  All green.
+- **History growth is bounded.** The record sits behind `cooldown_ok`, so a
+  radio-only account gains at most one row per callsign per cooldown
+  window, and the `ALERT_HISTORY_MAX` prune still runs on every insert.
+- **"All" relies on a clamp that exists:** it asks for 100000 and
+  `api.rs` caps it with `q.limit.min(500)`.
+- The author reports running the migration against a copy of a live
+  database, all rows intact, and then on the Pi that database came from.
+
+**Two behaviour changes worth knowing**, neither called out loudly in the PR:
+
+- **Failed now means "any channel refused"**, not "Telegram refused". A
+  Telegram that arrived beside a full radio queue reads Failed; the chips
+  say which radio. Deliberate — the amber state is the case worth seeing.
+- **The page loads 100 rows by default, down from a hard-coded 200.** *Show*
+  goes to 500, which is the whole history.
+
+**Why a squash.** The branch carried 16 commits, 11 of them the fork's own
+upkeep: its merges of upstream, its PRs #3–#7, and two reverts. Their tree
+was identical to main's (`785d7dc^{tree}` = `origin/main^{tree}`). A merge
+commit would have put "Merge pull request #3" and its revert into this
+repo's history, where #3 was closed unmerged, beside a second copy of #6
+and #7. The five commits that are the work stay readable on the PR:
+`e24f7ac` (rustfmt on the KG4 test assertions, pre-existing and split out on
+purpose), `a26e3ed`, `f6907de`, `cf2b20c`, `8104119`.
+
+Worth keeping:
+
+- **One tick cannot speak for several channels.** The fix
+  was not a second boolean but a list, folded at the end — so the
+  verdict can never be claimed before every channel has reported.
+- **Review against the merge ref when the head is a fork.** `pull/N/merge`
+  is exactly what lands; a fork's branch can look fine and still carry its
+  own history into yours.
 
 ## Session 2026-09-23 — a CLAUDE.md, and a contents index for this file
 
@@ -1998,6 +2080,22 @@ date, what changed and why, at the top. v2.21.0 shipped without one and the
 Status section led with v2.20.4 for eighteen days (backfilled 2026-09-21).
 
 ## Open items → next session
+
+### OPEN: a green radio chip is the queue, not the radio (2026-09-25)
+
+From PR #8, left out of it deliberately. The Flex and TCI chips under
+*Sent to* are the client queue's verdict, and that queue only refuses once
+it is full — so a radio that has just been switched off reads green until
+its backlog fills. Making it honest needs the Flex and TCI clients to report
+link state back into the alert path, which is a larger change. The README's
+*Alert history* tells the operator this in the meantime.
+
+### DONE (merged, unreleased): every alert recorded for every channel — PR #8 (2026-09-25)
+
+Squash-merged to `main` on 2026-09-25 with no version bump, so no tag and
+no release. **Put the version on this heading when it ships.** The new
+`alerts_sent.channels` column migrates itself on first open; nothing to do
+by hand on any host. See *Session 2026-09-25*.
 
 ### OPEN: point the feeds at .109 (2026-09-22)
 
