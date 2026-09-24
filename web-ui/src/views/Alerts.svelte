@@ -59,6 +59,60 @@
     `${channelLabel(ch.name)}${ch.target ? ` ${ch.target}` : ''} — ` +
     (ch.ok ? 'accepted' : ch.error || 'refused');
 
+  /* One chip per CHANNEL, not per target. Four TCI radios used to draw four
+     chips all reading "TCI", tellable apart only by hovering each one — a
+     column of identical labels says nothing the column heading did not.
+     Grouped, the row reads `Flex  TCI x4`, and the hover carries every
+     address and its verdict.
+
+     Three states, because two would hide the interesting one: all accepted,
+     all refused, and SOME refused — the last is the case worth seeing, and
+     folding it into either neighbour would either cry wolf or stay silent
+     about a radio that is down. */
+  function groupChannels(chs: any[] | undefined) {
+    const by = new Map<string, any[]>();
+    for (const c of chs ?? []) {
+      if (!by.has(c.name)) by.set(c.name, []);
+      by.get(c.name)!.push(c);
+    }
+    return [...by].map(([name, list]) => {
+      const bad = list.filter((c) => !c.ok).length;
+      return {
+        name,
+        label: channelLabel(name),
+        n: list.length,
+        bad: bad === list.length,
+        mixed: bad > 0 && bad < list.length,
+        title: list.map(channelTitle).join('\n'),
+      };
+    });
+  }
+
+  /* Filter options: the channel by name, and then each address under it.
+     With four radios "did this go to TCI" is rarely the question — "did it
+     reach the MB1" is. Value is `name` or `name|target`; the separator
+     cannot appear in either half. */
+  function channelOptions(rows: any[]) {
+    const byName = new Map<string, Set<string>>();
+    for (const r of rows) {
+      for (const c of r.channels ?? []) {
+        if (!byName.has(c.name)) byName.set(c.name, new Set());
+        if (c.target) byName.get(c.name)!.add(c.target);
+      }
+    }
+    const out: { value: string; label: string }[] = [];
+    for (const [name, targets] of byName) {
+      out.push({ value: name, label: channelLabel(name) });
+      for (const t of [...targets].sort()) {
+        // Indented so the list reads as a tree in a plain <select>, which
+        // cannot nest. <optgroup> would label the group but make it
+        // unselectable, and "any TCI" has to stay selectable.
+        out.push({ value: `${name}|${t}`, label: `\u00a0\u00a0${channelLabel(name)} ${t}` });
+      }
+    }
+    return out;
+  }
+
   // The ladder shows the classic eight plus only the awards this account
   // chases (Settings › My station › Awards) — an award nobody opted into
   // must not add rows here.
@@ -142,9 +196,7 @@
   let modeOpts = $derived(uniq(sent, (r) => r.mode));
   let bandOpts = $derived(uniq(sent, (r) => r.band));
   let levelOpts = $derived(uniq(sent, (r) => r.level));
-  let chanOpts = $derived(
-    [...new Set(sent.flatMap((r: any) => (r.channels ?? []).map((c: any) => c.name)))].sort(),
-  );
+  let chanOpts = $derived(channelOptions(sent));
 
   const like = (v: unknown, f: string) =>
     !f || String(v ?? '').toLowerCase().includes(f.trim().toLowerCase());
@@ -159,9 +211,16 @@
       if (!like(a.dxcc_name, fDxcc)) return false;
       if (fLevel && a.level !== fLevel) return false;
       // "Sent to" matches the channel being PRESENT, whether or not it
-      // accepted — "show me everything that went at this radio" is the
-      // question, and Status answers the other one.
-      if (fChannel && !(a.channels ?? []).some((c: any) => c.name === fChannel)) return false;
+      // accepted — "show me everything aimed at this radio" is the question,
+      // and Status answers the other one. A bare name matches any address
+      // under it; `name|target` pins one radio.
+      if (fChannel) {
+        const [fName, fTarget] = fChannel.split('|');
+        const hit = (a.channels ?? []).some(
+          (c: any) => c.name === fName && (!fTarget || c.target === fTarget),
+        );
+        if (!hit) return false;
+      }
       if (fStatus === 'ok' && !a.delivered) return false;
       if (fStatus === 'failed' && a.delivered) return false;
       return true;
@@ -459,7 +518,7 @@
               <td>
                 <select bind:value={fChannel} aria-label="Filter by channel">
                   <option value="">any</option>
-                  {#each chanOpts as o}<option value={o}>{channelLabel(o)}</option>{/each}
+                  {#each chanOpts as o}<option value={o.value}>{o.label}</option>{/each}
                 </select>
               </td>
               <td>
@@ -495,9 +554,9 @@
                      "it failed" is not a useful answer without the address. -->
                 <td class="chans">
                   {#if a.channels?.length}
-                    {#each a.channels as ch}
-                      <span class="chan" class:bad={!ch.ok} title={channelTitle(ch)}
-                        >{channelLabel(ch.name)}</span
+                    {#each groupChannels(a.channels) as g}
+                      <span class="chan" class:bad={g.bad} class:mixed={g.mixed} title={g.title}
+                        >{g.label}{g.n > 1 ? ` \u00d7${g.n}` : ''}</span
                       >
                     {/each}
                   {:else}
@@ -850,6 +909,15 @@
     opacity: 0.75;
     cursor: help;
     white-space: nowrap;
+  }
+
+  /* Some accepted, some refused. Its own colour because it is neither: a
+     red chip would say the channel is down when most of it is up, and a
+     green one would hide the radio that is. */
+  .chan.mixed {
+    border-color: var(--warn);
+    color: var(--warn);
+    opacity: 1;
   }
 
   /* Full strength, unlike the quiet success chip — a channel that refused is
