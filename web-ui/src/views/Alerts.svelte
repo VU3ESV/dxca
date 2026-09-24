@@ -47,6 +47,18 @@
   // cannot say no is worse than one that is not there.
   const fieldOf = (l: { notifyField?: string | null }) => l.notifyField ?? '';
 
+  /* Short names for the delivery channels. The chip has to fit beside three
+     others, so "Telegram" is TG — the tooltip carries the full story. */
+  const CHANNEL_LABEL: Record<string, string> = {
+    telegram: 'TG',
+    flex: 'Flex',
+    tci: 'TCI',
+  };
+  const channelLabel = (n: string) => CHANNEL_LABEL[n] ?? n.toUpperCase();
+  const channelTitle = (ch: { name: string; target?: string; ok: boolean; error?: string }) =>
+    `${channelLabel(ch.name)}${ch.target ? ` ${ch.target}` : ''} — ` +
+    (ch.ok ? 'accepted' : ch.error || 'refused');
+
   // The ladder shows the classic eight plus only the awards this account
   // chases (Settings › My station › Awards) — an award nobody opted into
   // must not add rows here.
@@ -293,7 +305,7 @@
             <col class="c-time" /><col class="c-call" /><col class="c-spot" />
             <col class="c-src" /><col class="c-freq" /><col class="c-mode" />
             <col class="c-db" /><col class="c-band" /><col class="c-dxcc" />
-            <col class="c-al" /><col class="c-status" />
+            <col class="c-al" /><col class="c-chan" /><col class="c-status" />
           </colgroup>
           <thead>
             <tr>
@@ -305,6 +317,7 @@
               <th>Mode</th>
               <th title="Signal-to-noise, dB">dB</th>
               <th>Band</th><th>DXCC</th><th>Alert</th>
+              <th title="The channels this alert was offered to">Sent to</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -326,17 +339,33 @@
                 <td class="alert"
                   >{levelLabel(a.level)}{a.award_ref ? ` ${a.award_ref}` : ''}</td
                 >
+                <!-- One chip per channel, because they fail independently:
+                     a radio that is switched off must not make a delivered
+                     Telegram look broken, and with four radios configurable
+                     "it failed" is not a useful answer without the address. -->
+                <td class="chans">
+                  {#if a.channels?.length}
+                    {#each a.channels as ch}
+                      <span class="chan" class:bad={!ch.ok} title={channelTitle(ch)}
+                        >{channelLabel(ch.name)}</span
+                      >
+                    {/each}
+                  {:else}
+                    <span
+                      class="muted"
+                      title="Recorded before DXCA logged which channel an alert went to">—</span
+                    >
+                  {/if}
+                </td>
                 <!-- Shown either way, not just on failure: a column that is
                      blank on a good row cannot be told from a column that is
                      broken, and "did it actually go out" is the question this
                      whole table exists to answer. -->
                 <td class="status">
                   {#if a.delivered}
-                    <span class="ok-tick" title="Delivered to Telegram">✓</span>
+                    <span class="ok-tick" title="Accepted by every channel it was sent to">✓</span>
                   {:else}
-                    <span class="err failed" title="Telegram refused this one: {a.error || 'no reason given'}"
-                      >Failed</span
-                    >
+                    <span class="err failed" title={a.error || 'no reason given'}>Failed</span>
                   {/if}
                 </td>
               </tr>
@@ -490,6 +519,9 @@
   col.c-band { width: 3.5rem; }
   col.c-dxcc { width: 11.5rem; }
   col.c-al   { width: 5.75rem; }
+  /* Four radios plus Telegram is the realistic worst case; past that the
+     cell scrolls rather than pushing Status off the card. */
+  col.c-chan { width: 9rem; }
   /* Last and elastic — it takes the slack so the table always fills its card
      rather than truncating, and "Failed" is short enough that the extra room
      reads as margin. */
@@ -582,6 +614,37 @@
 
   .status {
     white-space: nowrap;
+  }
+
+  .chans {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    align-items: center;
+    overflow: hidden;
+  }
+
+  /* Reads as a label, not a button: this is a record of what happened, and
+     nothing here is clickable. */
+  .chan {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    padding: 0.05rem 0.3rem;
+    border-radius: 0.2rem;
+    border: 1px solid var(--ok);
+    color: var(--ok);
+    opacity: 0.75;
+    cursor: help;
+    white-space: nowrap;
+  }
+
+  /* Full strength, unlike the quiet success chip — a channel that refused is
+     the thing worth spotting in a column of them. */
+  .chan.bad {
+    border-color: var(--err);
+    color: var(--err);
+    opacity: 1;
   }
 
   .empty {

@@ -828,7 +828,33 @@ pub struct Db {
 /// times a day, so this is weeks of history and still trivial to query.
 const ALERT_HISTORY_MAX: i64 = 500;
 
-/// One Telegram alert as it was sent — or as it failed.
+/// One delivery attempt for an alert, on one channel.
+///
+/// Recorded per channel rather than folded into a single verdict because
+/// the channels fail independently: a radio that is switched off must not
+/// make a delivered Telegram look broken, and a Telegram that Bot API
+/// refused must not hide the fact the panadapter got its mark.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AlertChannel {
+    /// `telegram`, `flex` or `tci`. Lower case, so the UI can key on it.
+    pub name: String,
+    /// `host:port` for a radio; empty for Telegram, which has one endpoint
+    /// per account and names it nowhere the operator would recognise.
+    #[serde(default)]
+    pub target: String,
+    pub ok: bool,
+    /// Why it failed; empty when `ok`.
+    #[serde(default)]
+    pub error: String,
+}
+
+/// One alert as it was delivered — or as it failed.
+///
+/// Written for **every** alert that passes the gates, not only the ones with
+/// a Telegram behind them. Before 2.23 the record was built inside the
+/// Telegram branch, so an account alerting to a radio alone accumulated no
+/// history at all and its Alerts page stayed empty while the marks were
+/// landing on the panadapter.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SentAlert {
     pub time_unix: i64,
@@ -859,9 +885,53 @@ pub struct SentAlert {
     /// before the award axes existed.
     #[serde(default)]
     pub award_ref: String,
+    /// True when every channel that was *attempted* accepted the alert.
+    /// False when any refused, and false when no channel was configured —
+    /// "nowhere to send it" is a failure to deliver, not a success.
     pub delivered: bool,
-    /// Telegram's complaint when `delivered` is false; empty otherwise.
+    /// The overall complaint when `delivered` is false; empty otherwise.
+    /// Per-channel detail lives in [`Self::channels`].
     pub error: String,
+    /// One entry per channel this alert was offered to, in the order they
+    /// were tried. Empty for rows written before 2.23, which is why the UI
+    /// must keep rendering `delivered` when this is empty.
+    #[serde(default)]
+    pub channels: Vec<AlertChannel>,
+}
+
+impl SentAlert {
+    /// Fold the per-channel verdicts into the overall one.
+    ///
+    /// Delivered means **every channel that was tried** accepted it. An
+    /// alert with no channel at all is deliberately *not* delivered: that is
+    /// precisely the case this record exists to make visible, and calling it
+    /// a success would hide it behind a tick.
+    pub fn summarise(&mut self) {
+        if self.channels.is_empty() {
+            self.delivered = false;
+            self.error = "no delivery channel configured".into();
+            return;
+        }
+        let failed: Vec<String> = self
+            .channels
+            .iter()
+            .filter(|c| !c.ok)
+            .map(|c| {
+                let reason = if c.error.is_empty() {
+                    "refused".to_string()
+                } else {
+                    c.error.clone()
+                };
+                if c.target.is_empty() {
+                    format!("{}: {reason}", c.name)
+                } else {
+                    format!("{} {}: {reason}", c.name, c.target)
+                }
+            })
+            .collect();
+        self.delivered = failed.is_empty();
+        self.error = failed.join("; ");
+    }
 }
 
 /// The three answers to "who has to have made the spot". Named here so the
@@ -928,7 +998,8 @@ CREATE TABLE IF NOT EXISTS alerts_sent (
     error TEXT NOT NULL DEFAULT '',
     spotter TEXT NOT NULL DEFAULT '',
     snr_db INTEGER,
-    award_ref TEXT NOT NULL DEFAULT ''
+    award_ref TEXT NOT NULL DEFAULT '',
+    channels TEXT NOT NULL DEFAULT '[]'
 );
 CREATE INDEX IF NOT EXISTS alerts_sent_user_time
     ON alerts_sent (user_id, time_unix DESC);
@@ -977,6 +1048,16 @@ const ADDED_COLUMNS: &[(&str, &str, &str)] = &[
         "alerts_sent",
         "award_ref",
         "award_ref TEXT NOT NULL DEFAULT ''",
+    ),
+    // Per-channel delivery detail, as a JSON array. `'[]'` and not NULL for
+    // every historical row: those alerts genuinely went to Telegram and
+    // nowhere else, but the *detail* was never recorded, and an empty list
+    // says "no per-channel record" without claiming no channel was used.
+    // The UI falls back to `delivered` when it is empty.
+    (
+        "alerts_sent",
+        "channels",
+        "channels TEXT NOT NULL DEFAULT '[]'",
     ),
 ];
 
@@ -1214,8 +1295,8 @@ impl Db {
             "INSERT INTO alerts_sent
                (user_id, time_unix, callsign, frequency_hz, mode, band,
                 dxcc_name, level, source, spotter, snr_db, award_ref,
-                delivered, error)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+                delivered, error, channels)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
             params![
                 user_id,
                 a.time_unix,
@@ -1231,6 +1312,10 @@ impl Db {
                 a.award_ref,
                 a.delivered as i64,
                 a.error,
+                // Serialising cannot realistically fail for a Vec of plain
+                // structs, but a history row is worth more than its detail:
+                // fall back to an empty list rather than lose the alert.
+                serde_json::to_string(&a.channels).unwrap_or_else(|_| "[]".into()),
             ],
         )
         .map_err(|e| format!("record alert: {e}"))?;
@@ -1252,7 +1337,7 @@ impl Db {
             .prepare(
                 "SELECT time_unix, callsign, frequency_hz, mode, band,
                         dxcc_name, level, source, spotter, snr_db, award_ref,
-                        delivered, error
+                        delivered, error, channels
                  FROM alerts_sent WHERE user_id = ?1
                  ORDER BY time_unix DESC, id DESC LIMIT ?2",
             )
@@ -1273,6 +1358,10 @@ impl Db {
                     award_ref: r.get(10)?,
                     delivered: r.get::<_, i64>(11)? != 0,
                     error: r.get(12)?,
+                    // A row written before the column existed, or by a build
+                    // that wrote something unreadable, degrades to "no detail"
+                    // rather than failing the whole query.
+                    channels: serde_json::from_str(&r.get::<_, String>(13)?).unwrap_or_default(),
                 })
             })
             .map_err(db_err)?;
@@ -2414,6 +2503,12 @@ mod tests {
                 award_ref: String::new(),
                 delivered: true,
                 error: String::new(),
+                channels: vec![AlertChannel {
+                    name: "telegram".into(),
+                    target: String::new(),
+                    ok: true,
+                    error: String::new(),
+                }],
             },
         )
         .unwrap();
@@ -2427,6 +2522,122 @@ mod tests {
         assert_eq!(db.sent_alerts(1, 10).unwrap().len(), 2);
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The verdict is derived from the channels, and "nowhere to send it"
+    /// is a failure. This is the bug the column was added for: an account
+    /// alerting to a radio alone recorded nothing at all, so its Alerts page
+    /// was empty while marks were landing on the panadapter.
+    #[test]
+    fn the_overall_verdict_is_folded_from_the_channels() {
+        let base = |channels: Vec<AlertChannel>| {
+            let mut a = SentAlert {
+                time_unix: 1,
+                callsign: "3Y0J".into(),
+                frequency_hz: 14_074_000,
+                mode: "FT8".into(),
+                band: "20M".into(),
+                dxcc_name: "Bouvet".into(),
+                level: "newDXCC".into(),
+                source: "VE7CC".into(),
+                spotter: String::new(),
+                snr_db: Some(-7),
+                award_ref: String::new(),
+                delivered: false,
+                error: String::new(),
+                channels,
+            };
+            a.summarise();
+            a
+        };
+        let ch = |name: &str, target: &str, ok: bool, err: &str| AlertChannel {
+            name: name.into(),
+            target: target.into(),
+            ok,
+            error: err.into(),
+        };
+
+        let none = base(Vec::new());
+        assert!(!none.delivered, "an alert with no channel is not delivered");
+        assert_eq!(none.error, "no delivery channel configured");
+
+        let all_ok = base(vec![
+            ch("tci", "192.168.86.55:50001", true, ""),
+            ch("telegram", "", true, ""),
+        ]);
+        assert!(all_ok.delivered);
+        assert!(all_ok.error.is_empty());
+
+        // One radio down must not hide the Telegram that DID go out, and the
+        // message has to name which radio — four are configurable.
+        let partial = base(vec![
+            ch("tci", "192.168.86.55:50001", true, ""),
+            ch("tci", "192.168.86.50:60001", false, "radio not reachable"),
+            ch("telegram", "", true, ""),
+        ]);
+        assert!(!partial.delivered);
+        assert_eq!(
+            partial.error,
+            "tci 192.168.86.50:60001: radio not reachable"
+        );
+        assert_eq!(
+            partial.channels.iter().filter(|c| c.ok).count(),
+            2,
+            "the two that worked are still recorded as having worked"
+        );
+    }
+
+    /// The per-channel detail has to survive the round trip, or the column
+    /// is decorative. (The pre-column case is covered by `migrate`'s own
+    /// test — this one is about the payload, not the schema.)
+    #[test]
+    fn channels_round_trip_through_the_database() {
+        let (db, _p) = temp_db();
+        let u = db.create_user("VU2CPL", "h", "", "admin").unwrap();
+        let mut a = SentAlert {
+            time_unix: 100,
+            callsign: "VP8ABC".into(),
+            frequency_hz: 14_285_000,
+            mode: "SSB".into(),
+            band: "20M".into(),
+            dxcc_name: "Falklands".into(),
+            level: "newDXCC".into(),
+            source: "VE7CC".into(),
+            spotter: "LB9KJ".into(),
+            snr_db: Some(0),
+            award_ref: String::new(),
+            delivered: false,
+            error: String::new(),
+            channels: vec![
+                AlertChannel {
+                    name: "tci".into(),
+                    target: "192.168.86.55:50001".into(),
+                    ok: true,
+                    error: String::new(),
+                },
+                AlertChannel {
+                    name: "flex".into(),
+                    target: "192.168.86.41:4992".into(),
+                    ok: false,
+                    error: "radio not reachable".into(),
+                },
+            ],
+        };
+        a.summarise();
+        db.record_sent_alert(u, &a).unwrap();
+
+        let rows = db.sent_alerts(u, 10).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].channels.len(), 2, "both channels round-trip");
+        assert_eq!(rows[0].channels[0].name, "tci");
+        assert_eq!(rows[0].channels[0].target, "192.168.86.55:50001");
+        assert!(rows[0].channels[0].ok);
+        assert!(!rows[0].channels[1].ok);
+        assert_eq!(rows[0].channels[1].error, "radio not reachable");
+        assert!(
+            !rows[0].delivered,
+            "one radio down means not fully delivered"
+        );
     }
 
     #[test]
@@ -2449,6 +2660,7 @@ mod tests {
             award_ref: String::new(),
             delivered,
             error: error.into(),
+            channels: Vec::new(),
         };
 
         db.record_sent_alert(a, &alert("VU2ZZZ", true, "")).unwrap();
