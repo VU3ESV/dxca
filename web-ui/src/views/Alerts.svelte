@@ -47,6 +47,84 @@
   // cannot say no is worse than one that is not there.
   const fieldOf = (l: { notifyField?: string | null }) => l.notifyField ?? '';
 
+  /* Short names for the delivery channels. The chip has to fit beside three
+     others, so "Telegram" is TG — the tooltip carries the full story. */
+  const CHANNEL_LABEL: Record<string, string> = {
+    telegram: 'TG',
+    flex: 'Flex',
+    tci: 'TCI',
+  };
+  const channelLabel = (n: string) => CHANNEL_LABEL[n] ?? n.toUpperCase();
+  const channelTitle = (ch: { name: string; target?: string; ok: boolean; error?: string }) =>
+    `${channelLabel(ch.name)}${ch.target ? ` ${ch.target}` : ''} — ` +
+    (ch.ok ? 'accepted' : ch.error || 'refused');
+
+  /* One chip per CHANNEL, not per target. Four TCI radios used to draw four
+     chips all reading "TCI", tellable apart only by hovering each one — a
+     column of identical labels says nothing the column heading did not.
+     Grouped, the row reads `Flex  TCI x4`, and the hover carries every
+     address and its verdict.
+
+     Three states, because two would hide the interesting one: all accepted,
+     all refused, and SOME refused — the last is the case worth seeing, and
+     folding it into either neighbour would either cry wolf or stay silent
+     about a radio that is down. */
+  function groupChannels(chs: any[] | undefined) {
+    const by = new Map<string, any[]>();
+    for (const c of chs ?? []) {
+      if (!by.has(c.name)) by.set(c.name, []);
+      by.get(c.name)!.push(c);
+    }
+    return [...by].map(([name, list]) => {
+      const bad = list.filter((c) => !c.ok).length;
+      return {
+        name,
+        label: channelLabel(name),
+        n: list.length,
+        bad: bad === list.length,
+        mixed: bad > 0 && bad < list.length,
+        title: list.map(channelTitle).join('\n'),
+      };
+    });
+  }
+
+  /* What the "Sent to" cell draws once a channel is picked.
+     Filtering the ROWS by "has Flex" excludes nothing on a station that
+     alerts to every channel — every row matches, and the column went on
+     showing TCI beside it, so the control looked broken. Picking a channel
+     is a question about that channel, so the cell answers about that channel
+     and the row count stops being the only thing that moved. */
+  function visibleChannels(chs: any[] | undefined, filter: string) {
+    if (!filter) return chs ?? [];
+    const [fName, fTarget] = filter.split('|');
+    return (chs ?? []).filter((c) => c.name === fName && (!fTarget || c.target === fTarget));
+  }
+
+  /* Filter options: the channel by name, and then each address under it.
+     With four radios "did this go to TCI" is rarely the question — "did it
+     reach the MB1" is. Value is `name` or `name|target`; the separator
+     cannot appear in either half. */
+  function channelOptions(rows: any[]) {
+    const byName = new Map<string, Set<string>>();
+    for (const r of rows) {
+      for (const c of r.channels ?? []) {
+        if (!byName.has(c.name)) byName.set(c.name, new Set());
+        if (c.target) byName.get(c.name)!.add(c.target);
+      }
+    }
+    const out: { value: string; label: string }[] = [];
+    for (const [name, targets] of byName) {
+      out.push({ value: name, label: channelLabel(name) });
+      for (const t of [...targets].sort()) {
+        // Indented so the list reads as a tree in a plain <select>, which
+        // cannot nest. <optgroup> would label the group but make it
+        // unselectable, and "any TCI" has to stay selectable.
+        out.push({ value: `${name}|${t}`, label: `\u00a0\u00a0${channelLabel(name)} ${t}` });
+      }
+    }
+    return out;
+  }
+
   // The ladder shows the classic eight plus only the awards this account
   // chases (Settings › My station › Awards) — an award nobody opted into
   // must not add rows here.
@@ -79,11 +157,94 @@
   let bandSel = $state<Set<string>>(new Set());
   let modeSel = $state<Set<string>>(new Set());
 
-  // What has actually been sent to this account's Telegram.
+  // What has actually been sent, to every channel this account uses.
   let sent = $state<any[]>([]);
+
+  /* How many rows to FETCH. Separate from the filters below, which narrow
+     what was fetched — a filter that could only see 20 rows would quietly
+     lie about how many matches exist.
+
+     "All" asks for more than the server will ever hold and lets it clamp
+     (`q.limit.min(500)`), rather than hard-coding 500 here. Today that makes
+     All and 500 the same set — the server keeps `ALERT_HISTORY_MAX = 500`
+     rows per account and prunes on every insert — but if that cap is ever
+     raised, All follows it without this file being touched. The two options
+     must not share a value: `bind:value` matches on it, so a duplicate would
+     leave "All" selectable but never shown as selected. */
+  const LIMITS = [
+    { n: 20, label: '20' },
+    { n: 50, label: '50' },
+    { n: 100, label: '100' },
+    { n: 500, label: '500' },
+    { n: 100000, label: 'All' },
+  ];
+  let limit = $state(100);
+
   async function loadSent() {
-    const r = await api('GET', '/api/me/alerts?limit=200');
+    const r = await api('GET', `/api/me/alerts?limit=${limit}`);
     if (r.status === 200) sent = r.json.alerts ?? [];
+  }
+
+  /* Per-column narrowing of what is on screen. Client-side on purpose: the
+     whole history is at most 500 rows, so filtering here is instant and
+     costs no round trip — and unlike the rail on the left, NONE of this is
+     saved. The rail edits account settings; this is a lens on the table. */
+  let fDx = $state('');
+  let fDe = $state('');
+  let fSource = $state('');
+  let fMode = $state('');
+  let fBand = $state('');
+  let fDxcc = $state('');
+  let fLevel = $state('');
+  let fChannel = $state('');
+  let fStatus = $state('');
+
+  /* Options come from the rows actually loaded, not from the reference
+     tables: a band this account has never been alerted on is a dead option,
+     and a dropdown of dead options is worse than a short one. */
+  const uniq = (rows: any[], pick: (r: any) => string) =>
+    [...new Set(rows.map(pick).filter(Boolean))].sort();
+  let srcOpts = $derived(uniq(sent, (r) => r.source));
+  let modeOpts = $derived(uniq(sent, (r) => r.mode));
+  let bandOpts = $derived(uniq(sent, (r) => r.band));
+  let levelOpts = $derived(uniq(sent, (r) => r.level));
+  let chanOpts = $derived(channelOptions(sent));
+
+  const like = (v: unknown, f: string) =>
+    !f || String(v ?? '').toLowerCase().includes(f.trim().toLowerCase());
+
+  let shown = $derived(
+    sent.filter((a: any) => {
+      if (!like(a.callsign, fDx)) return false;
+      if (!like(a.spotter, fDe)) return false;
+      if (fSource && a.source !== fSource) return false;
+      if (fMode && a.mode !== fMode) return false;
+      if (fBand && a.band !== fBand) return false;
+      if (!like(a.dxcc_name, fDxcc)) return false;
+      if (fLevel && a.level !== fLevel) return false;
+      // "Sent to" matches the channel being PRESENT, whether or not it
+      // accepted — "show me everything aimed at this radio" is the question,
+      // and Status answers the other one. A bare name matches any address
+      // under it; `name|target` pins one radio.
+      if (fChannel) {
+        const [fName, fTarget] = fChannel.split('|');
+        const hit = (a.channels ?? []).some(
+          (c: any) => c.name === fName && (!fTarget || c.target === fTarget),
+        );
+        if (!hit) return false;
+      }
+      if (fStatus === 'ok' && !a.delivered) return false;
+      if (fStatus === 'failed' && a.delivered) return false;
+      return true;
+    }),
+  );
+
+  let filtering = $derived(
+    !!(fDx || fDe || fSource || fMode || fBand || fDxcc || fLevel || fChannel || fStatus),
+  );
+
+  function clearFilters() {
+    fDx = fDe = fSource = fMode = fBand = fDxcc = fLevel = fChannel = fStatus = '';
   }
 
   onMount(async () => {
@@ -269,9 +430,13 @@
     <div class="stationline">
       <span class="who">Alerts sent</span>
       <HelpTip label="Alerts sent">
-        The last {sent.length} Telegram alert{sent.length === 1 ? '' : 's'} for
-        this account, newest first. Failed sends are kept and marked — a refused
-        message is the row worth seeing.
+        The last {sent.length} alert{sent.length === 1 ? '' : 's'} for this
+        account, newest first, across every channel — Telegram and each
+        configured radio. Failures are kept and marked: a refused alert is the
+        row worth seeing. The boxes under the headings narrow what is on
+        screen and are not saved; <b>Show</b> changes how many rows are
+        fetched. The server keeps at most 500 per account, so 500 and All are
+        the same set.
       </HelpTip>
       {#if !cfg.telegram_enabled}
         <span class="warn">
@@ -280,7 +445,24 @@
       {:else if !anyLevel}
         <span class="warn">No levels ticked — Telegram is on but nothing will ever ping.</span>
       {/if}
-      <span class="counts"><span class="count muted">{sent.length} sent</span></span>
+      <span class="counts">
+        <label class="showsel" title="How many rows to fetch. The server keeps at most 500 per account.">
+          Show
+          <select bind:value={limit} onchange={loadSent}>
+            {#each LIMITS as l}
+              <option value={l.n}>{l.label}</option>
+            {/each}
+          </select>
+        </label>
+        {#if filtering}
+          <button class="clearf" onclick={clearFilters} title="Clear every column filter"
+            >Clear filters</button
+          >
+          <span class="count muted">{shown.length} of {sent.length}</span>
+        {:else}
+          <span class="count muted">{sent.length} sent</span>
+        {/if}
+      </span>
     </div>
 
     <div class="card feed">
@@ -293,7 +475,7 @@
             <col class="c-time" /><col class="c-call" /><col class="c-spot" />
             <col class="c-src" /><col class="c-freq" /><col class="c-mode" />
             <col class="c-db" /><col class="c-band" /><col class="c-dxcc" />
-            <col class="c-al" /><col class="c-status" />
+            <col class="c-al" /><col class="c-chan" /><col class="c-status" />
           </colgroup>
           <thead>
             <tr>
@@ -305,11 +487,70 @@
               <th>Mode</th>
               <th title="Signal-to-noise, dB">dB</th>
               <th>Band</th><th>DXCC</th><th>Alert</th>
+              <th
+                title={fChannel
+                  ? 'Narrowed to one channel — clear the filter below to see them all'
+                  : 'The channels this alert was offered to'}
+                >Sent to{#if fChannel}<span class="thnarrow"
+                    >{chanOpts.find((o) => o.value === fChannel)?.label.trim() ?? ''}</span
+                  >{/if}</th
+              >
               <th>Status</th>
+            </tr>
+            <!-- Narrowing sits under the heading it narrows, so the column and
+                 its control cannot be mismatched. Free text where the values
+                 are open (callsigns, entity names), a list where they are not
+                 — a dropdown you can mistype is a filter that silently
+                 matches nothing. Time, Freq and dB have no control: a
+                 substring of a frequency is not a question anyone asks. -->
+            <tr class="filters">
+              <td></td>
+              <td><input type="text" bind:value={fDx} placeholder="call" aria-label="Filter by DX callsign" /></td>
+              <td><input type="text" bind:value={fDe} placeholder="de" aria-label="Filter by spotter" /></td>
+              <td>
+                <select bind:value={fSource} aria-label="Filter by source">
+                  <option value="">any</option>
+                  {#each srcOpts as o}<option value={o}>{o}</option>{/each}
+                </select>
+              </td>
+              <td></td>
+              <td>
+                <select bind:value={fMode} aria-label="Filter by mode">
+                  <option value="">any</option>
+                  {#each modeOpts as o}<option value={o}>{o}</option>{/each}
+                </select>
+              </td>
+              <td></td>
+              <td>
+                <select bind:value={fBand} aria-label="Filter by band">
+                  <option value="">any</option>
+                  {#each bandOpts as o}<option value={o}>{o}</option>{/each}
+                </select>
+              </td>
+              <td><input type="text" bind:value={fDxcc} placeholder="entity" aria-label="Filter by DXCC entity" /></td>
+              <td>
+                <select bind:value={fLevel} aria-label="Filter by alert level">
+                  <option value="">any</option>
+                  {#each levelOpts as o}<option value={o}>{levelLabel(o)}</option>{/each}
+                </select>
+              </td>
+              <td>
+                <select bind:value={fChannel} aria-label="Filter by channel">
+                  <option value="">any</option>
+                  {#each chanOpts as o}<option value={o.value}>{o.label}</option>{/each}
+                </select>
+              </td>
+              <td>
+                <select bind:value={fStatus} aria-label="Filter by delivery status">
+                  <option value="">any</option>
+                  <option value="ok">Delivered</option>
+                  <option value="failed">Failed</option>
+                </select>
+              </td>
             </tr>
           </thead>
           <tbody>
-            {#each sent as a}
+            {#each shown as a}
               <tr data-level={a.level}>
                 <td class="mono">{hhmm(a.time_unix)}Z</td>
                 <td class="mono call">{a.callsign}</td>
@@ -326,27 +567,53 @@
                 <td class="alert"
                   >{levelLabel(a.level)}{a.award_ref ? ` ${a.award_ref}` : ''}</td
                 >
+                <!-- One chip per channel, because they fail independently:
+                     a radio that is switched off must not make a delivered
+                     Telegram look broken, and with four radios configurable
+                     "it failed" is not a useful answer without the address. -->
+                <td class="chans">
+                  {#if a.channels?.length}
+                    {#each groupChannels(visibleChannels(a.channels, fChannel)) as g}
+                      <span class="chan" class:bad={g.bad} class:mixed={g.mixed} title={g.title}
+                        >{g.label}{g.n > 1 ? ` \u00d7${g.n}` : ''}</span
+                      >
+                    {/each}
+                  {:else}
+                    <span
+                      class="muted"
+                      title="Recorded before DXCA logged which channel an alert went to">—</span
+                    >
+                  {/if}
+                </td>
                 <!-- Shown either way, not just on failure: a column that is
                      blank on a good row cannot be told from a column that is
                      broken, and "did it actually go out" is the question this
                      whole table exists to answer. -->
                 <td class="status">
                   {#if a.delivered}
-                    <span class="ok-tick" title="Delivered to Telegram">✓</span>
+                    <span class="ok-tick" title="Accepted by every channel it was sent to">✓</span>
                   {:else}
-                    <span class="err failed" title="Telegram refused this one: {a.error || 'no reason given'}"
-                      >Failed</span
-                    >
+                    <span class="err failed" title={a.error || 'no reason given'}>Failed</span>
                   {/if}
                 </td>
               </tr>
             {/each}
           </tbody>
         </table>
+        <!-- Two different nothings, and conflating them would send you to
+             the wrong page: an empty history means no alert has fired, an
+             empty filter means one has and you cannot see it. -->
         {#if sent.length === 0}
           <p class="empty hint">
-            Nothing sent yet. Alerts appear here once Telegram is switched on
-            and a spot matches a level you have ticked.
+            Nothing sent yet. Alerts appear here once a spot matches a level
+            you have ticked and at least one channel — Telegram or a radio —
+            is switched on.
+          </p>
+        {:else if shown.length === 0}
+          <p class="empty hint">
+            No alert matches these filters. <button class="linkish" onclick={clearFilters}
+              >Clear them</button
+            > to see all {sent.length}.
           </p>
         {/if}
       </div>
@@ -490,6 +757,9 @@
   col.c-band { width: 3.5rem; }
   col.c-dxcc { width: 11.5rem; }
   col.c-al   { width: 5.75rem; }
+  /* Four radios plus Telegram is the realistic worst case; past that the
+     cell scrolls rather than pushing Status off the card. */
+  col.c-chan { width: 9rem; }
   /* Last and elastic — it takes the slack so the table always fills its card
      rather than truncating, and "Failed" is short enough that the extra room
      reads as margin. */
@@ -582,6 +852,107 @@
 
   .status {
     white-space: nowrap;
+  }
+
+  /* The filter row. Deliberately quieter than the headings above it and the
+     data below: it is scaffolding, and a row of bright controls would compete
+     with the rows it exists to reveal. app.css already styles `input, select`
+     with the real tokens, so this only resizes them to the column — restating
+     the colours here is how a control drifts out of the theme. */
+  .filters td {
+    padding: 0.15rem 0.3rem;
+    border-bottom: 1px solid var(--border);
+    overflow: visible;
+  }
+
+  .filters input,
+  .filters select {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    font-size: 0.72rem;
+    padding: 0.1rem 0.25rem;
+    border-radius: 4px;
+  }
+
+  .filters input::placeholder {
+    color: var(--muted);
+    opacity: 0.7;
+  }
+
+  /* Says WHICH channel the column is narrowed to, so a cell showing one chip
+     cannot be read as "only this one was tried". */
+  .thnarrow {
+    font-weight: 400;
+    color: var(--accent);
+    margin-left: 0.3rem;
+  }
+
+  .showsel {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: var(--fs-hint);
+    color: var(--muted);
+  }
+
+  .showsel select {
+    font-size: 0.78rem;
+    padding: 0.1rem 0.3rem;
+  }
+
+  /* Only drawn while something is filtered, so it never sits there as a
+     control with nothing to undo. */
+  .clearf,
+  .linkish {
+    font: inherit;
+    font-size: var(--fs-hint);
+    color: var(--accent);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+
+  .chans {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    align-items: center;
+    overflow: hidden;
+  }
+
+  /* Reads as a label, not a button: this is a record of what happened, and
+     nothing here is clickable. */
+  .chan {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    padding: 0.05rem 0.3rem;
+    border-radius: 0.2rem;
+    border: 1px solid var(--ok);
+    color: var(--ok);
+    opacity: 0.75;
+    cursor: help;
+    white-space: nowrap;
+  }
+
+  /* Some accepted, some refused. Its own colour because it is neither: a
+     red chip would say the channel is down when most of it is up, and a
+     green one would hide the radio that is. */
+  .chan.mixed {
+    border-color: var(--warn);
+    color: var(--warn);
+    opacity: 1;
+  }
+
+  /* Full strength, unlike the quiet success chip — a channel that refused is
+     the thing worth spotting in a column of them. */
+  .chan.bad {
+    border-color: var(--err);
+    color: var(--err);
+    opacity: 1;
   }
 
   .empty {
