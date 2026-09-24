@@ -88,6 +88,18 @@
     });
   }
 
+  /* What the "Sent to" cell draws once a channel is picked.
+     Filtering the ROWS by "has Flex" excludes nothing on a station that
+     alerts to every channel — every row matches, and the column went on
+     showing TCI beside it, so the control looked broken. Picking a channel
+     is a question about that channel, so the cell answers about that channel
+     and the row count stops being the only thing that moved. */
+  function visibleChannels(chs: any[] | undefined, filter: string) {
+    if (!filter) return chs ?? [];
+    const [fName, fTarget] = filter.split('|');
+    return (chs ?? []).filter((c) => c.name === fName && (!fTarget || c.target === fTarget));
+  }
+
   /* Filter options: the channel by name, and then each address under it.
      With four radios "did this go to TCI" is rarely the question — "did it
      reach the MB1" is. Value is `name` or `name|target`; the separator
@@ -475,7 +487,14 @@
               <th>Mode</th>
               <th title="Signal-to-noise, dB">dB</th>
               <th>Band</th><th>DXCC</th><th>Alert</th>
-              <th title="The channels this alert was offered to">Sent to</th>
+              <th
+                title={fChannel
+                  ? 'Narrowed to one channel — clear the filter below to see them all'
+                  : 'The channels this alert was offered to'}
+                >Sent to{#if fChannel}<span class="thnarrow"
+                    >{chanOpts.find((o) => o.value === fChannel)?.label.trim() ?? ''}</span
+                  >{/if}</th
+              >
               <th>Status</th>
             </tr>
             <!-- Narrowing sits under the heading it narrows, so the column and
@@ -554,7 +573,7 @@
                      "it failed" is not a useful answer without the address. -->
                 <td class="chans">
                   {#if a.channels?.length}
-                    {#each groupChannels(a.channels) as g}
+                    {#each groupChannels(visibleChannels(a.channels, fChannel)) as g}
                       <span class="chan" class:bad={g.bad} class:mixed={g.mixed} title={g.title}
                         >{g.label}{g.n > 1 ? ` \u00d7${g.n}` : ''}</span
                       >
@@ -859,6 +878,14 @@
   .filters input::placeholder {
     color: var(--muted);
     opacity: 0.7;
+  }
+
+  /* Says WHICH channel the column is narrowed to, so a cell showing one chip
+     cannot be read as "only this one was tried". */
+  .thnarrow {
+    font-weight: 400;
+    color: var(--accent);
+    margin-left: 0.3rem;
   }
 
   .showsel {
