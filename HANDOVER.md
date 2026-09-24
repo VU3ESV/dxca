@@ -2,9 +2,10 @@
 *For continuation in a new Claude session*
 
 <details>
-<summary><b>Contents</b> — 91 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
+<summary><b>Contents</b> — 92 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
 
 - [What this is](#what-this-is)
+- [Session 2026-09-23 — a CLAUDE.md, and a contents index for this file](#session-2026-09-23--a-claudemd-and-a-contents-index-for-this-file)
 - [Session 2026-09-22 (later) — production moves to a container on .109](#session-2026-09-22-later--production-moves-to-a-container-on-109)
 - [Session 2026-09-22 — KG4 2×3 calls are the USA, not Guantanamo Bay](#session-2026-09-22--kg4-23-calls-are-the-usa-not-guantanamo-bay)
 - [Session 2026-09-21 — destination sources are picked, not typed](#session-2026-09-21--destination-sources-are-picked-not-typed)
@@ -98,7 +99,7 @@
 
 </details>
 
-**Created:** 2026-08-26 · **Last updated:** 2026-09-22 · **Status:**
+**Created:** 2026-08-26 · **Last updated:** 2026-09-23 · **Status:**
 **Production moved off noderedpi4 into a Docker container on `ubersdr`
 (192.168.1.109), 2026-09-22, 11:09 IST.** noderedpi4's dxca is stopped and
 disabled, kept as the rollback. The decoders and the Mac's telnet client
@@ -696,6 +697,54 @@ and the web GUI's design system from the same repo's
 2026-09-22**, having run on noderedpi4 (192.168.1.169) from the 2026-08-27
 cutover. noderedpi4's install is stopped and disabled, kept as the
 rollback. The 1.x macOS app is the retained fallback (maintenance mode).
+
+## Session 2026-09-23 — a CLAUDE.md, and a contents index for this file
+
+Two docs PRs from VU3ESV, reviewed against the tree and merged: #7 (`24ebc16`)
+then #6 (`4ef356f`). No code, no version bump.
+
+**#7 — the contents index above.** This file was 4,962 lines and ~67,000
+tokens across 91 sections with no map, so the cheapest way to find one fact
+was to open the whole thing. 97 lines added, no prose touched: every heading
+listed, wrapped in `<details>` so a returning session still sees *Last
+updated / Status* first, and placed at the top rather than after the status
+block — the first H2 is at line 584, and a signpost 573 lines past the
+junction is not a signpost.
+
+**#6 — `CLAUDE.md` at the root**, loaded automatically at the start of a
+session: the gate, the crate boundaries, the four traps, the seven places a
+spot destination touches. Merged with four corrections pushed onto the branch
+first (`6f33969`):
+
+- Its headline trap said a `cargo build --release` "silently arms the live
+  station". Not since 2026-09-13 — the agent is `launchctl disable`d here and
+  production is .109 — so a new session would have read this Mac as a live
+  node. The trap stays, because `install.sh macos` bootstraps the agent again
+  and one `launchctl enable` re-arms it, but it now says which state it is in.
+- The ClubLog key was absent, and it is the costliest trap here to learn
+  twice: injected by `build.rs`, never committed, silently empty if neither
+  the environment variable nor `.clublog-api-key` is present.
+- "a test that an old stored row reads as off" is not the rule — nine award
+  fields use `#[serde(default = "default_true")]` deliberately.
+- A new section in this file owes the index an entry.
+
+Worth keeping:
+
+- **Verify generated anchors against the renderer, not a regex.** Checking
+  the 91 links meant slugging 92 headings, and the hand-rolled slugger
+  reported four of them broken with complete confidence — `2×3`, `§11`,
+  `→`, and the `×` in the band × mode heading. github-slugger strips `×`,
+  `§`, `→` and the rest of the Latin-1 and arrow blocks; the regex did not.
+  `gh api --method POST /markdown` renders the headings and hands back the
+  real ids: 91/91, and the four "failures" were the checker's.
+- **A defused trap still needs saying so.** "Arms the live station" reads as
+  present tense; "disabled here since 2026-09-13, and `install.sh macos`
+  re-arms it" is the fact and keeps the warning.
+- **Maintenance this creates:** the index is hand-maintained. A new session
+  section means a new entry, in document order, or the map quietly stops
+  matching the territory. `scripts/check-handover-index.py` is that check —
+  every link against the renderer, plus coverage, order and the count in the
+  `<summary>`, and it names the anchor to use when one is wrong.
 
 ## Session 2026-09-22 (later) — production moves to a container on .109
 
@@ -5054,6 +5103,11 @@ decoder ports if the shack grows.
 ## Conventions (see ~/.claude/CLAUDE.md)
 
 - **CDP** — Commit, Document, Push together on every substantive change.
-- Repo is **private**; goes public only on explicit instruction.
+- Repo is **public** (see *Repo* in the header block). Nothing secret goes in
+  the tree: the ClubLog key is injected at build time from the environment or
+  the gitignored `.clublog-api-key`, never committed.
+- Repo-level conventions and traps live in `CLAUDE.md` at the root, loaded
+  automatically by a Claude session; `~/.claude/CLAUDE.md` holds the
+  shack-wide ones.
 - Credit VU3ESV (concept) and Meridian (telnet engine + the web GUI's
   design system) in any user-facing write-up — already in README.
