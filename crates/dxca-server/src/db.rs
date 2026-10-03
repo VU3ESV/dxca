@@ -2524,6 +2524,41 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// A password written by `dxca reset-password` must verify through the
+    /// ordinary login path.
+    ///
+    /// That subcommand is the only writer of `pass_hash` outside the API, and
+    /// it exists for someone already locked out. If it ever grew its own
+    /// hasher — or the API's argon2 parameters moved without it — the reset
+    /// would report success and the login would still refuse, with nothing
+    /// anywhere to say why. This pins the two together.
+    #[test]
+    fn a_password_written_outside_the_api_still_verifies_at_login() {
+        let (db, _p) = temp_db();
+        let first = crate::auth::hash_password("the-forgotten-one").unwrap();
+        let id = db.create_user("LB9KJ", &first, "", "admin").unwrap();
+
+        // What `dxca reset-password LB9KJ` does.
+        let hash = crate::auth::hash_password("a-brand-new-password").unwrap();
+        db.set_pass_hash(id, &hash).unwrap();
+
+        // What `POST /api/login` does — including the uppercasing, so a
+        // lower-case callsign at the prompt still finds the account.
+        let (user, stored) = db
+            .user_by_callsign("lb9kj")
+            .unwrap()
+            .expect("lookup uppercases the callsign");
+        assert_eq!(user.id, id);
+        assert!(
+            crate::auth::verify_password("a-brand-new-password", &stored),
+            "the password just set must be the one that logs in"
+        );
+        assert!(
+            !crate::auth::verify_password("the-forgotten-one", &stored),
+            "and the forgotten one must stop working"
+        );
+    }
+
     /// The verdict is derived from the channels, and "nowhere to send it"
     /// is a failure. This is the bug the column was added for: an account
     /// alerting to a radio alone recorded nothing at all, so its Alerts page

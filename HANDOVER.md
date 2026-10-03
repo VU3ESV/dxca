@@ -2,9 +2,10 @@
 *For continuation in a new Claude session*
 
 <details>
-<summary><b>Contents</b> — 95 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
+<summary><b>Contents</b> — 96 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
 
 - [What this is](#what-this-is)
+- [Session 2026-10-03 — a locked-out admin can reset their own password](#session-2026-10-03--a-locked-out-admin-can-reset-their-own-password)
 - [Session 2026-09-25 — alerts are recorded for every channel (PR #8)](#session-2026-09-25--alerts-are-recorded-for-every-channel-pr-8)
 - [Session 2026-09-23 — a CLAUDE.md, and a contents index for this file](#session-2026-09-23--a-claudemd-and-a-contents-index-for-this-file)
 - [Session 2026-09-22 (later) — production moves to a container on .109](#session-2026-09-22-later--production-moves-to-a-container-on-109)
@@ -703,6 +704,65 @@ and the web GUI's design system from the same repo's
 2026-09-22**, having run on noderedpi4 (192.168.1.169) from the 2026-08-27
 cutover. noderedpi4's install is stopped and disabled, kept as the
 rollback. The 1.x macOS app is the retained fallback (maintenance mode).
+
+## Session 2026-10-03 — a locked-out admin can reset their own password
+
+**No version bump** — `Cargo.toml` stays 2.22.1, so there is no tag and this
+runs on none of the five hosts yet.
+
+**The hole.** Found by walking into it: the admin on noderedpi4 could not log
+in, and there was no way back. Passwords change only through
+`PATCH /api/users/{id}`, which needs an admin session — the one thing a
+locked-out admin cannot get. `main.rs` parsed **no arguments at all**, so the
+binary offered nothing either. The documented "start over" is deleting every
+account to re-arm `/api/setup` at zero, which also deletes every ClubLog
+setting, alert preference and worked matrix on the install. For a forgotten
+password that is not a recovery path, it is a wipe.
+
+**What was ruled out first**, because the diagnosis matters more than the fix:
+
+- *Restore the backup.* The reflex, and wrong. The `pass_hash` for both
+  accounts was **byte-identical** between the 09-24 backup and live
+  (`fp=84dadd211a6f`), so a restore could not have changed the password — it
+  would only have cost 455 alerts and 58 QSOs. Compare the hashes before
+  reaching for a restore.
+- *A broken login path.* `POST /api/login` returned a clean 401 for a wrong
+  password, a wrong case and an unknown callsign; no 500, no lockout,
+  no crash. `user_by_callsign` uppercases, so case was never a candidate.
+
+**What changed.** `dxca reset-password <CALL>`, a subcommand on the server
+binary. `run_subcommand()` runs before anything binds a port or dials a node,
+and returns `false` with no arguments so the ordinary start path is
+byte-for-byte what it was. `dxca --help` now exists too.
+
+- It loads `config/dxca.toml` for `data_dir`, so there is no path to mistype
+  and no way to silently create an empty database beside the real one.
+- The password comes from **stdin, never argv** — an argument lands in shell
+  history and is readable in `ps` by every user on the box, and this is the
+  one command whose entire payload is a secret.
+- Unknown callsign is refused *before* the prompt; under six characters is
+  refused *after* it, matching the floor `PUT /api/users/{id}` enforces. A
+  back door that can set a password the front door would refuse is a back
+  door.
+- It uses `auth::hash_password`, not its own argon2.
+  `a_password_written_outside_the_api_still_verifies_at_login` in `db.rs`
+  pins that: it resets a password the way the subcommand does and then
+  verifies it the way `POST /api/login` does, including the uppercasing. If
+  the two ever drift, the reset would report success and the login would
+  still refuse — with nothing anywhere to say why.
+
+**Rejected: a `cargo run --example`.** It was written that way first and it
+was wrong. An example needs a source checkout and a Rust toolchain; the
+locked-out operator is typically on a release binary from the installer, a Pi
+image, or the Windows `.exe`, and can run none of it. A recovery tool the
+people needing recovery cannot run is not one.
+
+**Not a privilege escalation.** Anyone who can run it already holds the
+database file, so it grants no access they did not have. That is precisely
+why it is the binary and not a protected endpoint.
+
+**Stop the server before running it** — one writer at a time. The README's
+*Forgotten password* section has the three commands.
 
 ## Session 2026-09-25 — alerts are recorded for every channel (PR #8)
 
