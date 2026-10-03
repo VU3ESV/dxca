@@ -740,6 +740,7 @@ what it printed. The common ones:
 | `never answered` | it built and started but is not serving; the message names the log command |
 | `serving the PLACEHOLDER page` | the running binary was built without the dashboard |
 | `nodejs : Conflicts: npm` | you asked apt for `npm` next to a NodeSource Node — drop `npm` |
+| the login refuses a password you are sure of | see [Forgotten password](#forgotten-password) — `dxca reset-password <CALL>` |
 
 Re-running `./install.sh` is always safe. In a source tree it rebuilds from
 scratch, so it is the correct fix after installing a missing toolchain — it
@@ -1569,6 +1570,35 @@ one over. The single refusal is removing — or demoting — the last **admin**
 while other accounts remain, because `/api/setup` only re-arms at zero
 accounts, so that state would leave users nobody can administer and no way
 back through the UI. Promote another admin first, or delete the others.
+
+#### Forgotten password
+
+Every route above needs you to be logged in, so an admin who forgets their
+password has no way back through the web UI — and because `/api/setup`
+re-arms only at **zero** accounts, "start over" would mean deleting every
+account and, with them, every ClubLog setting, alert preference and worked
+matrix on the install.
+
+The server itself can set one. Stop it first so there is one writer, run the
+command from the install directory, and start it again:
+
+```sh
+sudo systemctl stop dxca                 # launchctl on macOS; Services on Windows
+cd /opt/dxca && ./dxca reset-password VU2CPL
+sudo systemctl start dxca
+```
+
+It reads `config/dxca.toml` for the database location, so there is no path
+to get wrong, and it prompts for the new password rather than taking it as
+an argument — an argument would sit in your shell history and be readable in
+`ps` by everyone on the machine. The password must be at least six
+characters, the same floor the Users tab enforces. An unknown callsign is
+refused *before* the prompt.
+
+It changes nothing else: existing sessions, settings and the worked matrix
+are untouched. Anyone who can run it already has the database file, so it
+grants no access they did not have — which is why it is the server binary
+and not a protected endpoint.
 
 ## License
 
