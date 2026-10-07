@@ -2,7 +2,7 @@
 *For continuation in a new Claude session*
 
 <details>
-<summary><b>Contents</b> — 101 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
+<summary><b>Contents</b> — 102 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
 
 - [What this is](#what-this-is)
 - [Session 2026-10-09 (later) — v2.22.2 released, on .109 and Windows](#session-2026-10-09-later--v2222-released-on-109-and-windows)
@@ -43,6 +43,7 @@
 - [Open items → next session](#open-items--next-session)
   - [DONE: v2.22.2 on the three remote Pis (2026-10-09)](#done-v2222-on-the-three-remote-pis-2026-10-09)
   - [DONE in v2.22.2: the GitHub release check (2026-10-08)](#done-in-v2222-the-github-release-check-2026-10-08)
+  - [TODO: a cloud QSO inbox — QLog on the Pi into RUMlog (2026-10-07)](#todo-a-cloud-qso-inbox--qlog-on-the-pi-into-rumlog-2026-10-07)
   - [OPEN: a green radio chip is the queue, not the radio (2026-09-25)](#open-a-green-radio-chip-is-the-queue-not-the-radio-2026-09-25)
   - [DONE in v2.22.2: every alert recorded for every channel — PR #8 (2026-09-25)](#done-in-v2222-every-alert-recorded-for-every-channel--pr-8-2026-09-25)
   - [OPEN: point the feeds at .109 (2026-09-22)](#open-point-the-feeds-at-109-2026-09-22)
@@ -121,7 +122,8 @@ builds never check by themselves (*Sessions 2026-10-08 and 2026-10-09*);
 `dxca reset-password` for a locked-out admin (VU3ESV's PR #9, *Session
 2026-10-03*); and VU3ESV's PR #8 — every alert is recorded for every channel
 it went to, and the Alerts table filters by column (*Session 2026-09-25*).
-Deploy record in *Session 2026-10-09 (later)*. Previously:
+Deploy record in *Session 2026-10-09 (later)*. A cloud QSO inbox is parked
+as a todo under *Open items* (2026-10-07). Previously:
 **Production moved off noderedpi4 into a Docker container on `ubersdr`
 (192.168.1.109), 2026-09-22, 11:09 IST.** noderedpi4's dxca is stopped and
 disabled, kept as the rollback. The decoders and the Mac's telnet client
@@ -2504,6 +2506,56 @@ nothing — revised 2026-10-09). An install shows a banner
 only once a release newer than the one it runs is published, so the first
 notice anyone sees will be for the release *after* the one that ships this.
 See *Session 2026-10-08* and *Session 2026-10-09*.
+
+### TODO: a cloud QSO inbox — QLog on the Pi into RUMlog (2026-10-07)
+
+**Parked on Manoj's word** (*"keep it as a todo"*). Not a dxca feature: build
+it as its own private repo, borrowing `dxca-core`'s `adif.rs` and `wsjtx.rs`
+if they help.
+
+**The idea (Manoj):** loggers at any site — QLog on a Pi, other programs, other
+PCs — send each QSO to a cloud server; RUMlog, the central log, downloads the
+new ones and the server clears them. One log however many places you operate
+from.
+
+**The shape it came out as:**
+
+1. **Site side.** QLog sends a UDP JSON message for every QSO insert, update
+   and delete, each with the full ADIF record (Settings › Network › QSO
+   Changes; QLog wiki, *Notifications*). One catch: an edit to several fields
+   arrives as one message per field. A small agent beside QLog catches them,
+   keeps them on disk until the server confirms receipt, and posts over HTTPS
+   with a per-station token. **Not raw UDP to the cloud** — no delivery
+   guarantee and no login, and a lost datagram is a lost QSO.
+2. **Cloud.** A queue. Each QSO carries an id made at the site, so a resend
+   is not stored twice.
+3. **RUMlog side — already built.** `~/projects/MSHV-Mac/tools/mshv_rumlog_bridge.py`
+   (LaunchAgent `com.vu2cpl.mshv-rumlog-bridge`) delivers to RUMlog's ADIF
+   UDP input on 2238, which keeps every field; the WSJT-X input on 2237 drops
+   them (measured 2026-09-20/22, see the script's header). It skips anything
+   RUMlog already holds (same call/band/mode within ±2 min, via AppleScript
+   `ReadAdif`), reads back after each save, and retries while RUMlog is
+   closed or not answering — it did exactly that on 2026-10-07, 06:43–07:00.
+   It needs a second input that collects from the cloud, and **the server
+   clears a QSO only when the bridge has confirmed it in RUMlog**, never on
+   download. Keep cleared QSOs a month or so as a backup.
+
+**First step, not done:** only FT8 has ever gone through port 2238. Check a CW
+or SSB QSO by sending one real QLog QSO that RUMlog lacks through
+`mshv_rumlog_bridge.py --file`. **Not a dummy:** every save on 2238 is
+uploaded to Club Log at once (*"Club Log Y"* in
+`~/Library/Logs/mshv-rumlog-bridge.log`), so a test QSO lands in the public
+Club Log log unless RUMlog's live upload is switched off first.
+
+**Where it started: hosting dxca itself in the cloud, set aside.** Only the
+half that connects outward moves cleanly — cluster nodes, ClubLog/LoTW/
+reference downloads, Telegram, the guest web UI. Decoder UDP in, the RUMlog
+passthrough, FlexRadio/TCI and MQTT all need the shack LAN, so they'd need a
+tunnel home and would stop working whenever the shack's internet drops. If the
+web UI is ever reachable from the internet, a Cloudflare Tunnel included,
+fix two things first: there is **no limit on failed logins**, and the session
+cookie has **no `Secure` flag** (`auth.rs:45`). Tailscale in front of .109
+gives outside access with neither.
 
 ### OPEN: a green radio chip is the queue, not the radio (2026-09-25)
 
