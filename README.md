@@ -25,6 +25,31 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.22.2** (2026-10-09): **DXCA says when a newer release is out.** Once a
+day it asks GitHub for the latest release — one `GET` to
+`api.github.com/repos/vu2cpl/dxca/releases/latest`, no token, nothing about
+your station — and when that release is newer than the one running, every
+admin sees a band under the header with the release notes link and **Skip
+this version**, and the log gets one line. It never downloads or installs
+anything. Only a successful answer is stored; a failed check (offline, rate
+limit, any error) stores nothing, shows nothing and is tried again an hour
+later. Development builds never check by themselves. To switch it off, put
+`check_for_updates = false` in `config/dxca.toml` and restart; **Check now**
+on Settings › Server › Reference data still works. See [Update
+check](#update-check). Also in this release: **every alert is recorded for
+every channel it went to** — an account alerting to a FlexRadio or
+ExpertSDR3 alone used to get no history at all — with a *Sent to* column and
+a filter under each heading on the Alerts page, contributed by VU3ESV
+([#8](https://github.com/vu2cpl/dxca/pull/8)); see [Alert
+history](#alert-history). **`dxca reset-password <CALL>`** gives a locked-out
+admin a way back in without deleting every account, contributed by VU3ESV
+([#9](https://github.com/vu2cpl/dxca/pull/9)); see [Forgotten
+password](#forgotten-password). And **`deploy/docker-deploy.sh`** runs DXCA
+as a container on a Linux box that already runs Docker; see
+[Docker](#docker-a-linux-box-that-already-runs-containers). Nothing to do on
+upgrade: the alert history gains its per-channel column by itself on first
+start, and the update check is on without a config change.
+
 **v2.22.1** (2026-09-22): **a `KG4` call with a three-letter suffix is the
 USA, not Guantanamo Bay.** Only `KG4` + two letters is Guantanamo. The FCC
 issues `KG4` + three letters to ordinary stateside amateurs, but cty.xml has
@@ -670,7 +695,7 @@ schema is applied as `CREATE TABLE IF NOT EXISTS`, so an older database just
 keeps working. `git pull` cannot conflict with your settings, because both
 paths are gitignored — nothing you edit is tracked.
 
-**Knowing when to.** From the release after v2.22.1, the web UI tells its
+**Knowing when to.** Since v2.22.2, the web UI tells its
 admins when a newer release is out, once a day — see [Update
 check](#update-check). It never updates anything itself.
 
@@ -1563,19 +1588,19 @@ are dropped completely.
 
 ### Update check
 
-*New in the release after v2.22.1.*
+*New in v2.22.2.*
 
 Once a day DXCA asks GitHub whether there is a newer release, and when there
 is, every admin sees a band under the header on every screen:
 
 ```
-DXCA v2.23.0 is available (you have v2.22.1) — release notes & download ↗   [Skip this version]
+DXCA v2.23.0 is available (you have v2.22.2) — release notes & download ↗   [Skip this version]
 ```
 
 and the service log gets one line, once per run:
 
 ```
-dxca: DXCA 2.23.0 is available (you have 2.22.1) — https://github.com/vu2cpl/dxca/releases/tag/v2.23.0
+dxca: DXCA 2.23.0 is available (you have 2.22.2) — https://github.com/vu2cpl/dxca/releases/tag/v2.23.0
 ```
 
 **It tells you; it never installs.** Nothing is downloaded — the link goes to

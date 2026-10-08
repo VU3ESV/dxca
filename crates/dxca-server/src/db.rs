@@ -851,7 +851,7 @@ pub struct AlertChannel {
 /// One alert as it was delivered — or as it failed.
 ///
 /// Written for **every** alert that passes the gates, not only the ones with
-/// a Telegram behind them. Before 2.23 the record was built inside the
+/// a Telegram behind them. Before 2.22.2 the record was built inside the
 /// Telegram branch, so an account alerting to a radio alone accumulated no
 /// history at all and its Alerts page stayed empty while the marks were
 /// landing on the panadapter.
@@ -893,7 +893,7 @@ pub struct SentAlert {
     /// Per-channel detail lives in [`Self::channels`].
     pub error: String,
     /// One entry per channel this alert was offered to, in the order they
-    /// were tried. Empty for rows written before 2.23, which is why the UI
+    /// were tried. Empty for rows written before 2.22.2, which is why the UI
     /// must keep rendering `delivered` when this is empty.
     #[serde(default)]
     pub channels: Vec<AlertChannel>,
