@@ -30,9 +30,42 @@
   let error = $state('');
   let busy = $state(false);
 
+  /// The release check (`GET /api/update`): what is running, what GitHub
+  /// last said and when. Separate from `status` because it carries the
+  /// release notes, which have no business in a frame sent every 5 seconds.
+  let upd = $state<any>(null);
+  let checking = $state(false);
+  let updError = $state('');
+
+  async function loadUpdate() {
+    const r = await api('GET', '/api/update');
+    if (r.status === 200) upd = r.json;
+  }
+
+  async function checkNow() {
+    checking = true;
+    updError = '';
+    const r = await api('POST', '/api/update/check');
+    checking = false;
+    if (r.status === 200) upd = r.json;
+    else {
+      updError = r.json?.error ?? `HTTP ${r.status}`;
+      await loadUpdate(); // the stamp and the stored error moved anyway
+    }
+    await refreshStatus(); // so the banner follows without waiting for a poll
+  }
+
+  /// Bring back a release that was skipped from the banner.
+  async function unskip() {
+    const r = await api('POST', '/api/update/skip', { tag: '' });
+    if (r.status === 200) upd = r.json;
+    await refreshStatus();
+  }
+
   onMount(() => {
     loadServerConfig();
     refreshStatus();
+    loadUpdate();
   });
 
   async function refreshCty() {
@@ -97,6 +130,48 @@
         <dd class="num" class:err={s.udp_failed}>{s.udp_failed}</dd>
       </div>
     </dl>
+
+    {#if upd}
+      <!-- The release check. Says what it knows and when it learned it, so
+           "no banner" can be told apart from "never managed to ask". -->
+      <div class="updates">
+        <span class="label">Updates</span>
+        <span>
+          {#if upd.newer}
+            <b>v{upd.latest.version}</b> is available —
+            <a href={upd.latest.url} target="_blank" rel="noopener noreferrer"
+              >release notes &amp; download ↗</a
+            >
+            {#if upd.skipped === upd.latest.tag}
+              · skipped in the banner
+              <button onclick={unskip} title="Show the banner for this release again">Show again</button>
+            {/if}
+          {:else if upd.latest}
+            Up to date — v{upd.latest.version} is the latest release.
+          {:else}
+            Not checked yet.
+          {/if}
+        </span>
+        <span class="hint">
+          {upd.enabled ? 'Checked daily' : 'Automatic check off'}
+          {#if upd.last_check_unix}· last {ago(upd.last_check_unix)} ago{/if}
+        </span>
+        <button onclick={checkNow} disabled={checking}>
+          {checking ? 'Checking…' : 'Check now'}
+        </button>
+      </div>
+      {#if updError}
+        <p class="err">{updError}</p>
+      {:else if upd.last_error}
+        <p class="hint">The last check failed: {upd.last_error}</p>
+      {/if}
+      {#if upd.newer && upd.latest.notes}
+        <details class="notes">
+          <summary>What's new in v{upd.latest.version}</summary>
+          <pre>{upd.latest.notes}</pre>
+        </details>
+      {/if}
+    {/if}
   </div>
 {/if}
 
@@ -280,7 +355,8 @@
       {days(server.cfg.read_only.cty_refresh_days)}, LoTW
       {days(server.cfg.read_only.lotw_refresh_days)}, IOTA
       {days(server.cfg.read_only.iota_refresh_days)}, FCC
-      {days(server.cfg.read_only.fcc_refresh_days)} · data dir
+      {days(server.cfg.read_only.fcc_refresh_days)} · update check
+      {server.cfg.read_only.check_for_updates === false ? 'off' : 'on'} · data dir
       <code>{server.cfg.read_only.data_dir}</code> (edit config/dxca.toml + restart).
     </p>
   </div>
@@ -336,6 +412,51 @@
   .file-only {
     margin: 0.75rem 0 0;
     line-height: 1.5;
+  }
+
+  .updates {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.4rem 0.9rem;
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.9rem;
+  }
+
+  .updates .label {
+    font-size: var(--fs-hint);
+    color: var(--muted);
+  }
+
+  .updates a {
+    color: var(--accent);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .updates a:hover {
+    text-decoration: underline;
+  }
+
+  /* Release notes are Markdown, shown as the text they are: rendering them as
+     HTML would mean trusting a remote document with an admin's session. */
+  .notes > summary {
+    cursor: pointer;
+    font-size: var(--fs-hint);
+    color: var(--muted);
+    margin-top: 0.5rem;
+  }
+
+  .notes pre {
+    margin: 0.5rem 0 0;
+    max-height: 20rem;
+    overflow: auto;
+    white-space: pre-wrap;
+    font-family: inherit;
+    font-size: 0.82rem;
+    line-height: 1.45;
   }
 
   p {

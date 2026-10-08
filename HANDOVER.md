@@ -2,9 +2,10 @@
 *For continuation in a new Claude session*
 
 <details>
-<summary><b>Contents</b> — 96 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
+<summary><b>Contents</b> — 98 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
 
 - [What this is](#what-this-is)
+- [Session 2026-10-08 — DXCA says when a newer release is out](#session-2026-10-08--dxca-says-when-a-newer-release-is-out)
 - [Session 2026-10-03 — a locked-out admin can reset their own password](#session-2026-10-03--a-locked-out-admin-can-reset-their-own-password)
 - [Session 2026-09-25 — alerts are recorded for every channel (PR #8)](#session-2026-09-25--alerts-are-recorded-for-every-channel-pr-8)
 - [Session 2026-09-23 — a CLAUDE.md, and a contents index for this file](#session-2026-09-23--a-claudemd-and-a-contents-index-for-this-file)
@@ -38,6 +39,7 @@
 - [The installs (2026-08-28; VU2OY added 2026-08-30; production moved to .109 2026-09-22)](#the-installs-2026-08-28-vu2oy-added-2026-08-30-production-moved-to-109-2026-09-22)
 - [Release convention (2026-08-28, standing)](#release-convention-2026-08-28-standing)
 - [Open items → next session](#open-items--next-session)
+  - [DONE (on main, unreleased): the GitHub release check (2026-10-08)](#done-on-main-unreleased-the-github-release-check-2026-10-08)
   - [OPEN: a green radio chip is the queue, not the radio (2026-09-25)](#open-a-green-radio-chip-is-the-queue-not-the-radio-2026-09-25)
   - [DONE (merged, unreleased): every alert recorded for every channel — PR #8 (2026-09-25)](#done-merged-unreleased-every-alert-recorded-for-every-channel--pr-8-2026-09-25)
   - [OPEN: point the feeds at .109 (2026-09-22)](#open-point-the-feeds-at-109-2026-09-22)
@@ -103,8 +105,12 @@
 
 </details>
 
-**Created:** 2026-08-26 · **Last updated:** 2026-09-25 · **Status:**
-**`main` is ahead of v2.22.1: VU3ESV's PR #8 — every alert is recorded for
+**Created:** 2026-08-26 · **Last updated:** 2026-10-08 · **Status:**
+**`main` is ahead of v2.22.1 with three unreleased changes, all shipping
+with the next release:** the GitHub release check — admins see a banner when
+a newer DXCA is out, one log line, never an install (*Session 2026-10-08*);
+`dxca reset-password` for a locked-out admin (*Session 2026-10-03*); and
+VU3ESV's PR #8 — every alert is recorded for
 every channel it went to, and the Alerts table filters by column —
 squash-merged 2026-09-25, unreleased** (*Session 2026-09-25*). Previously:
 **Production moved off noderedpi4 into a Docker container on `ubersdr`
@@ -704,6 +710,112 @@ and the web GUI's design system from the same repo's
 2026-09-22**, having run on noderedpi4 (192.168.1.169) from the 2026-08-27
 cutover. noderedpi4's install is stopped and disabled, kept as the
 rollback. The 1.x macOS app is the retained fallback (maintenance mode).
+
+## Session 2026-10-08 — DXCA says when a newer release is out
+
+**Unreleased — ships with the next release.** No version bump: `Cargo.toml`
+stays 2.22.1, no tag, and it runs on none of the five hosts.
+
+Manoj's spec, approved for all his apps: an in-app check against GitHub
+releases — no Sparkle, no extra servers — in every app's next release.
+DXCA is a server with a web UI, not a desktop app, so the spec's dialog
+(Download / Skip / Remind me later) became **a banner for admins, one log
+line, and a Skip this version button**.
+
+**What it does.** About 30 s after start, then at most once every 24 h,
+`GET https://api.github.com/repos/vu2cpl/dxca/releases/latest` with
+`Accept: application/vnd.github+json` and `User-Agent: DXCA/<version>`,
+10 s timeout, no token. It reads `tag_name`, `name`, `html_url`, `body` and
+compares the tag with `CARGO_PKG_VERSION`: leading `v` stripped, split into
+integers on every non-digit, compared as tuples with missing parts as 0.
+When the release is newer, admins get a band under the header on every screen
+— *DXCA v2.23.0 is available (you have v2.22.1) — release notes & download ↗
+[Skip this version]* — and the log gets `dxca: DXCA 2.23.0 is available (you
+have 2.22.1) — <url>` once per run per release. Nothing is downloaded.
+
+**Where it lives** (crate boundaries per `CLAUDE.md`):
+
+- `dxca-connect/src/update.rs` — `fetch_latest`, `parse_release`,
+  `version_key`, `is_newer`. The link is accepted only as an
+  `https://github.com/` page, because it becomes an `href` in an admin's
+  browser; anything else falls back to the releases page. Notes capped at
+  32 KB. A 403/429 with `x-ratelimit-remaining: 0` gets its own message
+  ("the hourly limit for this address is used up"), because a bare
+  "HTTP 403" reads like a block.
+- `dxca-server/src/update.rs` — the loop, the storage, the JSON the UI gets.
+  State is five `meta` keys: `update_last_check_unix` (the *attempt*, written
+  before the request — the `refresh.rs` arrangement, so a failing or
+  crash-looping service is still once a day), `update_latest_release` (the
+  last good answer, without notes — read on every status frame),
+  `update_latest_notes`, `update_last_error`, `update_skipped_tag`.
+  "Newer" is decided at read time against the running binary, so the notice
+  ends by itself after the upgrade. A stamp a day or more in the future
+  counts as due (a Pi has no RTC).
+- API: `/api/status` gains `update` — `null`, or `{tag, version, name, url,
+  current, skipped}`. Admin-only `GET /api/update` (everything, with notes),
+  `POST /api/update/check` (*Check now* — works with the switch off, and
+  reports failures), `POST /api/update/skip {tag}` (`""` un-skips).
+  `/api/config/global`'s `read_only` gains `check_for_updates`.
+- Config: **`check_for_updates`** in `config/dxca.toml`, default `true`,
+  read at start. **Not written to the file while it is true** —
+  `skip_serializing_if`: `Config` is `deny_unknown_fields` and the web UI
+  rewrites the whole file on every save, so a written key would stop v2.22.1
+  starting on rollback. The example config shows it commented out for the
+  same reason.
+- UI: `lib/UpdateBanner.svelte` in `App.svelte`, admins only. Settings ›
+  Server › Reference data: an *Updates* row on the Server card (state, last
+  check, last error, *Check now*, *Show again* for a skipped release, *What's
+  new* as plain text); the file-only line lists the switch; the rail search
+  finds the page by "update", "release", "github".
+- `scripts/dxca-mock-server.py` carries a v2.99.0 offer so the banner shows.
+- Test hook: `DXCA_UPDATE_TEST_VERSION=0.0.1` compares against that version
+  instead of the real one (User-Agent unchanged). Inert unset.
+
+**No dependency added.** `ureq` 2 (rustls) and `serde_json` were already in
+`dxca-connect` for ClubLog, LoTW and Telegram.
+
+**Verified.** `just gate` green: fmt, clippy `-D warnings`, 326 tests (309
+before; +17), web build. Release build in a scratch `CARGO_TARGET_DIR`, 0
+warnings — this clone's `target/release/dxca` untouched (the launchd trap).
+Live: `cargo test -p dxca-connect -- --ignored --nocapture live_` read
+**v2.22.1** from the real endpoint. A scratch instance (own config, data dir
+and ports 17580/17575, in the session scratchpad, stopped afterwards):
+
+- Its first automatic check got **HTTP 403** — the shack's public address had
+  spent its 60 unauthenticated requests for the hour (`/rate_limit`: used 60,
+  remaining 0), by something other than DXCA. It behaved as designed: no
+  banner, no log line, the reason kept for the card, and *Check now* returned
+  502 with it. That real-world 403 is why the rate-limit message exists.
+- With the v2.22.1 record seeded and `DXCA_UPDATE_TEST_VERSION=0.0.1`: the log
+  line appeared, `/api/status` carried the offer, skip and un-skip
+  round-tripped. Without the hook, no notice (2.22.1 is current).
+- The banner and the Server card were looked at against the mock server, at
+  desktop and phone width.
+
+**Rejected:**
+
+- *Download or install it.* A service on Pis, in Docker, on Windows and
+  macOS, several of them other people's: an unattended binary swap is not
+  this program's decision. The link goes to the release page.
+- *The notes in `/api/status`.* That object goes out every 5 s per open Spots
+  page. Notes come from `GET /api/update`, read by the Server card only.
+- *Rendering the notes as Markdown.* Remote HTML in an admin's session.
+  Shown as plain text.
+- *The banner for every account.* Only an admin can act on it.
+- *Retrying a failed check within the day.* The spec is at most once a day,
+  and the hourly budget is shared by the whole LAN.
+- *A switch in the web UI.* The server-wide scalars (refresh cadences, the
+  telnet login) are file-only here; this one joins them and is listed on the
+  file-only line.
+
+Worth keeping:
+
+- **GitHub's unauthenticated limit is per public address, not per program.**
+  Every machine behind the router and every tool asking without a token
+  share 60 an hour. It was found spent on 2026-10-08 — who spent it is not
+  known.
+- **A new `Config` key breaks rollback unless it stays out of the file at its
+  default** (`deny_unknown_fields` + whole-file rewrite). Now in `CLAUDE.md`.
 
 ## Session 2026-10-03 — a locked-out admin can reset their own password
 
@@ -2140,6 +2252,16 @@ date, what changed and why, at the top. v2.21.0 shipped without one and the
 Status section led with v2.20.4 for eighteen days (backfilled 2026-09-21).
 
 ## Open items → next session
+
+### DONE (on main, unreleased): the GitHub release check (2026-10-08)
+
+**Ships with the next release.** Put the version on this heading when it
+does, and give it a README `## Status` entry (the README section is *Update
+check*). Nothing to do on any host: the switch is on when the key is absent,
+and the five `meta` keys appear on first check. An install shows a banner
+only once a release newer than the one it runs is published, so the first
+notice anyone sees will be for the release *after* the one that ships this.
+See *Session 2026-10-08*.
 
 ### OPEN: a green radio chip is the queue, not the radio (2026-09-25)
 

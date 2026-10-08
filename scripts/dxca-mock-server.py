@@ -77,6 +77,10 @@ STATUS = {
     "udp_sent": 749, "udp_failed": 0, "setup_required": False,
     "cluster_nodes": NODES,
     "spots_per_source": {s: 100 + i * 31 for i, s in enumerate(SOURCES)},
+    # A newer release on offer, so the admin banner shows.
+    "update": {"tag": "v2.99.0", "version": "2.99.0", "name": "v2.99.0 — mock release",
+               "url": "https://github.com/vu2cpl/dxca/releases", "current": "2.12.0-dev",
+               "skipped": False},
 }
 
 STATS = {
@@ -156,7 +160,7 @@ ROUTES = {
              "sources": ["MSHV", "N2WQ-2", "Meridian", "OldNode"], "unfiltered": False, "enabled": True}],
         "read_only": {"web_bind": "0.0.0.0:80", "telnet_port": 7300, "dedupe_window_secs": 60,
                       "spot_ring_capacity": 5000, "cty_refresh_days": 7, "lotw_refresh_days": 7,
-                      "data_dir": "/var/lib/dxca"}},
+                      "check_for_updates": True, "data_dir": "/var/lib/dxca"}},
     "/api/mqtt": lambda: {"destinations": [{"name": "shack", "host": "192.168.1.169", "port": 1883,
                                             "username": "svc", "password": "", "topic": "shack/dxca/spots",
                                             "client_id": "dxca", "sources": [], "unfiltered": False,
@@ -165,6 +169,12 @@ ROUTES = {
         {"id": 1, "callsign": "VU2CPL", "display_name": "Manoj", "role": "admin"},
         {"id": 2, "callsign": "VU3ESV", "display_name": "Vinod", "role": "user"}]},
     "/api/blacklist": lambda: {"calls": ["R1ABC", "N0CALL"]},
+    "/api/update": lambda: {
+        "enabled": True, "current": "2.12.0-dev", "newer": True, "skipped": "",
+        "last_check_unix": NOW - 5400, "last_error": "",
+        "latest": {"tag": "v2.99.0", "version": "2.99.0", "name": "v2.99.0 — mock release",
+                   "url": "https://github.com/vu2cpl/dxca/releases",
+                   "notes": "A mock release.\n\n## What changed\n\n- one thing\n- another"}},
 }
 
 

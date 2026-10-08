@@ -10,6 +10,7 @@
   import { onMount } from 'svelte';
   import ThemeSwitcher from './lib/ThemeSwitcher.svelte';
   import StatusPill from './lib/StatusPill.svelte';
+  import UpdateBanner from './lib/UpdateBanner.svelte';
   import { refreshStatus } from './lib/status.svelte';
   import Auth from './views/Auth.svelte';
   import Dashboard from './views/Dashboard.svelte';
@@ -111,6 +112,10 @@
       <button onclick={logout}>Log out</button>
     </div>
   </header>
+
+  {#if me.role === 'admin'}
+    <UpdateBanner />
+  {/if}
 
   {#if settings}
     <Settings isAdmin={me.role === 'admin'} />

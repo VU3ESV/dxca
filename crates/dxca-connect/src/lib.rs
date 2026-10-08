@@ -10,7 +10,8 @@
 //! on proof, auth/silence watchdog, Telnet IAC stripping).
 //!
 //! M4 added `clublog` (log + cty.xml download) and `telegram` (bot-API
-//! notifier); M5 added `lotw` (users-list download + lookup).
+//! notifier); M5 added `lotw` (users-list download + lookup). `update`
+//! reads GitHub's latest-release record for the release check.
 //!
 //! Lift rules (plan §6): lifted meridian code stays diff-minimal with
 //! `// DXCA:` divergence markers. This crate never imports axum, SQLite,
@@ -28,4 +29,5 @@ pub mod mqtt;
 pub mod tci;
 pub mod telegram;
 pub mod telnet;
+pub mod update;
 pub mod wsjtx_udp;

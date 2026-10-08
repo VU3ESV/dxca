@@ -14,4 +14,5 @@ pub mod nodes;
 pub mod pipeline;
 pub mod refresh;
 pub mod telnetcmd;
+pub mod update;
 pub mod users;

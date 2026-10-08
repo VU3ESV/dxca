@@ -670,6 +670,10 @@ schema is applied as `CREATE TABLE IF NOT EXISTS`, so an older database just
 keeps working. `git pull` cannot conflict with your settings, because both
 paths are gitignored — nothing you edit is tracked.
 
+**Knowing when to.** From the release after v2.22.1, the web UI tells its
+admins when a newer release is out, once a day — see [Update
+check](#update-check). It never updates anything itself.
+
 Confirm what is actually running, rather than what you think you installed:
 
 ```sh
@@ -1556,6 +1560,64 @@ datagrams untouched, before anything is parsed — that is what keeps a
 logger's click-to-fill working — so a blocked call inside a WSJT-X decode can
 still reach the logger by that path. Cluster spots have no passthrough and
 are dropped completely.
+
+### Update check
+
+*New in the release after v2.22.1.*
+
+Once a day DXCA asks GitHub whether there is a newer release, and when there
+is, every admin sees a band under the header on every screen:
+
+```
+DXCA v2.23.0 is available (you have v2.22.1) — release notes & download ↗   [Skip this version]
+```
+
+and the service log gets one line, once per run:
+
+```
+dxca: DXCA 2.23.0 is available (you have 2.22.1) — https://github.com/vu2cpl/dxca/releases/tag/v2.23.0
+```
+
+**It tells you; it never installs.** Nothing is downloaded — the link goes to
+the release page (notes, and the Windows zip), and you update the way you
+always have: [Updating](#updating). Operators who are not admins never see
+the banner, since only an admin can act on it.
+
+**What it sends.** One `GET` to
+`api.github.com/repos/vu2cpl/dxca/releases/latest` with a
+`User-Agent: DXCA/<version>` header — no token, no account, nothing about
+your station. The first look is about 30 seconds after start, then at most
+once every 24 hours; the time of the last attempt is kept in the database, so
+restarting the service does not ask again. GitHub's `latest` never returns a
+draft or a pre-release.
+
+**When it cannot ask, it says nothing.** Offline, GitHub's rate limit used up
+(60 unauthenticated requests an hour, shared by every machine behind your
+router), or an answer that is not a release: no banner, no log line, and the
+next try is a day later. The last answer that did arrive is kept, so a
+notice that is still true does not disappear on a bad night.
+
+**Settings › Server › Reference data** shows the whole state on the Server
+card: what is running, the latest release and its notes, when it last asked,
+why the last attempt failed if it did, and **Check now**, which asks
+immediately and does report a failure. **Skip this version** hides the banner
+for that one release — the next one brings it back — and **Show again** on
+the card undoes it. After you upgrade, the notice goes away by itself.
+
+To switch the automatic check off, add to `config/dxca.toml` and restart:
+
+```toml
+check_for_updates = false
+```
+
+Then nothing is ever requested unless an admin presses **Check now**, and no
+banner is shown. It is on when the key is absent, so existing installs get it
+with nothing to change.
+
+To see the banner without waiting for a release, start a scratch copy with
+`DXCA_UPDATE_TEST_VERSION=0.0.1`: it compares the latest release against that
+version instead of its own (the User-Agent still carries the real one).
+Unset, the variable does nothing.
 
 ### Accounts
 

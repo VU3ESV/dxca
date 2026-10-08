@@ -236,6 +236,9 @@ async fn main() {
     // Feed-health alerts. Silent unless an account sets a threshold, and
     // powerless if this host is what failed — see the module docs.
     dxca_server::health::spawn(users.clone(), pipeline_state.clone(), manager.clone());
+    // Once a day, a look at GitHub's latest release; a banner in the web UI
+    // and one log line when there is a newer one. Never downloads anything.
+    dxca_server::update::spawn(users.db.clone(), cfg.check_for_updates);
 
     let app_state = AppState {
         pipeline: pipeline_state,
