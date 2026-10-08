@@ -2,9 +2,10 @@
 *For continuation in a new Claude session*
 
 <details>
-<summary><b>Contents</b> — 99 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
+<summary><b>Contents</b> — 101 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
 
 - [What this is](#what-this-is)
+- [Session 2026-10-09 (later) — v2.22.2 released, on .109 and Windows](#session-2026-10-09-later--v2222-released-on-109-and-windows)
 - [Session 2026-10-09 — the release check stores only a success](#session-2026-10-09--the-release-check-stores-only-a-success)
 - [Session 2026-10-08 — DXCA says when a newer release is out](#session-2026-10-08--dxca-says-when-a-newer-release-is-out)
 - [Session 2026-10-03 — a locked-out admin can reset their own password](#session-2026-10-03--a-locked-out-admin-can-reset-their-own-password)
@@ -40,11 +41,12 @@
 - [The installs (2026-08-28; VU2OY added 2026-08-30; production moved to .109 2026-09-22)](#the-installs-2026-08-28-vu2oy-added-2026-08-30-production-moved-to-109-2026-09-22)
 - [Release convention (2026-08-28, standing)](#release-convention-2026-08-28-standing)
 - [Open items → next session](#open-items--next-session)
-  - [DONE (on main, unreleased): the GitHub release check (2026-10-08)](#done-on-main-unreleased-the-github-release-check-2026-10-08)
+  - [OPEN: v2.22.2 on the three remote Pis (2026-10-09)](#open-v2222-on-the-three-remote-pis-2026-10-09)
+  - [DONE in v2.22.2: the GitHub release check (2026-10-08)](#done-in-v2222-the-github-release-check-2026-10-08)
   - [OPEN: a green radio chip is the queue, not the radio (2026-09-25)](#open-a-green-radio-chip-is-the-queue-not-the-radio-2026-09-25)
-  - [DONE (merged, unreleased): every alert recorded for every channel — PR #8 (2026-09-25)](#done-merged-unreleased-every-alert-recorded-for-every-channel--pr-8-2026-09-25)
+  - [DONE in v2.22.2: every alert recorded for every channel — PR #8 (2026-09-25)](#done-in-v2222-every-alert-recorded-for-every-channel--pr-8-2026-09-25)
   - [OPEN: point the feeds at .109 (2026-09-22)](#open-point-the-feeds-at-109-2026-09-22)
-  - [OPEN: v2.22.1 on the Windows box (2026-09-22)](#open-v2221-on-the-windows-box-2026-09-22)
+  - [DONE in v2.22.2: the Windows box caught up (2026-09-22)](#done-in-v2222-the-windows-box-caught-up-2026-09-22)
   - [OPEN: the 1.x Swift app has the same KG4 fault (2026-09-22)](#open-the-1x-swift-app-has-the-same-kg4-fault-2026-09-22)
   - [DONE in v2.22.0: the destination source picker, all four tabs, on all five hosts (2026-09-21)](#done-in-v2220-the-destination-source-picker-all-four-tabs-on-all-five-hosts-2026-09-21)
   - [DONE in v2.22.0: source filter for FlexRadio and TCI (2026-09-21)](#done-in-v2220-source-filter-for-flexradio-and-tci-2026-09-21)
@@ -107,15 +109,18 @@
 </details>
 
 **Created:** 2026-08-26 · **Last updated:** 2026-10-09 · **Status:**
-**`main` is ahead of v2.22.1 with three unreleased changes, all shipping
-with the next release:** the GitHub release check — admins see a banner when
-a newer DXCA is out, one log line, never an install; only a successful check
-is stored, failures retry hourly, dev builds never check by themselves
-(*Sessions 2026-10-08 and 2026-10-09*);
-`dxca reset-password` for a locked-out admin (*Session 2026-10-03*); and
-VU3ESV's PR #8 — every alert is recorded for
-every channel it went to, and the Alerts table filters by column —
-squash-merged 2026-09-25, unreleased** (*Session 2026-09-25*). Previously:
+**v2.22.2 — DXCA says when a newer release is out. Tagged and released with
+the Windows zip, 2026-10-09 05:15 IST; running on .109 (the production
+container) and the Windows box `.170`.** The three remote Pis are still on
+2.22.1: their WireGuard tunnels were down, and bringing them up needs
+Manoj's `sudo wg-quick up` (open item). The release ships the GitHub release
+check — admins see a banner when a newer DXCA is out, one log line, never an
+install; only a successful check is stored, failures retry hourly, dev
+builds never check by themselves (*Sessions 2026-10-08 and 2026-10-09*);
+`dxca reset-password` for a locked-out admin (VU3ESV's PR #9, *Session
+2026-10-03*); and VU3ESV's PR #8 — every alert is recorded for every channel
+it went to, and the Alerts table filters by column (*Session 2026-09-25*).
+Deploy record in *Session 2026-10-09 (later)*. Previously:
 **Production moved off noderedpi4 into a Docker container on `ubersdr`
 (192.168.1.109), 2026-09-22, 11:09 IST.** noderedpi4's dxca is stopped and
 disabled, kept as the rollback. The decoders and the Mac's telnet client
@@ -714,10 +719,86 @@ and the web GUI's design system from the same repo's
 cutover. noderedpi4's install is stopped and disabled, kept as the
 rollback. The 1.x macOS app is the retained fallback (maintenance mode).
 
+## Session 2026-10-09 (later) — v2.22.2 released, on .109 and Windows
+
+Manoj, 2026-10-09: the next patch version, a GitHub release, installed
+everywhere — *"Everything, servers too"*.
+
+**The release.** `Cargo.toml` 2.22.1 → 2.22.2 (`Cargo.lock` follows;
+`web-ui/package.json` stays 2.1.1, as it has through every release — it has
+never tracked the app version). The two `db.rs` doc comments that named
+"2.23" for PR #8 now name 2.22.2. README: a `## Status` entry, and *Update
+check* and *Updating* say "v2.22.2" where they said "the release after
+v2.22.1". `just gate` green: fmt, clippy `-D warnings`, 331 tests (5
+ignored), web build. Release commit `d2498a5` and annotated tag `v2.22.2`,
+both pushed. `deploy/win-bundle.sh` → `dxca-2.22.2-windows-x64.zip`
+(5,237,494 bytes, sha256 `fa5d6b263b0b0784fdd2df95836bf734029c470c505e7d98c16c7bef408e8d34`),
+with the obfuscated ClubLog key confirmed present in the exe and no
+placeholder page. `gh release create --latest` with notes covering
+everything since v2.22.1: the update check (what it asks, when, how to
+switch it off), #8, #9, the Docker route and pi-deploy's asked-for host,
+with VU3ESV credited for #8 and #9. The asset was downloaded back: its
+sha256 equals the local zip's and GitHub's digest. v2.22.1 shipped only the
+Windows zip and no checksum file, so this release does the same.
+
+**The deploy, one host at a time:**
+
+- **.109 (`ubersdr`, the production container).** Before: 2.22.1, up 6 h on
+  `dxca:2.22.1`, 7/10 nodes Live — KST2Mac refusing (attempt 72), and
+  `Meridian` and `Uber Merdn` reading "Reconnecting: stopped".
+  `data/dxca.db` copied to `dxca.db.pre-v2.22.2` (md5 equal; no WAL file).
+  `deploy/docker-deploy.sh`, 05:15:48–05:17:21 IST: smoke test reported
+  2.22.2, and the running container came back on `dxca:2.22.2`. After:
+  **2.22.2**, web UI 200, **7/8 Live**, telnet client back (1), cty 402, FCC
+  816,280, IOTA 1,178, LoTW 236,286, one user, no setup card. The node count
+  dropped from 10 to 8 because `Meridian` and `Uber Merdn` had been removed
+  from `config/dxca.toml` at 05:06:59, before the deploy (a UI save — the
+  old process still listed them as stopped). KST2Mac, the Mac at
+  `192.168.10.226:7373`, refused before and after. Config md5 unchanged
+  (`3a739c89232a`). Log: the start line and `flex 192.168.1.148:4992:
+  connected`, no panic, no error. `alerts_sent.channels` was added on first
+  open. **The update check ran 36 s after start and succeeded:**
+  `update_last_success_unix`, the v2.22.2 record and its notes stored;
+  `/api/status` carries `update: null`, since 2.22.2 is current.
+  **Rollback:** `dxca:2.22.1` is still tagged on the host — `sudo docker
+  stop dxca && sudo docker rm dxca`, the `docker create` line from
+  `docker-deploy.sh` with `dxca:2.22.1`, then `sudo docker start dxca`.
+  v2.22.1 runs on the migrated database (its `alerts_sent` INSERT names its
+  columns and `channels` has a default); `dxca.db.pre-v2.22.2` is there if
+  the database has to go back too.
+- **Windows `.170`.** Before: 2.22.0 (the open item since 09-22), 2/2 Live.
+  No database backup: a `copy` of `data\dxca.db` gets a sharing violation
+  while `dxca.exe` runs, and that box holds only test accounts with Telegram
+  unset, behind an additive migration. `deploy/win-deploy.sh`,
+  05:18:18–05:18:32 IST — not blocked this time. After: **2.22.2**, 2/2
+  Live, a clean start line in `run.log`, cty 402, `fcc_calls: 0` (the
+  expected not-shipped state). Rollback: `C:\DXCA\dxca.exe.bak` is the
+  2.22.0 exe.
+- **adersh `.151`, vu2wj `.201`, vu2oy `192.168.220.51`: skipped, still
+  2.22.1.** No tunnel was up — all three addresses routed via `en0` to the
+  default gateway, no ping, no `/api/status` — and `sudo wg-quick up` needs
+  Manoj's password. Open item.
+- **noderedpi4: not deployed, on purpose.** Its dxca is the stopped,
+  disabled rollback for .109, and `pi-deploy.sh` would re-enable it as a
+  second sender.
+- **This Mac's launchd agent: not deployed, on purpose.** `com.vu2cpl.dxca`
+  is still disabled (since 2026-09-13) and was left so. No
+  `target/release/dxca` was built in this clone — every build went to a
+  cross-target directory — so the agent is not armed either.
+
+Worth keeping:
+
+- **A running Windows dxca locks its database.** `copy` and `certutil`
+  both get a sharing violation, so a backup there needs the task stopped,
+  and `win-deploy.sh` stops it only after its own build. Skipped here
+  because the migration is additive; a release with a destructive one
+  should stop the task, copy, then deploy.
+
 ## Session 2026-10-09 — the release check stores only a success
 
-**Unreleased — ships with the next release**, together with the check it
-revises (*Session 2026-10-08*). No version bump, no tag, on none of the hosts.
+**Shipped in v2.22.2 (2026-10-09)**, together with the check it revises
+(*Session 2026-10-08*) — see *Session 2026-10-09 (later)*. Written while it
+was unreleased.
 
 Manoj's decisions (2026-10-09), implemented as given:
 
@@ -805,8 +886,8 @@ a failure stores nothing and is retried an hour later, dev builds never check
 by themselves. The `meta` key list and the "Retrying a failed check within
 the day" rejection below are superseded.*
 
-**Unreleased — ships with the next release.** No version bump: `Cargo.toml`
-stays 2.22.1, no tag, and it runs on none of the five hosts.
+**Shipped in v2.22.2 (2026-10-09)** — see *Session 2026-10-09 (later)*.
+Written while it was unreleased, on 2.22.1.
 
 Manoj's spec, approved for all his apps: an in-app check against GitHub
 releases — no Sparkle, no extra servers — in every app's next release.
@@ -911,8 +992,8 @@ Worth keeping:
 
 ## Session 2026-10-03 — a locked-out admin can reset their own password
 
-**No version bump** — `Cargo.toml` stays 2.22.1, so there is no tag and this
-runs on none of the five hosts yet.
+**Shipped in v2.22.2 (2026-10-09)** — see *Session 2026-10-09 (later)*.
+Merged as VU3ESV's PR #9 on 2026-10-05, without a version bump.
 
 **The hole.** Found by walking into it: the admin on noderedpi4 could not log
 in, and there was no way back. Passwords change only through
@@ -971,9 +1052,10 @@ why it is the binary and not a protected endpoint.
 ## Session 2026-09-25 — alerts are recorded for every channel (PR #8)
 
 VU3ESV's PR #8, reviewed against main at v2.22.1 and squash-merged together
-with this entry and the README's *Alert history* rewrite. **No version bump**
-— `Cargo.toml` is still 2.22.1, so there is no tag and it runs on none of the
-five hosts. The code comments already name 2.23 as where it lands.
+with this entry and the README's *Alert history* rewrite. No version bump
+at the time; **shipped in v2.22.2 (2026-10-09)** — see *Session 2026-10-09
+(later)*. The code comments that named 2.23 as where it would land were
+corrected to 2.22.2 in the release commit.
 
 **The bug.** The My Alerts row was built inside `fan_out`'s Telegram branch,
 after `if !wants_telegram { continue; }`, so an account alerting to a radio
@@ -2345,11 +2427,25 @@ Status section led with v2.20.4 for eighteen days (backfilled 2026-09-21).
 
 ## Open items → next session
 
-### DONE (on main, unreleased): the GitHub release check (2026-10-08)
+### OPEN: v2.22.2 on the three remote Pis (2026-10-09)
 
-**Ships with the next release.** Put the version on this heading when it
-does, and give it a README `## Status` entry (the README section is *Update
-check*). Nothing to do on any host: the switch is on when the key is absent,
+v2.22.2 is on .109 and the Windows box. **adersh `192.168.1.151`, vu2wj
+`192.168.1.201` and vu2oy `192.168.220.51` are still on 2.22.1**: on
+2026-10-09 none of the three tunnels was up (each address routed via `en0`
+to the default gateway, no ping, no `/api/status`), and `sudo wg-quick up`
+needs Manoj's password. Once he has brought them up — check `sudo wg show`
+for a recent handshake, not just the route — the drill per box is the
+09-22 one: ping, `cp -p data/dxca.db data/dxca.db.pre-v2.22.2` with md5
+equal, the outgoing binary kept as `dxca.rollback-v2.22.1`, then
+`deploy/pi-deploy.sh --no-seed <user>@<ip>` from a checkout of `v2.22.2`
+(or `main`, while it carries only docs since the tag), and verify version, nodes Live, config md5 unchanged, journal clean. Ask
+before assuming vu2wj is on.
+
+### DONE in v2.22.2: the GitHub release check (2026-10-08)
+
+**Shipped in v2.22.2 (2026-10-09)**, with a README `## Status` entry (the
+README section is *Update check*). On .109 its first check ran 36 s after
+the restart and succeeded. Nothing to do on any host: the switch is on when the key is absent,
 and the four `meta` keys appear on the first successful check (failures store
 nothing — revised 2026-10-09). An install shows a banner
 only once a release newer than the one it runs is published, so the first
@@ -2365,12 +2461,12 @@ its backlog fills. Making it honest needs the Flex and TCI clients to report
 link state back into the alert path, which is a larger change. The README's
 *Alert history* tells the operator this in the meantime.
 
-### DONE (merged, unreleased): every alert recorded for every channel — PR #8 (2026-09-25)
+### DONE in v2.22.2: every alert recorded for every channel — PR #8 (2026-09-25)
 
-Squash-merged to `main` on 2026-09-25 with no version bump, so no tag and
-no release. **Put the version on this heading when it ships.** The new
-`alerts_sent.channels` column migrates itself on first open; nothing to do
-by hand on any host. See *Session 2026-09-25*.
+Squash-merged to `main` on 2026-09-25 with no version bump; **shipped in
+v2.22.2 (2026-10-09).** The new `alerts_sent.channels` column migrates
+itself on first open (confirmed on .109); nothing to do by hand on any
+host. See *Session 2026-09-25*.
 
 ### OPEN: point the feeds at .109 (2026-09-22)
 
@@ -2389,12 +2485,13 @@ sample. Wherever they run, the same change applies before their next
 session. `udp_sent` and the per-source counts on `/api/status` show each
 feed as it arrives.
 
-### OPEN: v2.22.1 on the Windows box (2026-09-22)
+### DONE in v2.22.2: the Windows box caught up (2026-09-22)
 
-On all four Pis. **Windows `.170` is still on 2.22.0**, and so still sends
-false Guantanamo alerts for `KG4` 2×3 spots. Claude Code's auto-mode
-permission check blocked `deploy/win-deploy.sh`, so it was not run. Either
-Manoj runs it himself, or he allows it and a session runs it.
+**Resolved 2026-10-09:** `deploy/win-deploy.sh` ran this time and `.170`
+went from 2.22.0 straight to **2.22.2**, so it no longer sends false
+Guantanamo alerts. See *Session 2026-10-09 (later)*. The original entry:
+Windows `.170` was left on 2.22.0 when v2.22.1 went to the four Pis, because
+Claude Code's auto-mode permission check blocked `deploy/win-deploy.sh`.
 
 ### OPEN: the 1.x Swift app has the same KG4 fault (2026-09-22)
 
