@@ -1586,23 +1586,36 @@ the banner, since only an admin can act on it.
 **What it sends.** One `GET` to
 `api.github.com/repos/vu2cpl/dxca/releases/latest` with a
 `User-Agent: DXCA/<version>` header — no token, no account, nothing about
-your station. The first look is about 30 seconds after start, then at most
-once every 24 hours; the time of the last attempt is kept in the database, so
-restarting the service does not ask again. GitHub's `latest` never returns a
-draft or a pre-release.
+your station. GitHub's `latest` never returns a draft or a pre-release.
 
-**When it cannot ask, it says nothing.** Offline, GitHub's rate limit used up
-(60 unauthenticated requests an hour, shared by every machine behind your
-router), or an answer that is not a release: no banner, no log line, and the
-next try is a day later. The last answer that did arrive is kept, so a
-notice that is still true does not disappear on a bad night.
+**When it asks.** The first look is about 30 seconds after start, then one
+every hour. A look asks GitHub only when the last *successful* check is 24
+hours old (or there has never been one), and not within an hour of an
+automatic attempt that failed. A check succeeds when GitHub answers with a
+release — newer than yours or not — and only then is anything written down:
+the release and the time. So restarting the service within the day does not
+ask again, and a check that failed is simply tried again.
+
+**When it cannot ask, it says nothing.** Offline, a timeout, GitHub's rate
+limit used up (60 unauthenticated requests an hour, shared by every machine
+behind your router), any other error, or an answer that is not a release: no
+banner, no log line, nothing stored — the next try is an hour later, or about
+30 seconds after the next start, whichever comes first. The last answer that
+did arrive is kept, so a notice that is still true does not disappear on a
+bad night.
+
+**Development builds never check by themselves.** When the running version
+has "dev" in it (`2.23.0-dev`, any case), there is no automatic check at all;
+**Check now** still works.
 
 **Settings › Server › Reference data** shows the whole state on the Server
-card: what is running, the latest release and its notes, when it last asked,
-why the last attempt failed if it did, and **Check now**, which asks
-immediately and does report a failure. **Skip this version** hides the banner
-for that one release — the next one brings it back — and **Show again** on
-the card undoes it. After you upgrade, the notice goes away by itself.
+card: what is running, the latest release and its notes, when GitHub last
+answered, why the last attempt failed if it did (since the service started —
+a failure is never stored), and **Check now**, which asks immediately and
+does report a failure; a failed Check now does not put the next automatic
+check off. **Skip this version** hides the banner for that one release — the
+next one brings it back — and **Show again** on the card undoes it. After you
+upgrade, the notice goes away by itself.
 
 To switch the automatic check off, add to `config/dxca.toml` and restart:
 
@@ -1616,8 +1629,9 @@ with nothing to change.
 
 To see the banner without waiting for a release, start a scratch copy with
 `DXCA_UPDATE_TEST_VERSION=0.0.1`: it compares the latest release against that
-version instead of its own (the User-Agent still carries the real one).
-Unset, the variable does nothing.
+version instead of its own, and decides "development build" on it too, so it
+checks automatically even on a `-dev` build (the User-Agent still carries the
+real version). Unset, the variable does nothing.
 
 ### Accounts
 

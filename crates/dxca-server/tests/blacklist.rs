@@ -113,6 +113,8 @@ async fn blocked_calls_never_reach_the_ring() {
     let state = AppState {
         pipeline: pipeline_state,
         nodes: Arc::new(NodeManager::new()),
+        // Before `users` is moved into the struct.
+        update: Arc::new(dxca_server::update::Checker::new(users.db.clone())),
         users,
         config: Arc::new(Mutex::new(cfg.clone())),
         config_path: data_dir.join("dxca.toml"),

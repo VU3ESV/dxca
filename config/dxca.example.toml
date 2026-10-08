@@ -66,7 +66,9 @@ fcc_refresh_days = 30
 # api.github.com/repos/vu2cpl/dxca/releases/latest, no token, nothing about
 # this install but its version in the User-Agent — and, when there is one,
 # show a banner to admins in the web UI and log one line. Nothing is ever
-# downloaded or installed. A failed check (offline, rate limited) is silent.
+# downloaded or installed. A failed check (offline, rate limited) is silent,
+# stores nothing, and is tried again an hour later. A development build
+# (a version containing "dev") never checks by itself.
 # Shown commented because true is the default: a file that never names the
 # key also still starts the releases before this one (they refuse keys they
 # do not know), which is what makes rolling back safe. Uncomment and set

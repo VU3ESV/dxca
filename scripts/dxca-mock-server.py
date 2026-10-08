@@ -170,8 +170,10 @@ ROUTES = {
         {"id": 2, "callsign": "VU3ESV", "display_name": "Vinod", "role": "user"}]},
     "/api/blacklist": lambda: {"calls": ["R1ABC", "N0CALL"]},
     "/api/update": lambda: {
-        "enabled": True, "current": "2.12.0-dev", "newer": True, "skipped": "",
-        "last_check_unix": NOW - 5400, "last_error": "",
+        # A "-dev" version, as in STATUS: no automatic check (Check now only).
+        "enabled": True, "automatic": False, "current": "2.12.0-dev", "newer": True,
+        "skipped": "", "last_success_unix": NOW - 5400, "last_error": "",
+        "last_error_unix": 0,
         "latest": {"tag": "v2.99.0", "version": "2.99.0", "name": "v2.99.0 — mock release",
                    "url": "https://github.com/vu2cpl/dxca/releases",
                    "notes": "A mock release.\n\n## What changed\n\n- one thing\n- another"}},

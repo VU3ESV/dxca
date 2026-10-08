@@ -68,8 +68,18 @@ impl Release {
     }
 }
 
+/// How long one check may take, connect to last byte. The server passes
+/// this; its tests pass a fraction of a second, so the timeout case is
+/// exercised without a ten-second test.
+pub const TIMEOUT: Duration = Duration::from_secs(10);
+
 /// Fetch the latest release. `version` goes into the User-Agent, which
 /// GitHub requires and which names the caller honestly in their logs.
+///
+/// `Ok` means exactly one thing: HTTP 200 and a JSON record with a
+/// `tag_name` — whether or not that release is newer. Everything else
+/// (offline, timeout, any other status, a body that is not a release) is an
+/// `Err`, and the server records nothing durable for it (Manoj, 2026-10-09).
 ///
 /// Exactly two headers and no credentials: the request carries nothing about
 /// the install it comes from beyond the version it is running.
@@ -77,9 +87,9 @@ impl Release {
 // clippy::result_large_err: the `ureq::Error` is turned into a String in the
 // same expression, as in telegram.rs — it never leaves this function.
 #[allow(clippy::result_large_err)]
-pub fn fetch_latest(url: &str, version: &str) -> Result<Release, String> {
+pub fn fetch_latest(url: &str, version: &str, timeout: Duration) -> Result<Release, String> {
     let resp = ureq::get(url)
-        .timeout(Duration::from_secs(10))
+        .timeout(timeout)
         .set("Accept", "application/vnd.github+json")
         .set("User-Agent", &format!("DXCA/{version}"))
         .call()
@@ -103,6 +113,13 @@ pub fn fetch_latest(url: &str, version: &str) -> Result<Release, String> {
             ureq::Error::Status(code, _) => format!("GitHub answered HTTP {code}"),
             other => format!("GitHub: {other}"),
         })?;
+    // ureq hands back every 2xx (and follows redirects — a renamed repo
+    // answers 301 — before getting here). GitHub's answer to this request is
+    // 200; a 203 from a caching proxy or a 204 is not GitHub's record, and
+    // counting it as a success would hold the next check off for a day.
+    if resp.status() != 200 {
+        return Err(format!("GitHub answered HTTP {}", resp.status()));
+    }
     // The record is a few KB; a megabyte is far past any real one and keeps
     // a misbehaving proxy from feeding the parser without end.
     let mut text = String::new();
@@ -307,7 +324,7 @@ mod tests {
     #[test]
     #[ignore = "network: reads the real GitHub API"]
     fn live_latest_release_is_read() {
-        let r = fetch_latest(LATEST_URL, env!("CARGO_PKG_VERSION")).unwrap();
+        let r = fetch_latest(LATEST_URL, env!("CARGO_PKG_VERSION"), TIMEOUT).unwrap();
         println!("latest: {} | {} | {}", r.tag, r.name, r.url);
         assert!(!version_key(&r.tag).is_empty(), "{}", r.tag);
         assert!(

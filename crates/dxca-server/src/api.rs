@@ -30,6 +30,9 @@ pub struct AppState {
     pub config_path: PathBuf,
     /// Pipeline input — hot-applied sources/nodes feed into it.
     pub input_tx: mpsc::Sender<PipelineInput>,
+    /// The release check, shared with its loop: the Server card reads why the
+    /// last attempt failed from here, since a failure is never stored.
+    pub update: Arc<crate::update::Checker>,
 }
 
 pub fn build_router(state: AppState) -> Router {
@@ -1299,21 +1302,23 @@ async fn get_update(State(app): State<AppState>, headers: HeaderMap) -> Response
         return resp;
     }
     let enabled = app.config.lock().unwrap().check_for_updates;
-    Json(crate::update::detail_json(&app.users.db, enabled)).into_response()
+    Json(app.update.detail_json(enabled)).into_response()
 }
 
 /// *Check now*. Works with the automatic check switched off — a person
 /// pressing the button is the one case that switch does not speak for — and,
-/// unlike the daily loop, reports a failure, because they asked.
+/// unlike the daily loop, reports a failure, because they asked. A failure
+/// here stores nothing either, so it does not put the next automatic check
+/// off — nor does it start the loop's hour of back-off.
 async fn check_update(State(app): State<AppState>, headers: HeaderMap) -> Response {
     if let Err(resp) = require_admin(&app, &headers) {
         return resp;
     }
-    let db = app.users.db.clone();
-    match tokio::task::spawn_blocking(move || crate::update::check(&db)).await {
+    let checker = app.update.clone();
+    match tokio::task::spawn_blocking(move || checker.check()).await {
         Ok(Ok(_)) => {
             let enabled = app.config.lock().unwrap().check_for_updates;
-            Json(crate::update::detail_json(&app.users.db, enabled)).into_response()
+            Json(app.update.detail_json(enabled)).into_response()
         }
         Ok(Err(e)) => err(StatusCode::BAD_GATEWAY, e),
         Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, format!("join: {e}")),
@@ -1342,7 +1347,7 @@ async fn skip_update(
         return err(StatusCode::INTERNAL_SERVER_ERROR, e);
     }
     let enabled = app.config.lock().unwrap().check_for_updates;
-    Json(crate::update::detail_json(&app.users.db, enabled)).into_response()
+    Json(app.update.detail_json(enabled)).into_response()
 }
 
 // --- ClubLog refresh -----------------------------------------------------

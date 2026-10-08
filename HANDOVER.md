@@ -2,9 +2,10 @@
 *For continuation in a new Claude session*
 
 <details>
-<summary><b>Contents</b> — 98 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
+<summary><b>Contents</b> — 99 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
 
 - [What this is](#what-this-is)
+- [Session 2026-10-09 — the release check stores only a success](#session-2026-10-09--the-release-check-stores-only-a-success)
 - [Session 2026-10-08 — DXCA says when a newer release is out](#session-2026-10-08--dxca-says-when-a-newer-release-is-out)
 - [Session 2026-10-03 — a locked-out admin can reset their own password](#session-2026-10-03--a-locked-out-admin-can-reset-their-own-password)
 - [Session 2026-09-25 — alerts are recorded for every channel (PR #8)](#session-2026-09-25--alerts-are-recorded-for-every-channel-pr-8)
@@ -105,10 +106,12 @@
 
 </details>
 
-**Created:** 2026-08-26 · **Last updated:** 2026-10-08 · **Status:**
+**Created:** 2026-08-26 · **Last updated:** 2026-10-09 · **Status:**
 **`main` is ahead of v2.22.1 with three unreleased changes, all shipping
 with the next release:** the GitHub release check — admins see a banner when
-a newer DXCA is out, one log line, never an install (*Session 2026-10-08*);
+a newer DXCA is out, one log line, never an install; only a successful check
+is stored, failures retry hourly, dev builds never check by themselves
+(*Sessions 2026-10-08 and 2026-10-09*);
 `dxca reset-password` for a locked-out admin (*Session 2026-10-03*); and
 VU3ESV's PR #8 — every alert is recorded for
 every channel it went to, and the Alerts table filters by column —
@@ -711,7 +714,96 @@ and the web GUI's design system from the same repo's
 cutover. noderedpi4's install is stopped and disabled, kept as the
 rollback. The 1.x macOS app is the retained fallback (maintenance mode).
 
+## Session 2026-10-09 — the release check stores only a success
+
+**Unreleased — ships with the next release**, together with the check it
+revises (*Session 2026-10-08*). No version bump, no tag, on none of the hosts.
+
+Manoj's decisions (2026-10-09), implemented as given:
+
+1. **Only a successful check is saved.** Success = HTTP 200 and a JSON record
+   with a `tag_name`, newer or not. A failure — offline, timeout, any HTTP
+   error including the rate-limit 403, a 2xx that is not 200, bad JSON, no
+   tag — writes **nothing** to the database, so the next start or the next
+   hourly look tries again. After a failed *automatic* attempt the loop waits
+   at least an hour, in memory only (monotonic clock: a Pi's wall clock jumps
+   at the first NTP sync). *Check now* still reports failures and, failing,
+   moves nothing either — so it does not put the automatic check off, and it
+   does not start the loop's hour (the decision names automatic attempts).
+2. **The schedule is one pure function**, `auto_check_due(enabled, version,
+   now, last_success, since_failure)`: setting on, not a dev build, 24 h since
+   the last *successful* check (wall clock, with the 10-08 rule that a stamp a
+   day or more in the future counts as due), an hour since the last failed
+   automatic attempt. The loop evaluates it hourly, first 30 s after start.
+3. **Development builds never check by themselves**: a version containing
+   "dev" in any case → `spawn` returns, no loop. *Check now* works.
+   `DXCA_UPDATE_TEST_VERSION` replaces the version this is decided on, as it
+   does the comparison — `=0.0.1` on a `-dev` build does check.
+
+**What changed:**
+
+- `dxca-connect/src/update.rs` — `fetch_latest(url, version, timeout)` with a
+  `TIMEOUT` const (10 s), so the tests exercise a real timeout in 400 ms; a
+  non-200 status is an `Err` (ureq passes every 2xx through).
+- `dxca-server/src/update.rs` — a `Checker` (the `Db` plus the last failure,
+  in memory) held in `AppState::update` and shared with the loop. `meta` keys
+  are now four: **`update_last_success_unix`** (replaces
+  `update_last_check_unix`, renamed because its meaning changed — the old one
+  never ran on an install), `update_latest_release`, `update_latest_notes`,
+  `update_skipped_tag`. `update_last_error` is gone: the reason is memory.
+  The record is written before the time, so a crash between the two costs one
+  more check, never a day. `auto_look` is one step of the loop, synchronous,
+  so the back-off is tested without a runtime.
+- `GET /api/update` — `last_check_unix` → `last_success_unix`; new
+  `automatic` (false when off or a dev build) and `last_error_unix`;
+  `last_error` comes from memory.
+- Server card — *Checked daily* / *Automatic check off* / *Development build —
+  no automatic check*, then *last answer Nh ago*; a failure reads *The last
+  attempt, Nm ago, failed: …*. `scripts/dxca-mock-server.py` follows (its
+  `2.12.0-dev` now reports `automatic: false`).
+- The five integration tests that build an `AppState` pass `update`.
+
+**Why the reversal.** The 10-08 version stamped each *attempt* before the
+request (the `refresh.rs` arrangement), so one bad minute — the rate limit
+spent by something else on the LAN, which is exactly what happened on 10-08 —
+meant a day with no answer. `refresh.rs` keeps its attempt stamp: it moves
+megabytes per attempt, this moves one small record. Accepted with it: a
+service that crash-loops but lives past 30 s asks once per start.
+
+**Verified.** `just gate` green: fmt, clippy `-D warnings`, 331 tests (326
+before; the server module's 6 became 11), web build. Each failure class has a
+test that leaves every `update_*` row byte-identical: refused (port 1),
+timeout (a server that never answers), 403, rate-limit 403, 404, 500, 203,
+not JSON, no `tag_name`. Release build in a scratch `CARGO_TARGET_DIR`, 0
+warnings — this clone has no `target/release/dxca` (the launchd trap). A
+scratch instance (own config and data dir, ports 17580/17575, every refresh
+0, no sources or nodes; stopped after):
+
+- `DXCA_UPDATE_TEST_VERSION=2.23.0-dev`, 40 s: no `update_*` rows, no request.
+- `DXCA_UPDATE_TEST_VERSION=0.0.1`, 45 s: one live request;
+  `update_last_success_unix`, the record and the notes stored; the log line
+  `dxca: DXCA 2.22.1 is available (you have 0.0.1) — …`; neither old key.
+- The Server card against the mock server: the dev-build hint, and (scratch
+  copy of the mock) the failure line.
+
+One live GitHub request all session; the ignored `live_` test was not run.
+
+**Rejected:**
+
+- *Keeping `update_last_error` in the database.* "A failed check writes
+  nothing persistent." The reason is memory and goes with a restart — whose
+  first look, 30 s in, asks again anyway.
+- *A failed Check now starting the hour.* Not in the decision; the button's
+  failure moves nothing.
+- *Any 2xx as a success.* The definition is HTTP 200.
+- *A log line at start on a dev build.* The card says it; not asked for.
+
 ## Session 2026-10-08 — DXCA says when a newer release is out
+
+*Revised 2026-10-09 (the session above): only a successful check is stored,
+a failure stores nothing and is retried an hour later, dev builds never check
+by themselves. The `meta` key list and the "Retrying a failed check within
+the day" rejection below are superseded.*
 
 **Unreleased — ships with the next release.** No version bump: `Cargo.toml`
 stays 2.22.1, no tag, and it runs on none of the five hosts.
@@ -2258,10 +2350,11 @@ Status section led with v2.20.4 for eighteen days (backfilled 2026-09-21).
 **Ships with the next release.** Put the version on this heading when it
 does, and give it a README `## Status` entry (the README section is *Update
 check*). Nothing to do on any host: the switch is on when the key is absent,
-and the five `meta` keys appear on first check. An install shows a banner
+and the four `meta` keys appear on the first successful check (failures store
+nothing — revised 2026-10-09). An install shows a banner
 only once a release newer than the one it runs is published, so the first
 notice anyone sees will be for the release *after* the one that ships this.
-See *Session 2026-10-08*.
+See *Session 2026-10-08* and *Session 2026-10-09*.
 
 ### OPEN: a green radio chip is the queue, not the radio (2026-09-25)
 

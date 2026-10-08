@@ -50,7 +50,7 @@
     if (r.status === 200) upd = r.json;
     else {
       updError = r.json?.error ?? `HTTP ${r.status}`;
-      await loadUpdate(); // the stamp and the stored error moved anyway
+      await loadUpdate(); // the card's own line says why, and when
     }
     await refreshStatus(); // so the banner follows without waiting for a poll
   }
@@ -149,12 +149,20 @@
           {:else if upd.latest}
             Up to date — v{upd.latest.version} is the latest release.
           {:else}
-            Not checked yet.
+            No answer from GitHub yet.
           {/if}
         </span>
+        <!-- Only a successful check is stored, so "last answer" is the time
+             GitHub last replied; a failed attempt has its own line below. -->
         <span class="hint">
-          {upd.enabled ? 'Checked daily' : 'Automatic check off'}
-          {#if upd.last_check_unix}· last {ago(upd.last_check_unix)} ago{/if}
+          {#if !upd.enabled}
+            Automatic check off
+          {:else if !upd.automatic}
+            Development build — no automatic check
+          {:else}
+            Checked daily
+          {/if}
+          {#if upd.last_success_unix}· last answer {ago(upd.last_success_unix)} ago{/if}
         </span>
         <button onclick={checkNow} disabled={checking}>
           {checking ? 'Checking…' : 'Check now'}
@@ -163,7 +171,7 @@
       {#if updError}
         <p class="err">{updError}</p>
       {:else if upd.last_error}
-        <p class="hint">The last check failed: {upd.last_error}</p>
+        <p class="hint">The last attempt, {ago(upd.last_error_unix)} ago, failed: {upd.last_error}</p>
       {/if}
       {#if upd.newer && upd.latest.notes}
         <details class="notes">
