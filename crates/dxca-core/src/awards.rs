@@ -1,10 +1,14 @@
 //! Award reference data beyond DXCC — the pure halves of `docs/AWARDS.md`
 //! phases 2–4: IOTA reference extraction, the WAS state vocabulary, and the
-//! call→state lookup table distilled from the FCC amateur database.
+//! call→state lookup table distilled from the FCC amateur database, and the
+//! built-in grid→state table that overrides it when a spot carries a grid.
 //!
 //! Downloading and distilling live in `dxca-connect` (this crate does no
 //! I/O); what belongs here is everything a classifier or a matrix build
 //! needs at spot time.
+
+use std::collections::HashMap;
+use std::sync::OnceLock;
 
 /// The fifty WAS states, postal codes, alphabetical. **DC is not here** —
 /// ARRL WAS rule 6 counts District of Columbia contacts for Maryland, which
@@ -200,6 +204,56 @@ fn line_call(data: &str, off: u32) -> &str {
     &rest[..end]
 }
 
+/// Grid square -> the US state(s) it covers, largest share of its US land
+/// first — `EM78 KY IN OH`. Built from US Census state boundaries by
+/// `scripts/build_us_grid_states.py` (the same table JTDX-VU's Show US State
+/// uses); a state holding under 2 % of the square's US land is left out.
+const US_GRID_STATES: &str = include_str!("../data/us_grid_states.txt");
+
+fn grid_state_map() -> &'static HashMap<&'static str, Vec<&'static str>> {
+    static MAP: OnceLock<HashMap<&'static str, Vec<&'static str>>> = OnceLock::new();
+    MAP.get_or_init(|| {
+        US_GRID_STATES
+            .lines()
+            .filter(|l| !l.starts_with('#'))
+            .filter_map(|l| {
+                let mut f = l.split_whitespace();
+                let g = f.next()?;
+                let states: Vec<&str> = f.collect();
+                (!states.is_empty()).then_some((g, states))
+            })
+            .collect()
+    })
+}
+
+/// The states a 4- or 6-character locator's square covers; empty outside
+/// the US.
+pub fn grid_states(locator: &str) -> &'static [&'static str] {
+    crate::grid::grid4(locator)
+        .and_then(|g| grid_state_map().get(g.as_str()))
+        .map_or(&[], |v| v.as_slice())
+}
+
+/// The one state a spot can be credited with, from what the station sent
+/// (its grid) and what the FCC says (its licence address).
+///
+/// **The grid wins when it is unambiguous**, because it says where the
+/// station IS: `W1AW/7` sending DM42 is in Arizona, which
+/// [`StateTable::lookup`] rightly refuses to guess from the licence. A square
+/// over several states only narrows it down: the licence state is taken if
+/// it is one of them, and otherwise there is no answer. A New State there
+/// would be a coin toss, and a false New State is the loudest way to be
+/// wrong. No grid, or a grid outside the US, leaves the licence state
+/// exactly as before.
+pub fn resolve_state<'a>(grid: Option<&str>, licence: Option<&'a str>) -> Option<&'a str> {
+    let covered = grid.map_or(&[][..], grid_states);
+    match covered {
+        [] => licence,
+        [only] => Some(only),
+        several => licence.filter(|l| several.contains(l)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -303,5 +357,38 @@ mod tests {
         assert!(counts_for_was(110), "Hawaii is a WAS state");
         assert!(!counts_for_was(375), "Philippines");
         assert!(!counts_for_was(103), "Guam is not a WAS state");
+    }
+
+    /// A square inside one state answers with it even when the licence
+    /// says otherwise — W1AW/7 in DM42 is in Arizona. Regression guard for
+    /// the grid being ignored in favour of the FCC address.
+    #[test]
+    fn an_unambiguous_grid_beats_the_licence() {
+        assert_eq!(grid_states("DM42"), ["AZ"]);
+        assert_eq!(grid_states("dm42ab"), ["AZ"], "6-char and lowercase");
+        assert_eq!(resolve_state(Some("DM42"), Some("CT")), Some("AZ"));
+        assert_eq!(resolve_state(Some("DM42"), None), Some("AZ"));
+    }
+
+    /// EM78 covers KY, IN and OH: the licence picks among them, and a
+    /// licence outside them gives no state rather than a guess.
+    #[test]
+    fn a_multi_state_grid_only_narrows_the_licence() {
+        assert_eq!(grid_states("EM78"), ["KY", "IN", "OH"]);
+        assert_eq!(resolve_state(Some("EM78"), Some("OH")), Some("OH"));
+        assert_eq!(resolve_state(Some("EM78"), Some("CA")), None);
+        assert_eq!(resolve_state(Some("EM78"), None), None);
+    }
+
+    /// No grid, or one outside the US, must not change what the FCC table
+    /// gave before this existed.
+    #[test]
+    fn without_a_us_grid_the_licence_state_stands() {
+        assert_eq!(resolve_state(None, Some("TX")), Some("TX"));
+        assert_eq!(resolve_state(Some("MK83"), Some("TX")), Some("TX"));
+        assert_eq!(resolve_state(Some("RR73"), Some("TX")), Some("TX"));
+        assert!(grid_states("MK83").is_empty());
+        assert_eq!(grid_states("RO62"), ["AK"], "Aleutians west of 180");
+        assert_eq!(grid_states("BL11"), ["HI"]);
     }
 }

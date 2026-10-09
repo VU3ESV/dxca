@@ -1131,7 +1131,12 @@ What each level runs on, spot side:
   an FT8 CQ. Counts 4-character squares **per band, 50 MHz and up only**
   (6m, 2m, 1.25m, 70cm, 33cm, 23cm — the ARRL rule; `RR73` is always a
   sign-off, never a square).
-- **WAS (state)** — which US state the call is licensed in, looked up in
+- **WAS (state)** — where the station is, when its spot carries a grid
+  (an FT8 CQ, or a grid in a cluster comment): a grid square inside one state
+  gives that state, even for `W1AW/7`. A square over several states (EM78 is
+  KY, IN and OH) only accepts the licence state if it is one of them, and
+  otherwise gives no state rather than a guess. Without a grid it is the
+  state the call is licensed in, looked up in
   the FCC amateur database. An admin downloads that once under **Settings
   › Server › Reference data** (~200 MB, distilled to ~8 MB on the spot);
   until then the State levels stay quiet. **A station operating away from

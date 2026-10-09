@@ -598,9 +598,20 @@ impl UserService {
         // gathered only when this user's config could rank it — the FCC
         // lookup and the directory check are cheap, but a fleet of users
         // with the awards off should pay literally nothing.
-        let state = (config.alert_new_state || config.alert_unconf_state)
-            .then(|| self.state_of(&call))
+        // The grid the station sent decides first, the licence address
+        // second: see `awards::resolve_state` for why a square over several
+        // states only narrows the licence and never guesses. Looked up only
+        // when the state or the zone is wanted.
+        let want_state = config.alert_new_state || config.alert_unconf_state;
+        let want_zone = config.alert_new_zone || config.alert_unconf_zone || config.alert_marathon;
+        let spot_state = (want_state || want_zone)
+            .then(|| {
+                let licence = self.state_of(&call);
+                dxca_core::awards::resolve_state(spot.grid.as_deref(), licence.as_deref())
+                    .map(str::to_string)
+            })
             .flatten();
+        let state = want_state.then(|| spot_state.clone()).flatten();
         let iota = spot.iota.as_deref().filter(|r| {
             // Validated when a directory is loaded; passed through when
             // not — a missing download must not switch the award off.
@@ -614,10 +625,9 @@ impl UserService {
         // cty.xml has no US call-area records and would answer 5 for the
         // whole country. Everywhere else the resolver's prefix rules are
         // the better source.
-        let want_zone = config.alert_new_zone || config.alert_unconf_zone || config.alert_marathon;
         let zone = want_zone
             .then(|| {
-                self.state_of(&call)
+                spot_state
                     .as_deref()
                     .and_then(dxca_core::awards::us_zone)
                     .or_else(|| resolver.zone(&call))

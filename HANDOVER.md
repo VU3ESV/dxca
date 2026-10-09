@@ -2,9 +2,10 @@
 *For continuation in a new Claude session*
 
 <details>
-<summary><b>Contents</b> — 105 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
+<summary><b>Contents</b> — 106 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
 
 - [What this is](#what-this-is)
+- [Session 2026-10-10 — WAS uses the spot's grid before the licence address](#session-2026-10-10--was-uses-the-spots-grid-before-the-licence-address)
 - [Session 2026-10-09 (night) — relayed comments verbatim, decodes in Aggregator's shape](#session-2026-10-09-night--relayed-comments-verbatim-decodes-in-aggregators-shape)
 - [Session 2026-10-09 (evening) — alerts carry the DX's audio offset](#session-2026-10-09-evening--alerts-carry-the-dxs-audio-offset)
 - [Session 2026-10-09 (later) — v2.22.2 released, on .109 and Windows](#session-2026-10-09-later--v2222-released-on-109-and-windows)
@@ -734,6 +735,33 @@ and the web GUI's design system from the same repo's
 2026-09-22**, having run on noderedpi4 (192.168.1.169) from the 2026-08-27
 cutover. noderedpi4's install is stopped and disabled, kept as the
 rollback. The 1.x macOS app is the retained fallback (maintenance mode).
+
+## Session 2026-10-10 — WAS uses the spot's grid before the licence address
+
+Manoj, after JTDX-VU got Show US State (jtdx-vu `1782dc05`): *"can we use
+the grid in dxca"*. Until now a spot's state came only from the FCC
+licence address, although decoder and cluster spots often carry the DX's grid.
+
+- **`awards::resolve_state (grid, licence)`**: a square inside one state
+  gives that state, so `W1AW/7` in DM42 is AZ, a call `StateTable::lookup`
+  rightly refuses. A square over several states accepts the licence state only if it
+  is one of them, else none: a New State there would be a guess. No grid,
+  or a non-US grid, leaves the licence answer exactly as before.
+  `classify ()` uses it for the WAS axis **and** the US zone (zone came from
+  the FCC state). The lookup still runs only when state or zone alerts are on.
+- **The table**: `crates/dxca-core/data/us_grid_states.txt`, `include_str!`
+  (no I/O in core), parsed once into a `OnceLock` map. 750 squares from US
+  Census `cb_2023_us_state_500k`, states with at least 2 % of the square's US land,
+  largest first; AK incl. west of 180 (RO6x), HI; DC counted as MD. The
+  generator is `scripts/build_us_grid_states.py` (copied from jtdx-vu
+  `tools/`). It is a 4-char table: a 6-char grid is cut to its square, so
+  border squares stay ambiguous. A sub-square table for the 191 multi-state
+  squares is a possible refinement.
+- **Tests:** three in `awards.rs` (unambiguous grid beats the licence; a
+  multi-state grid only narrows it; no or non-US grid changes nothing,
+  incl. RR73, RO62, BL11). `just gate` green.
+- **Not deployed**: production on .109 runs the released container.
+  It ships with the next release.
 
 ## Session 2026-10-09 (night) — relayed comments verbatim, decodes in Aggregator's shape
 
