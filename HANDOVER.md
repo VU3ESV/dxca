@@ -849,8 +849,8 @@ then `start`; no schema change, so the database needs nothing.
 |---|---|---|---|---|
 | Windows .170 | 2.22.3 → **2.23.0** | 2/2 → 2/2 | no DB copy (locked while running; nothing to migrate); `C:\DXCA\dxca.exe.bak` is the 2.22.3 exe | 13:48 |
 | vu2oy `192.168.220.51` (bookworm, glibc 2.36) | 2.22.3 → **2.23.0** | 4/4 → 4/4 | `dxca.db.pre-v2.23.0`, md5 `88ae4518…` equal, no WAL; `/opt/dxca/dxca.rollback-v2.22.3` (md5 `8c2d945c…`) | 13:48 |
-| adersh `192.168.1.151` | **not reached** | — | — | — |
-| vu2wj `192.168.1.201` | **not reached** | — | — | — |
+| adersh `192.168.1.151` (trixie) | 2.22.3 → **2.23.0** | 5/5 → 5/5 | `dxca.db.pre-v2.23.0`, md5 `239be11d…` equal, no WAL; `/opt/dxca/dxca.rollback-v2.22.3` (md5 `8c2d945c…`) | 13:51 |
+| vu2wj `192.168.1.201` | **not reached, still on 2.22.3** | — | — | — |
 
 Windows: `deploy/win-deploy.sh`, 13:47:52–13:48:04, binary swapped, task
 restarted, dashboard serving, `fcc_calls: 0` as always there. vu2oy:
@@ -863,6 +863,19 @@ three `/32` routes were up (`utun8/9/10`) but `.151` and `.201` answered
 neither ping, `:7580` nor ssh in 10 s — the "a route is not a tunnel" case
 from 2026-09-22. `wg-quick down`/`up` needs Manoj's sudo, so those two wait
 on him; the memory and this table say so.
+
+**Tunnels bounced (Manoj, 13:50 IST: *"tunnels are up, deploy on the other
+two"*).** adersh answered at once — ping, `:7580`, ssh — and went through
+the same drill: `pi-deploy.sh --no-seed`, 13:51:20–13:51:38, journal `shut
+down cleanly` then the 2.23.0 start line naming its five nodes, no error
+or warning, `NRestarts=0`, the same aarch64 binary as vu2oy's (md5
+`0b7548e8…`, 8,487,328 bytes), config md5 unchanged (`2f8c037c…`), nothing
+seeded. **vu2wj did not come back:** route on `utun9` as before, 6 pings
+over 20 s all lost, ssh timed out, `:7580` silent — after the bounce. So
+either that tunnel has no handshake (`sudo wg show Shaji_vu2wj`, Manoj's
+to run) or the Pi is off, which the deploy memory warns is the ordinary
+state of a third-party box. It stays on v2.22.3; deploy it with the same
+drill when it answers a ping.
 
 ## Session 2026-10-09 (evening) — alerts carry the DX's audio offset
 
