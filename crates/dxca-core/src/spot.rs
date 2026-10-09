@@ -140,6 +140,27 @@ impl Spot {
         None
     }
 
+    /// The **DX station's audio offset** in Hz — where in the passband it is
+    /// transmitting, the number you click in the waterfall to answer it.
+    ///
+    /// A decoder reports it directly, as `delta_frequency_hz`. A cluster spot
+    /// arrives as a synthetic decode with that field at 0, so its offset can
+    /// only come from the spotter's comment ([`offset_from_comment`]). `None`
+    /// when neither says, never `Some(0)`: no FT8/FT4 signal sits at 0 Hz
+    /// audio, and a 0 would send the operator to the bottom of the passband.
+    ///
+    /// Display only. Never write a comment's offset back into
+    /// `delta_frequency_hz`: [`Spot::frequency_hz`] adds that field to the
+    /// dial, and a skimmer that already spots at dial + offset (14075.8 for
+    /// 14074 + 1794 Hz) would be counted twice, moving the spot's band, its
+    /// dedupe key and every radio mark.
+    pub fn dx_offset_hz(&self) -> Option<u32> {
+        match self.delta_frequency_hz {
+            0 => offset_from_comment(&self.comment),
+            hz => Some(hz),
+        }
+    }
+
     /// Dedupe key: CALL-BAND-MODE (the 60-second-window key used both for
     /// display collapse and rebroadcast dedupe in 1.x). None when no
     /// callsign can be extracted — such spots always pass.
@@ -178,6 +199,98 @@ pub fn grid_from_message(message: &str) -> Option<String> {
         ..blank_spot()
     };
     probe.dx_callsign().map(|_| last.to_ascii_uppercase())
+}
+
+/// The top of WSJT-X's passband. An offset above it is not an offset.
+const MAX_OFFSET_HZ: u32 = 5_000;
+
+/// The floor for an **unlabelled** offset. In the `-18 dB 6 FT8 2167` shape
+/// (RBN Aggregator's, VU2OY's node) the field between dB and the mode is
+/// the symbol rate in baud — `6` for FT8's 6.25, where a CW spot shows its
+/// WPM — not an offset, and this floor is what stops the dB-mode rule
+/// reading it as one. No skimmer offset in the 2026-10-09 sample was below
+/// 185 Hz.
+const MIN_UNLABELLED_OFFSET_HZ: u32 = 100;
+
+/// The DX station's audio offset from a cluster comment, in Hz.
+///
+/// Three shapes, all from the shack's own feed (2,000 spots on .109,
+/// 2026-10-09; 1,932 of the 1,936 FT8 cluster spots carried one):
+///
+/// - `FT8 1500Hz BL11`: labelled, attached or spaced (`1500 Hz`). The only
+///   form a human types. `kHz` is not `Hz`, so `QSX up 2 kHz` stays out.
+/// - `-15 dB 1032 FT8`: unlabelled, between the dB and the mode. That skimmer
+///   spots at dial + offset (14075.0 for 14074 + 1032 Hz), and every spot in
+///   the sample agreed with its frequency that way.
+/// - `-18 dB 6 FT8 2167`, `-13 dB 6 FT8 CQ KN34 1497`: unlabelled, last. That
+///   skimmer spots at the dial itself, so the comment is the only place the
+///   offset survives.
+///
+/// The unlabelled shapes are read only inside their exact frame, an SNR,
+/// `dB`, one field, then `FT8` or `FT4`. A bare number anywhere else could
+/// be a power, a serial number or a time, and RBN's `FT8 -5 dB CQ` puts the
+/// mode first, so it never enters the frame at all.
+pub fn offset_from_comment(comment: &str) -> Option<u32> {
+    let tokens: Vec<&str> = comment.split_whitespace().collect();
+    labelled_offset(&tokens).or_else(|| framed_offset(&tokens))
+}
+
+/// `1500Hz`, `+1500Hz` or `1500 Hz`.
+fn labelled_offset(tokens: &[&str]) -> Option<u32> {
+    let clean = |t: &str| t.trim_end_matches([',', ';', '.', ')']).to_string();
+    for (i, raw) in tokens.iter().enumerate() {
+        let t = clean(raw.trim_start_matches('+'));
+        let digits = t.len() - t.trim_start_matches(|c: char| c.is_ascii_digit()).len();
+        if digits == 0 {
+            continue;
+        }
+        let (num, unit) = t.split_at(digits);
+        // `1.5kHz` splits as `1` + `.5kHz`: not a bare `Hz`, so not ours.
+        let is_hz = if unit.is_empty() {
+            tokens
+                .get(i + 1)
+                .is_some_and(|next| clean(next).eq_ignore_ascii_case("hz"))
+        } else {
+            unit.eq_ignore_ascii_case("hz")
+        };
+        if !is_hz {
+            continue;
+        }
+        if let Some(hz) = num
+            .parse::<u32>()
+            .ok()
+            .filter(|hz| (1..=MAX_OFFSET_HZ).contains(hz))
+        {
+            return Some(hz);
+        }
+    }
+    None
+}
+
+/// The two skimmer shapes: `<snr> dB <n> FT8 …`, offset at `<n>` or last.
+fn framed_offset(tokens: &[&str]) -> Option<u32> {
+    let mode_at = tokens
+        .iter()
+        .position(|t| t.eq_ignore_ascii_case("FT8") || t.eq_ignore_ascii_case("FT4"))?;
+    let framed = mode_at >= 3
+        && tokens[mode_at - 2].eq_ignore_ascii_case("dB")
+        && tokens[mode_at - 3].parse::<i32>().is_ok();
+    if !framed {
+        return None;
+    }
+    let plausible = |t: &str| {
+        t.parse::<u32>()
+            .ok()
+            .filter(|hz| (MIN_UNLABELLED_OFFSET_HZ..=MAX_OFFSET_HZ).contains(hz))
+    };
+    let last = tokens.len() - 1;
+    plausible(tokens[mode_at - 1]).or_else(|| {
+        if last > mode_at {
+            plausible(tokens[last])
+        } else {
+            None
+        }
+    })
 }
 
 /// A structurally valid spot with nothing in it — the base for
@@ -329,6 +442,67 @@ mod tests {
         assert_eq!(s.duplicate_key().as_deref(), Some("P5DX-20M-FT8"));
         assert_eq!(spot("73").duplicate_key(), None);
         assert_eq!(s.frequency_hz(), 14_075_487);
+    }
+
+    /// Every shape the shack's feed carried on 2026-10-09, and the near
+    /// misses that must not be read as offsets. The values come from real
+    /// spots; the skimmer ones agree with their spot frequencies.
+    #[test]
+    fn offset_from_comment_table() {
+        let cases: &[(&str, Option<u32>)] = &[
+            // Labelled, typed by a human.
+            ("FT8 1500Hz BL11", Some(1500)),
+            ("FT8 1500 Hz BL11", Some(1500)),
+            ("FT8 +1500hz", Some(1500)),
+            ("ft8 tnx 850 HZ, 73", Some(850)),
+            // Skimmer at dial + offset: offset between dB and the mode.
+            ("-15 dB 1032 FT8", Some(1032)),
+            ("-16 dB 245 FT8", Some(245)),
+            ("-19 dB 1768 FT8 CQ KN34", Some(1768)),
+            ("3 dB 2302 FT4", Some(2302)),
+            // Skimmer at the dial: a single digit, then the offset last.
+            ("-18 dB 6 FT8 2167", Some(2167)),
+            ("-13 dB 6 FT8 635", Some(635)),
+            ("-13 dB 6 FT8 CQ KN34 1497", Some(1497)),
+            ("0 dB 6 FT8 2761", Some(2761)),
+            // Not offsets.
+            ("", None),
+            ("TNX/FT8 OI51", None),
+            ("FT8 USA250 NM", None),
+            ("QSX up 2 kHz", None),
+            ("FT8 1.5kHz up", None),
+            ("FT8 -5 dB CQ", None), // RBN: mode first, outside the frame
+            ("-13 dB 6 FT8 CQ KN34", None), // the single digit is not an offset
+            ("CW 23 dB 25 WPM CQ", None), // a CW skimmer's speed
+            ("-12 dB 9000 FT8", None), // above the passband
+            ("FT8 0Hz", None),
+        ];
+        for (comment, want) in cases {
+            assert_eq!(offset_from_comment(comment), *want, "{comment:?}");
+        }
+    }
+
+    /// The decoder's own reading wins; the comment is only for cluster
+    /// spots, which arrive with the field at 0.
+    #[test]
+    fn dx_offset_prefers_the_decoder_and_falls_back_to_the_comment() {
+        assert_eq!(spot("CQ K1JT FN20").dx_offset_hz(), Some(1487));
+
+        let cluster = Spot {
+            delta_frequency_hz: 0,
+            comment: "-11 dB 1794 FT8".into(),
+            dial_frequency_hz: 14_075_800,
+            ..spot("CQ K1JT")
+        };
+        assert_eq!(cluster.dx_offset_hz(), Some(1794));
+        // Display only: the spot stays where the skimmer put it.
+        assert_eq!(cluster.frequency_hz(), 14_075_800);
+
+        let silent = Spot {
+            comment: "TNX/FT8 OI51".into(),
+            ..cluster
+        };
+        assert_eq!(silent.dx_offset_hz(), None);
     }
 
     #[test]

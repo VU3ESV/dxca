@@ -30,6 +30,9 @@ pub struct AppState {
     pub config_path: PathBuf,
     /// Pipeline input — hot-applied sources/nodes feed into it.
     pub input_tx: mpsc::Sender<PipelineInput>,
+    /// The release check, shared with its loop: the Server card reads why the
+    /// last attempt failed from here, since a failure is never stored.
+    pub update: Arc<crate::update::Checker>,
 }
 
 pub fn build_router(state: AppState) -> Router {
@@ -58,6 +61,9 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/iota/refresh", post(iota_refresh))
         .route("/api/fcc/refresh", post(fcc_refresh))
         .route("/api/cty/refresh", post(cty_refresh))
+        .route("/api/update", get(get_update))
+        .route("/api/update/check", post(check_update))
+        .route("/api/update/skip", post(skip_update))
         .route("/api/users", get(list_users).post(create_user))
         .route("/api/users/{id}", patch(update_user).delete(delete_user))
         .route("/api/me/alerts", get(my_alerts))
@@ -115,6 +121,13 @@ fn status_json(app: &AppState) -> serde_json::Value {
         "cluster_nodes": app.nodes.statuses(),
         "udp_sent": counters.total_sent(),
         "udp_failed": counters.total_failed(),
+        // A newer release on GitHub, or null. Public like `version` beside
+        // it — the release list is public anyway — but only an admin's
+        // header shows the banner, since only an admin can act on it.
+        "update": crate::update::status_json(
+            &app.users.db,
+            app.config.lock().unwrap().check_for_updates,
+        ),
     })
 }
 
@@ -1070,6 +1083,7 @@ async fn get_global(State(app): State<AppState>, headers: HeaderMap) -> Response
             "lotw_refresh_days": cfg.lotw_refresh_days,
             "iota_refresh_days": cfg.iota_refresh_days,
             "fcc_refresh_days": cfg.fcc_refresh_days,
+            "check_for_updates": cfg.check_for_updates,
         },
         // Server-wide, admin-only, stored in the 0600 database rather than
         // the 0644 config file. This is the ADMIN-SET key only: the built-in
@@ -1277,6 +1291,63 @@ async fn fcc_refresh(State(app): State<AppState>, headers: HeaderMap) -> Respons
         Ok(Err(e)) => err(StatusCode::BAD_GATEWAY, e),
         Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, format!("join: {e}")),
     }
+}
+
+// --- release check (admin) -----------------------------------------------
+
+/// The Server card's view of the release check: what is running, what GitHub
+/// last said, when, and why the last attempt failed if it did.
+async fn get_update(State(app): State<AppState>, headers: HeaderMap) -> Response {
+    if let Err(resp) = require_admin(&app, &headers) {
+        return resp;
+    }
+    let enabled = app.config.lock().unwrap().check_for_updates;
+    Json(app.update.detail_json(enabled)).into_response()
+}
+
+/// *Check now*. Works with the automatic check switched off — a person
+/// pressing the button is the one case that switch does not speak for — and,
+/// unlike the daily loop, reports a failure, because they asked. A failure
+/// here stores nothing either, so it does not put the next automatic check
+/// off — nor does it start the loop's hour of back-off.
+async fn check_update(State(app): State<AppState>, headers: HeaderMap) -> Response {
+    if let Err(resp) = require_admin(&app, &headers) {
+        return resp;
+    }
+    let checker = app.update.clone();
+    match tokio::task::spawn_blocking(move || checker.check()).await {
+        Ok(Ok(_)) => {
+            let enabled = app.config.lock().unwrap().check_for_updates;
+            Json(app.update.detail_json(enabled)).into_response()
+        }
+        Ok(Err(e)) => err(StatusCode::BAD_GATEWAY, e),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, format!("join: {e}")),
+    }
+}
+
+#[derive(Deserialize)]
+struct SkipReq {
+    /// The release tag to stop offering; empty = offer it again.
+    tag: String,
+}
+
+/// *Skip this version*: the banner stays away for that one tag.
+async fn skip_update(
+    State(app): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<SkipReq>,
+) -> Response {
+    if let Err(resp) = require_admin(&app, &headers) {
+        return resp;
+    }
+    if req.tag.len() > 64 {
+        return err(StatusCode::BAD_REQUEST, "not a release tag");
+    }
+    if let Err(e) = crate::update::set_skipped(&app.users.db, &req.tag) {
+        return err(StatusCode::INTERNAL_SERVER_ERROR, e);
+    }
+    let enabled = app.config.lock().unwrap().check_for_updates;
+    Json(app.update.detail_json(enabled)).into_response()
 }
 
 // --- ClubLog refresh -----------------------------------------------------

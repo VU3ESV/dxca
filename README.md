@@ -25,6 +25,47 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.22.3** (2026-10-09): **alerts say where in the passband the DX is.**
+A Telegram alert's body line now ends with the DX station's audio offset —
+`DF 1487 Hz`, MSHV's name for it — which is the number you click in the
+waterfall to answer. It was always in the spot and always lost: the MHz
+figure is the dial plus the offset rounded to the kHz, so 14.074 + 1487 Hz
+read as 14.075. Your decoders report it with every decode; a cluster spot has
+no offset field, so DXCA reads it from the spotter's comment when the comment
+gives one — `FT8 1500Hz`, a skimmer's `-15 dB 1032 FT8`, or the trailing
+figure in `-18 dB 6 FT8 2167` — which on the shack's feed covers nearly every
+FT8 cluster spot. A spot that says nothing shows no `DF` rather than `DF 0
+Hz`. The **Alerts** history gains a `DF` column beside dB, `—` for older rows.
+FlexRadio and ExpertSDR3 marks are unchanged: they already sit at the spot's
+frequency. Nothing to do on upgrade — the history's new column is added by
+itself on first start. See [Who spotted it](#who-spotted-it) and [Alert
+history](#alert-history).
+
+**v2.22.2** (2026-10-09): **DXCA says when a newer release is out.** Once a
+day it asks GitHub for the latest release — one `GET` to
+`api.github.com/repos/vu2cpl/dxca/releases/latest`, no token, nothing about
+your station — and when that release is newer than the one running, every
+admin sees a band under the header with the release notes link and **Skip
+this version**, and the log gets one line. It never downloads or installs
+anything. Only a successful answer is stored; a failed check (offline, rate
+limit, any error) stores nothing, shows nothing and is tried again an hour
+later. Development builds never check by themselves. To switch it off, put
+`check_for_updates = false` in `config/dxca.toml` and restart; **Check now**
+on Settings › Server › Reference data still works. See [Update
+check](#update-check). Also in this release: **every alert is recorded for
+every channel it went to** — an account alerting to a FlexRadio or
+ExpertSDR3 alone used to get no history at all — with a *Sent to* column and
+a filter under each heading on the Alerts page, contributed by VU3ESV
+([#8](https://github.com/vu2cpl/dxca/pull/8)); see [Alert
+history](#alert-history). **`dxca reset-password <CALL>`** gives a locked-out
+admin a way back in without deleting every account, contributed by VU3ESV
+([#9](https://github.com/vu2cpl/dxca/pull/9)); see [Forgotten
+password](#forgotten-password). And **`deploy/docker-deploy.sh`** runs DXCA
+as a container on a Linux box that already runs Docker; see
+[Docker](#docker-a-linux-box-that-already-runs-containers). Nothing to do on
+upgrade: the alert history gains its per-channel column by itself on first
+start, and the update check is on without a config change.
+
 **v2.22.1** (2026-09-22): **a `KG4` call with a three-letter suffix is the
 USA, not Guantanamo Bay.** Only `KG4` + two letters is Guantanamo. The FCC
 issues `KG4` + three letters to ordinary stateside amateurs, but cty.xml has
@@ -670,6 +711,10 @@ schema is applied as `CREATE TABLE IF NOT EXISTS`, so an older database just
 keeps working. `git pull` cannot conflict with your settings, because both
 paths are gitignored — nothing you edit is tracked.
 
+**Knowing when to.** Since v2.22.2, the web UI tells its
+admins when a newer release is out, once a day — see [Update
+check](#update-check). It never updates anything itself.
+
 Confirm what is actually running, rather than what you think you installed:
 
 ```sh
@@ -740,6 +785,7 @@ what it printed. The common ones:
 | `never answered` | it built and started but is not serving; the message names the log command |
 | `serving the PLACEHOLDER page` | the running binary was built without the dashboard |
 | `nodejs : Conflicts: npm` | you asked apt for `npm` next to a NodeSource Node — drop `npm` |
+| the login refuses a password you are sure of | see [Forgotten password](#forgotten-password) — `dxca reset-password <CALL>` |
 
 Re-running `./install.sh` is always safe. In a source tree it rebuilds from
 scratch, so it is the correct fix after installing a missing toolchain — it
@@ -950,6 +996,56 @@ labels are what you scan for. Locally decoded spots show only `Node:` —
 there is no spotting station to name. The time is the spot's, not the
 delivery time, so a retried or queued alert still says when the station was
 heard.
+
+**Alerts also carry the DX station's audio offset**: `DF` (MSHV's name for
+it) at the end of the line. That's the number you click in the waterfall to
+answer. The MHz figure can't tell you: it is the dial plus the offset,
+rounded to the kHz, so 14.074 + 1487 Hz reads as 14.075.
+
+```
+🔴 NEW DXCC: 3Y0J
+Bouvet  14.075 MHz  20M  FT8  -10 dB  DF 1487 Hz
+```
+
+Your decoders report the offset with every decode. A cluster spot has no
+offset field, so DXCA reads it from the spot's comment when the comment
+gives one, in any of these forms:
+
+| Comment | Where it comes from | `DF` |
+|---|---|---|
+| `FT8 1500Hz BL11`, `1500 Hz` | typed by a human | 1500 |
+| `-15 dB 1032 FT8` | a skimmer that spots at dial + offset | 1032 |
+| `-18 dB 6 FT8 2167`, `-13 dB 6 FT8 CQ KN34 1497` | RBN Aggregator (VU2OY's node), which spots at the dial; the `6` is FT8's symbol rate in baud, in the column a CW spot uses for WPM | 2167, 1497 |
+
+The two unlabelled skimmer forms are read only in exactly that frame (an
+SNR, `dB`, one field, then `FT8` or `FT4`), so a number in any other comment
+is never mistaken for an offset. On the shack's feed that covers nearly
+every FT8 cluster spot: 1,932 of 1,936 in a sample of 2,000. A spot whose
+comment says nothing shows no `DF` at all rather than `DF 0 Hz`, which would
+point at the bottom of the passband.
+
+FlexRadio and TCI need no `DF`: they already place the mark at the spot's
+frequency. The **Alerts** history has a `DF` column too (see [Alert
+history](#alert-history)). (New in v2.22.3.)
+
+**The cluster line carries it too, in Aggregator's shape.** A relayed
+cluster spot reaches the telnet server, the `cluster`-format UDP
+destinations and MQTT's `<base>/cluster` with its comment exactly as it
+arrived — the forms above are what logging software is written to read, so
+DXCA no longer rewrites them to `FT8 -15 dB`. A decoder's spot has no
+comment, so DXCA writes one the way RBN Aggregator does, column for column:
+
+```
+DX de MSHV:          14074.0   UN7LZ          -6 dB   6 FT8  CQ MO13 2332 1428Z
+DX de MSHV:          14074.0   YC2VTS         -7 dB   6 FT8          1758 1428Z
+```
+
+SNR, the symbol rate (`6` for FT8, `21` for FT4), the mode, `CQ` and its
+grid when the message was a CQ, and the DX station's audio offset last.
+**The frequency column is the dial**, as Aggregator spots it, with the
+offset in the comment relative to it — up to v2.22.3 the line carried dial
++ offset (14075.8) and no offset, so a logger tuned the rig off the FT8
+dial. (After v2.22.3.)
 
 The search box above the table filters on **either** — type a DX callsign to
 follow one station, or a spotter to see everything one skimmer is hearing.
@@ -1471,6 +1567,12 @@ Failed sends are kept and marked, with the reason on hover — Telegram's own
 error text, or which radio was not reachable. A bad chat id otherwise fails
 quietly forever.
 
+**DF** is the DX station's audio offset in Hz, the same figure the Telegram
+alert ends with: from your decoder, or from a cluster spot's comment (see
+[Who spotted it](#who-spotted-it)). It shows `—` when the spot gave no
+offset, and for every alert recorded before the column existed. (New in
+v2.22.3.)
+
 The boxes under the column headings narrow the rows on screen: type part of
 a call, spotter or entity name, or pick a source, mode, band, level, channel
 or status. The lists only offer values that occur in the rows loaded.
@@ -1494,8 +1596,14 @@ Each spot is published **twice**, to sibling topics under the base (default
 
 | topic | payload |
 |---|---|
-| `<base>/json` | `{"callsign":"K1JT","frequency_hz":14074000,"band":"20M","mode":"FT8","snr_db":-10,"comment":"FT8 -10 dB","is_cq":true,…}` |
-| `<base>/cluster` | `DX de DXCA:  14074.0  K1JT  FT8 -10 dB  1428Z` |
+| `<base>/json` | `{"callsign":"K1JT","frequency_hz":14075487,"band":"20M","mode":"FT8","snr_db":-10,"comment":"FT8 -10 dB","is_cq":true,…}` |
+| `<base>/cluster` | `DX de DXCA:  14074.0  K1JT  -10 dB   6 FT8  CQ FN20 1487  1428Z` |
+
+The cluster line's comment is the spot's own when it came from a cluster
+node, and RBN Aggregator's shape (SNR, symbol rate, mode, `CQ` and grid,
+the DX station's audio offset — see [Who spotted it](#who-spotted-it)) for
+a decoder's spot, with the dial in the frequency column. `frequency_hz` in
+the JSON is dial + offset.
 
 **For a FlexRadio panadapter, the telnet cluster server is the shorter
 route.** Aether takes a DX cluster directly, so pointing it at DXCA's telnet
@@ -1556,6 +1664,81 @@ logger's click-to-fill working — so a blocked call inside a WSJT-X decode can
 still reach the logger by that path. Cluster spots have no passthrough and
 are dropped completely.
 
+### Update check
+
+*New in v2.22.2.*
+
+Once a day DXCA asks GitHub whether there is a newer release, and when there
+is, every admin sees a band under the header on every screen:
+
+```
+DXCA v2.23.0 is available (you have v2.22.2) — release notes & download ↗   [Skip this version]
+```
+
+and the service log gets one line, once per run:
+
+```
+dxca: DXCA 2.23.0 is available (you have 2.22.2) — https://github.com/vu2cpl/dxca/releases/tag/v2.23.0
+```
+
+**It tells you; it never installs.** Nothing is downloaded — the link goes to
+the release page (notes, and the Windows zip), and you update the way you
+always have: [Updating](#updating). Operators who are not admins never see
+the banner, since only an admin can act on it.
+
+**What it sends.** One `GET` to
+`api.github.com/repos/vu2cpl/dxca/releases/latest` with a
+`User-Agent: DXCA/<version>` header — no token, no account, nothing about
+your station. GitHub's `latest` never returns a draft or a pre-release.
+
+**When it asks.** The first look is about 30 seconds after start, then one
+every hour. A look asks GitHub only when the last *successful* check is 24
+hours old (or there has never been one), and not within an hour of an
+automatic attempt that failed. A check succeeds when GitHub answers with a
+release — newer than yours or not — and only then is anything written down:
+the release and the time. So restarting the service within the day does not
+ask again, and a check that failed is simply tried again.
+
+**When it cannot ask, it says nothing.** Offline, a timeout, GitHub's rate
+limit used up (60 unauthenticated requests an hour, shared by every machine
+behind your router), any other error, or an answer that is not a release: no
+banner, no log line, nothing stored — the next try is an hour later, or about
+30 seconds after the next start, whichever comes first. The last answer that
+did arrive is kept, so a notice that is still true does not disappear on a
+bad night.
+
+**Development builds never check by themselves.** When the running version
+has "dev" in it (`2.23.0-dev`, any case), there is no automatic check at all;
+**Check now** still works.
+
+**Settings › Server › Reference data** shows the whole state on the Server
+card: what is running, the latest release and its notes, when GitHub last
+answered, why the last attempt failed if it did (since the service started —
+a failure is never stored), and **Check now**, which asks immediately and
+does report a failure; a failed Check now does not put the next automatic
+check off. **Skip this version** hides the banner for that one release — the
+next one brings it back — and **Show again** on the card undoes it. After you
+upgrade, the notice goes away by itself. The banner follows **Check now** at
+once; the log line is the daily loop's, written at its next hourly pass once
+a newer release is stored, so after a Check now it can trail the banner by up
+to an hour.
+
+To switch the automatic check off, add to `config/dxca.toml` and restart:
+
+```toml
+check_for_updates = false
+```
+
+Then nothing is ever requested unless an admin presses **Check now**, and no
+banner is shown. It is on when the key is absent, so existing installs get it
+with nothing to change.
+
+To see the banner without waiting for a release, start a scratch copy with
+`DXCA_UPDATE_TEST_VERSION=0.0.1`: it compares the latest release against that
+version instead of its own, and decides "development build" on it too, so it
+checks automatically even on a `-dev` build (the User-Agent still carries the
+real version). Unset, the variable does nothing.
+
 ### Accounts
 
 The admin-only **Users** tab lists, creates, edits and deletes accounts.
@@ -1569,6 +1752,35 @@ one over. The single refusal is removing — or demoting — the last **admin**
 while other accounts remain, because `/api/setup` only re-arms at zero
 accounts, so that state would leave users nobody can administer and no way
 back through the UI. Promote another admin first, or delete the others.
+
+#### Forgotten password
+
+Every route above needs you to be logged in, so an admin who forgets their
+password has no way back through the web UI — and because `/api/setup`
+re-arms only at **zero** accounts, "start over" would mean deleting every
+account and, with them, every ClubLog setting, alert preference and worked
+matrix on the install.
+
+The server itself can set one. Stop it first so there is one writer, run the
+command from the install directory, and start it again:
+
+```sh
+sudo systemctl stop dxca                 # launchctl on macOS; Services on Windows
+cd /opt/dxca && ./dxca reset-password VU2CPL
+sudo systemctl start dxca
+```
+
+It reads `config/dxca.toml` for the database location, so there is no path
+to get wrong, and it prompts for the new password rather than taking it as
+an argument — an argument would sit in your shell history and be readable in
+`ps` by everyone on the machine. The password must be at least six
+characters, the same floor the Users tab enforces. An unknown callsign is
+refused *before* the prompt.
+
+It changes nothing else: existing sessions, settings and the worked matrix
+are untouched. Anyone who can run it already has the database file, so it
+grants no access they did not have — which is why it is the server binary
+and not a protected endpoint.
 
 ## License
 
