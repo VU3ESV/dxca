@@ -25,6 +25,22 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.22.3** (2026-10-09): **alerts say where in the passband the DX is.**
+A Telegram alert's body line now ends with the DX station's audio offset —
+`DF 1487 Hz`, MSHV's name for it — which is the number you click in the
+waterfall to answer. It was always in the spot and always lost: the MHz
+figure is the dial plus the offset rounded to the kHz, so 14.074 + 1487 Hz
+read as 14.075. Your decoders report it with every decode; a cluster spot has
+no offset field, so DXCA reads it from the spotter's comment when the comment
+gives one — `FT8 1500Hz`, a skimmer's `-15 dB 1032 FT8`, or the trailing
+figure in `-18 dB 6 FT8 2167` — which on the shack's feed covers nearly every
+FT8 cluster spot. A spot that says nothing shows no `DF` rather than `DF 0
+Hz`. The **Alerts** history gains a `DF` column beside dB, `—` for older rows.
+FlexRadio and ExpertSDR3 marks are unchanged: they already sit at the spot's
+frequency. Nothing to do on upgrade — the history's new column is added by
+itself on first start. See [Who spotted it](#who-spotted-it) and [Alert
+history](#alert-history).
+
 **v2.22.2** (2026-10-09): **DXCA says when a newer release is out.** Once a
 day it asks GitHub for the latest release — one `GET` to
 `api.github.com/repos/vu2cpl/dxca/releases/latest`, no token, nothing about
@@ -1010,7 +1026,7 @@ point at the bottom of the passband.
 
 FlexRadio and TCI need no `DF`: they already place the mark at the spot's
 frequency. The **Alerts** history has a `DF` column too (see [Alert
-history](#alert-history)). (Unreleased: on `main` after v2.22.2.)
+history](#alert-history)). (New in v2.22.3.)
 
 The search box above the table filters on **either** — type a DX callsign to
 follow one station, or a spotter to see everything one skimmer is hearing.
@@ -1535,8 +1551,8 @@ quietly forever.
 **DF** is the DX station's audio offset in Hz, the same figure the Telegram
 alert ends with: from your decoder, or from a cluster spot's comment (see
 [Who spotted it](#who-spotted-it)). It shows `—` when the spot gave no
-offset, and for every alert recorded before the column existed. (Unreleased:
-on `main` after v2.22.2.)
+offset, and for every alert recorded before the column existed. (New in
+v2.22.3.)
 
 The boxes under the column headings narrow the rows on screen: type part of
 a call, spotter or entity name, or pick a source, mode, band, level, channel

@@ -111,11 +111,13 @@
 </details>
 
 **Created:** 2026-08-26 · **Last updated:** 2026-10-09 · **Status:**
-**`main` is ahead of v2.22.2: alerts carry the DX's audio offset — `DF 1487
-Hz` in Telegram and a `DF` column in the Alerts history, from the decoder or
-a cluster spot's comment. Adds `alerts_sent.offset_hz`, which migrates itself
-on first open. Unreleased, on no host** (*Session 2026-10-09 (evening)*).
-Before that:
+**v2.22.3 — alerts carry the DX's audio offset: `DF 1487 Hz` in Telegram
+and a `DF` column in the Alerts history, from the decoder or a cluster spot's
+comment. Adds `alerts_sent.offset_hz`, which migrates itself on first open.
+Tagged and released with the Windows zip, 2026-10-09; deployed NOWHERE on
+purpose** — Manoj: *"dont install"*, so that .109 on 2.22.2 can show whether
+the new release check registers it (*Session 2026-10-09 (evening)*). Before
+that:
 **v2.22.2 — DXCA says when a newer release is out. Tagged and released with
 the Windows zip, 2026-10-09 05:15 IST; running on .109 (the production
 container), the Windows box `.170` and the three remote Pis** — adersh,
@@ -730,8 +732,12 @@ rollback. The 1.x macOS app is the retained fallback (maintenance mode).
 
 ## Session 2026-10-09 (evening) — alerts carry the DX's audio offset
 
-**No version bump.** `Cargo.toml` stays 2.22.2, so there is no tag and no host
-runs this yet.
+**Shipped as v2.22.3** the same evening, tagged and released with the Windows
+zip. **Deployed nowhere**, by instruction: Manoj wants to see the release
+check on .109 (still 2.22.2) notice it first — *"let me see if it registers
+as an update"*, then *"dont install"*. The automatic check runs daily, so
+**Check now** on Settings › Server › Reference data is the way to see it
+today. Deploying afterwards is the usual drill, .109 first.
 
 Manoj: *"add tx freq offset of dx station in alerts"*. A Telegram alert from a
 decoder now ends its body line with the DX station's audio offset:
