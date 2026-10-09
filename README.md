@@ -25,6 +25,24 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.23.0** (2026-10-09): **the cluster line goes out the way RBN Aggregator
+spots FT8, and a relayed comment goes out as it came.** A decoder's spot used
+to leave the telnet server (and the `cluster` UDP destinations and MQTT's
+cluster topic) as `14075.5  K1JT  FT8 -10 dB`: the DX station's audio offset
+folded into the frequency and rounded away, the comment saying nothing a
+logger could use. It now leaves at the **dial**, with the comment Aggregator
+would write — `-10 dB   6 FT8  CQ FN20 1487`: SNR, the symbol rate in baud
+(`6` for FT8, `21` for FT4), mode, `CQ` and its grid when the message was a
+CQ, the offset last — so logging software written for Aggregator's lines
+(VU2OY's node is one) reads DXCA's unchanged. A spot relayed from a cluster
+node keeps its spotter's comment exactly as it arrived, where it used to be
+rewritten to `FT8 -15 dB` and lose its offset and grid. **What a logger will
+notice:** decoder spots arrive at the FT8 dial (14074.0), not 1–3 kHz above
+it, so click-to-tune lands the rig where FT8 wants it. Nothing else moves:
+the Spots table, alerts, dedupe and the MQTT JSON still use dial + offset.
+Nothing to do on upgrade, and rolling back is safe — no schema change. See
+[Who spotted it](#who-spotted-it).
+
 **v2.22.3** (2026-10-09): **alerts say where in the passband the DX is.**
 A Telegram alert's body line now ends with the DX station's audio offset —
 `DF 1487 Hz`, MSHV's name for it — which is the number you click in the
@@ -1045,7 +1063,7 @@ grid when the message was a CQ, and the DX station's audio offset last.
 **The frequency column is the dial**, as Aggregator spots it, with the
 offset in the comment relative to it — up to v2.22.3 the line carried dial
 + offset (14075.8) and no offset, so a logger tuned the rig off the FT8
-dial. (After v2.22.3.)
+dial. (New in v2.23.0.)
 
 The search box above the table filters on **either** — type a DX callsign to
 follow one station, or a spotter to see everything one skimmer is hearing.

@@ -810,10 +810,41 @@ Tests: `spider_layout` (whole line), `a_decoded_spot_takes_aggregators_shape`
 (five live shapes plus empty), `no_offset_means_no_offset_column`,
 `the_written_offset_reads_back`. `just gate` passed. README: *Who spotted
 it* (the `6`, the shape, the dial) and the MQTT table; `spot.rs` doc on the
-unlabelled-offset floor. **Not released**: v2.22.3 stays the latest and the
-fleet is on it; a release (bump, tag, Windows zip, `## Updating` notes —
-see the checklist memory) and the .109-first deploy are the next step when
-Manoj wants the line on the air.
+unlabelled-offset floor.
+
+**Shipped as v2.23.0 the same afternoon** (Manoj: *"release it and install
+on 109"*). A minor bump, not a patch: what every connected logger receives
+changed. `Cargo.toml` 2.22.3 → 2.23.0, release commit `7ad3a5e`, annotated
+tag `v2.23.0` (`4418377`), both pushed. The README `## Status` entry
+missed that commit — the script that writes it stopped on a wrong
+assertion of mine and the commit went ahead on the version bump alone —
+and landed in the docs commit after the deploy, so the tag's tree lacks it
+and `main`'s has it. `deploy/win-bundle.sh` → `dxca-2.23.0-windows-x64.zip`
+(5,244,657 bytes, sha256
+`e2440ce3e8dc77cde55c95a75671228f8265a39d079068cb686352ae1b837ef5`, no
+placeholder page). `gh release create --latest` with notes covering the
+line change and a `## Updating` section on the v2.22.3 template; the asset
+downloaded back hashes equal, and `releases/latest` answers v2.23.0.
+
+**Deployed to .109 only**, by instruction. Before: 2.22.3, up 5 h on
+`dxca:2.22.3`, one telnet client. `data/dxca.db` copied to
+`dxca.db.pre-v2.23.0` (md5 `d0de91e8…` equal, no WAL). `deploy/docker-deploy.sh`
+13:39:04–13:39:51 IST: smoke test reported 2.23.0, the running container
+came back on `dxca:2.23.0`. After: **2.23.0**, start line names all eight
+nodes, no error, warning or panic in the log, config md5 unchanged
+(`3a739c89232a`), telnet client back (1), cty 402, FCC 816,280, IOTA 1,178,
+`update: null`, nodes Live  a minute in. **On the air** (40 s on
+`:7575`): relayed spots verbatim — `DX de VU2CPL: 18100.9 A60WSW/21 -18 dB
+947 FT8`, `DX de VU24DX: 14075.8 DM2DXA -20 dB 1806 FT8 CQ JO64`, DB0SUE's
+award chatter untouched. No decoder was feeding .109 at the time (136
+lines, all relayed; the 2,000-spot sample earlier had none either), so the
+Aggregator shape for decodes rests on `spider_layout`'s exact line until
+MSHV is next on. **Rollback:** `sudo docker stop dxca && sudo docker rm
+dxca`, the `docker create` line from `docker-deploy.sh` with `dxca:2.22.3`,
+then `start`; no schema change, so the database needs nothing.
+**Windows .170, adersh, vu2wj, vu2oy stay on v2.22.3** until Manoj says —
+the deploy memory records the split so a sweep doesn't read them as
+forgotten.
 
 ## Session 2026-10-09 (evening) — alerts carry the DX's audio offset
 
