@@ -833,7 +833,7 @@ downloaded back hashes equal, and `releases/latest` answers v2.23.0.
 came back on `dxca:2.23.0`. After: **2.23.0**, start line names all eight
 nodes, no error, warning or panic in the log, config md5 unchanged
 (`3a739c89232a`), telnet client back (1), cty 402, FCC 816,280, IOTA 1,178,
-`update: null`, nodes Live  a minute in. **On the air** (40 s on
+`update: null`, nodes Live 8/8 a few minutes in. **On the air** (40 s on
 `:7575`): relayed spots verbatim — `DX de VU2CPL: 18100.9 A60WSW/21 -18 dB
 947 FT8`, `DX de VU24DX: 14075.8 DM2DXA -20 dB 1806 FT8 CQ JO64`, DB0SUE's
 award chatter untouched. No decoder was feeding .109 at the time (136
