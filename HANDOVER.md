@@ -44,7 +44,7 @@
 - [Open items → next session](#open-items--next-session)
   - [DONE: v2.22.2 on the three remote Pis (2026-10-09)](#done-v2222-on-the-three-remote-pis-2026-10-09)
   - [DONE in v2.22.2: the GitHub release check (2026-10-08)](#done-in-v2222-the-github-release-check-2026-10-08)
-  - [OPEN: v2.22.3 on the three remote Pis (2026-10-09)](#open-v2223-on-the-three-remote-pis-2026-10-09)
+  - [DONE: v2.22.3 on the three remote Pis (2026-10-09)](#done-v2223-on-the-three-remote-pis-2026-10-09)
   - [TODO: a cloud QSO inbox — QLog on the Pi into RUMlog (2026-10-07)](#todo-a-cloud-qso-inbox--qlog-on-the-pi-into-rumlog-2026-10-07)
   - [OPEN: a green radio chip is the queue, not the radio (2026-09-25)](#open-a-green-radio-chip-is-the-queue-not-the-radio-2026-09-25)
   - [DONE in v2.22.2: every alert recorded for every channel — PR #8 (2026-09-25)](#done-in-v2222-every-alert-recorded-for-every-channel--pr-8-2026-09-25)
@@ -117,9 +117,10 @@ and a `DF` column in the Alerts history, from the decoder or a cluster spot's
 comment. Adds `alerts_sent.offset_hz`, which migrates itself on first open.
 Tagged and released with the Windows zip, 2026-10-09 07:44 IST; held back
 until the release check on .109 had shown its first real banner, then
-deployed: .109 (the production container) 08:57 IST and Windows `.170`
-08:59 IST, both verified. The three remote Pis wait on their tunnels** —
-see *Open items* (*Session 2026-10-09 (evening)*). Before that:
+deployed: .109 (the production container) 08:57 IST, Windows `.170`
+08:59 IST, and the three remote Pis 09:12–09:16 IST once Manoj had brought
+the tunnels up. The whole fleet is on 2.22.3, every host verified**
+(*Session 2026-10-09 (evening)*). Before that:
 **v2.22.2 — DXCA says when a newer release is out. Tagged and released with
 the Windows zip, 2026-10-09 05:15 IST; running on .109 (the production
 container), the Windows box `.170` and the three remote Pis** — adersh,
@@ -759,6 +760,27 @@ then *"and then on all other machines"*):
 |---|---|---|---|---|
 | .109 container (x86_64) | 2.22.2 → **2.22.3** | 8/8 → 8/8 | `dxca.db.pre-v2.22.3`, md5 `d51e2967…` equal, no WAL | 08:57 |
 | Windows .170 | 2.22.2 → **2.22.3** | 2/2 → 2/2 | `dxca.db.pre-v2.22.3`, md5 `485da4b3…` equal | 08:59 |
+| adersh `192.168.1.151` (trixie) | 2.22.2 → **2.22.3** | 5/5 → 5/5 | `dxca.db.pre-v2.22.3`, md5 `af4c3fa2…` equal, no WAL | 09:12 |
+| vu2wj `192.168.1.201` (trixie) | 2.22.2 → **2.22.3** | 3/3 → 3/3 | `dxca.db.pre-v2.22.3`, md5 `68460b49…` equal, no WAL | 09:14 |
+| vu2oy `192.168.220.51` (bookworm) | 2.22.2 → **2.22.3** | 4/4 → 4/4 | `dxca.db.pre-v2.22.3`, md5 `225c7fe9…` equal, no WAL | 09:16 |
+
+The Pis, after Manoj's *"tunnels are up, deploy dxca"*: all three routed
+(`utun8/9/10`), answered ping and reported 2.22.2 before anything was
+touched. Per box, first the backup above and the outgoing binary kept as
+`/opt/dxca/dxca.rollback-v2.22.2` (md5 `69fb32f8…`, the same 2.22.2 build
+on all three), then `pi-deploy.sh --no-seed` one at a time with a version
+check between. The aarch64 binary is 8,486,368 bytes, md5 `8c2d945c…`,
+needs GLIBC_2.34 at most (bookworm's 2.36 is fine), and is what
+`/opt/dxca/dxca` hashes to on each. Each journal shows `shut down cleanly`,
+then the 2.22.3 start line naming every node, no panic, error or warning,
+`NRestarts=0`; `offset_hz` present on each (500 rows kept). Node counts
+read 4/5 and 2/4 in the seconds after restart and were full a minute
+later — the logins, not a fault. `~/dxca-deploy` on each Pi holds the
+three shipped files plus **empty** `config/` and `data/` directories, made
+by the staging step (same mtime as the binary); nothing was seeded.
+**Rollback, per Pi:** `sudo systemctl
+stop dxca && sudo install -m 755 /opt/dxca/dxca.rollback-v2.22.2
+/opt/dxca/dxca && sudo systemctl start dxca`; 2.22.2 ignores the new column.
 
 .109: `deploy/docker-deploy.sh` from the main clone (the key file is there,
 and `DXCA_CLUBLOG_API_KEY` exported as well), code identical to the tag
@@ -2654,15 +2676,13 @@ only once a release newer than the one it runs is published, so the first
 notice anyone sees will be for the release *after* the one that ships this.
 See *Session 2026-10-08* and *Session 2026-10-09*.
 
-### OPEN: v2.22.3 on the three remote Pis (2026-10-09)
+### DONE: v2.22.3 on the three remote Pis (2026-10-09)
 
-.109 and Windows are on 2.22.3 (*Session 2026-10-09 (evening)*). At 09:00
-IST adersh, vu2wj and vu2oy had no tunnel route and no ping. Manoj was
-asked to bring the three tunnels up; then the 09-22 drill per box:
-`dxca.db` → `dxca.db.pre-v2.22.3` with md5 checked, `pi-deploy.sh --no-seed`,
-`/api/status` version and node count after. vu2oy is bookworm/glibc 2.36 —
-the target floor stays. Each of the three will show the v2.22.3 banner to
-its admin at its own daily check until then; that is the feature working.
+**Resolved 2026-10-09, 09:12–09:16 IST.** At 09:00 none of the three
+tunnels was up; Manoj brought them up (*"tunnels are up, deploy dxca"*) and
+each box got the drill — backup with md5, rollback binary kept,
+`pi-deploy.sh --no-seed`, verified. The whole fleet is on 2.22.3. Record in
+*Session 2026-10-09 (evening)*.
 
 ### TODO: a cloud QSO inbox — QLog on the Pi into RUMlog (2026-10-07)
 
