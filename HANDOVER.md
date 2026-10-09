@@ -842,9 +842,27 @@ Aggregator shape for decodes rests on `spider_layout`'s exact line until
 MSHV is next on. **Rollback:** `sudo docker stop dxca && sudo docker rm
 dxca`, the `docker create` line from `docker-deploy.sh` with `dxca:2.22.3`,
 then `start`; no schema change, so the database needs nothing.
-**Windows .170, adersh, vu2wj, vu2oy stay on v2.22.3** until Manoj says —
-the deploy memory records the split so a sweep doesn't read them as
-forgotten.
+**Then the rest of the fleet** (Manoj: *"install on all other machines"*,
+13:47 IST), the same drill, one host at a time:
+
+| Box | Before → after | Nodes Live | Backup / rollback | Up (IST) |
+|---|---|---|---|---|
+| Windows .170 | 2.22.3 → **2.23.0** | 2/2 → 2/2 | no DB copy (locked while running; nothing to migrate); `C:\DXCA\dxca.exe.bak` is the 2.22.3 exe | 13:48 |
+| vu2oy `192.168.220.51` (bookworm, glibc 2.36) | 2.22.3 → **2.23.0** | 4/4 → 4/4 | `dxca.db.pre-v2.23.0`, md5 `88ae4518…` equal, no WAL; `/opt/dxca/dxca.rollback-v2.22.3` (md5 `8c2d945c…`) | 13:48 |
+| adersh `192.168.1.151` | **not reached** | — | — | — |
+| vu2wj `192.168.1.201` | **not reached** | — | — | — |
+
+Windows: `deploy/win-deploy.sh`, 13:47:52–13:48:04, binary swapped, task
+restarted, dashboard serving, `fcc_calls: 0` as always there. vu2oy:
+`pi-deploy.sh --no-seed`, 13:48:21–13:48:36; journal shows `shut down
+cleanly` then the 2.23.0 start line naming its four nodes, no error or
+warning, `NRestarts=0`; the new aarch64 binary is 8,487,328 bytes, md5
+`0b7548e8…`; config md5 unchanged (`65935bf2…`); `~/dxca-deploy/config`
+and `data` empty, as `--no-seed` leaves them. **adersh and vu2wj:** all
+three `/32` routes were up (`utun8/9/10`) but `.151` and `.201` answered
+neither ping, `:7580` nor ssh in 10 s — the "a route is not a tunnel" case
+from 2026-09-22. `wg-quick down`/`up` needs Manoj's sudo, so those two wait
+on him; the memory and this table say so.
 
 ## Session 2026-10-09 (evening) — alerts carry the DX's audio offset
 
