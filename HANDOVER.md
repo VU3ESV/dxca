@@ -2537,6 +2537,19 @@ last *published* release, because tags can outrun releases.
 date, what changed and why, at the top. v2.21.0 shipped without one and the
 Status section led with v2.20.4 for eighteen days (backfilled 2026-09-21).
 
+**The release page ends with an `## Updating` section that says HOW** —
+the per-platform commands, not only "nothing to do on upgrade" (added
+2026-10-09, after v2.22.3's page went up without it and Manoj, reading it
+from the new update banner: *"how to install — it doesnt say"*). Every
+earlier page had an *Upgrading* heading that meant "no config or migration
+step", which reads as "no instructions" to someone the banner just sent
+there. The section: `cd dxca && git pull && ./install.sh` for a source
+install; `deploy/pi-deploy.sh --no-seed user@pi` and
+`deploy/docker-deploy.sh user@host` from a Mac clone; unzip + `install-dxca.cmd`
+on Windows with the SmartScreen caveat; a link to README › Updating; the
+`/api/status` version check; whether rollback is safe. v2.22.3's page was
+edited in place to carry it.
+
 ## Open items → next session
 
 ### DONE: v2.22.2 on the three remote Pis (2026-10-09)
