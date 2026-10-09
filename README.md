@@ -981,6 +981,22 @@ there is no spotting station to name. The time is the spot's, not the
 delivery time, so a retried or queued alert still says when the station was
 heard.
 
+**An alert from one of your decoders also carries the DX station's audio
+offset**: `DF` (MSHV's name for it) at the end of the line. That's the
+number you click in the waterfall to answer. The MHz figure can't tell you:
+it is the dial plus the offset, rounded to the kHz, so 14.074 + 1487 Hz reads
+as 14.075.
+
+```
+🔴 NEW DXCC: 3Y0J
+Bouvet  14.075 MHz  20M  FT8  -10 dB  DF 1487 Hz
+```
+
+Alerts from cluster spots show no `DF`. A cluster spot reaches DXCA without an
+offset, and printing `DF 0 Hz` would point at the bottom of the passband.
+FlexRadio and TCI need no `DF`: they already place the mark at the dial plus
+the offset. (Unreleased: on `main` after v2.22.2.)
+
 The search box above the table filters on **either** — type a DX callsign to
 follow one station, or a spotter to see everything one skimmer is hearing.
 

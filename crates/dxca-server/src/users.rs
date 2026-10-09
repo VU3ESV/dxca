@@ -1170,8 +1170,21 @@ fn alert_html(c: &Classification, call: &str, spot: &Spot, is_lotw: bool) -> Str
         "{label}{key}: {call}{}",
         if is_lotw { LOTW_MARK } else { "" }
     );
+    // The DX station's audio offset — the number you click in the waterfall
+    // to answer it. The MHz figure cannot say it: that is dial + offset
+    // rounded to the kHz, so 14.074 + 1487 Hz reads as 14.075 and the 487
+    // is gone. Shown as MSHV's `DF`, the column it sits under there.
+    //
+    // Zero means "no offset known", not 0 Hz: a cluster spot becomes a
+    // synthetic decode with the field at 0, and no FT8/FT4 signal sits at
+    // 0 Hz audio. An empty `DF 0 Hz` would send the operator to the bottom
+    // edge of the passband for a station that may be anywhere.
+    let df = match spot.delta_frequency_hz {
+        0 => String::new(),
+        hz => format!("  DF {hz} Hz"),
+    };
     let body = format!(
-        "{}{freq}  {band}  {}  {} dB",
+        "{}{freq}  {band}  {}  {} dB{df}",
         if dxcc.is_empty() {
             String::new()
         } else {
@@ -1265,6 +1278,34 @@ mod alert_message_tests {
         let html = alert_html(&classification(), "3Y0J", &spot("MSHV", None), false);
         assert!(html.contains("Node: MSHV"), "got {html}");
         assert!(!html.contains("Spotter:"), "no empty label: {html}");
+    }
+
+    /// A decoded spot says where in the passband the DX is transmitting.
+    /// The MHz figure rounds that away (14.074 + 1487 Hz shows as 14.075),
+    /// and it is the number the operator clicks to answer.
+    #[test]
+    fn a_decoded_alert_carries_the_dx_audio_offset() {
+        let s = Spot {
+            delta_frequency_hz: 1487,
+            ..spot("MSHV", None)
+        };
+        let html = alert_html(&classification(), "3Y0J", &s, false);
+        assert!(html.contains("-10 dB  DF 1487 Hz\n"), "got {html}");
+    }
+
+    /// A cluster spot has no offset: it arrives as a synthetic decode with
+    /// the field at 0. Printing `DF 0 Hz` would point at the bottom edge of
+    /// the passband for a station that could be anywhere in it.
+    #[test]
+    fn a_cluster_alert_shows_no_offset() {
+        let html = alert_html(
+            &classification(),
+            "3Y0J",
+            &spot("N2WQ-2", Some("VU2XYZ")),
+            false,
+        );
+        assert!(!html.contains("DF "), "no offset known: {html}");
+        assert!(html.contains("-10 dB\n"), "body ends at the SNR: {html}");
     }
 
     /// The spot's own time, in UTC, not the delivery time — a queued or

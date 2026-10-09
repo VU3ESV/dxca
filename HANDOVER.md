@@ -2,9 +2,10 @@
 *For continuation in a new Claude session*
 
 <details>
-<summary><b>Contents</b> — 102 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
+<summary><b>Contents</b> — 103 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
 
 - [What this is](#what-this-is)
+- [Session 2026-10-09 (evening) — Telegram alerts carry the DX's audio offset](#session-2026-10-09-evening--telegram-alerts-carry-the-dxs-audio-offset)
 - [Session 2026-10-09 (later) — v2.22.2 released, on .109 and Windows](#session-2026-10-09-later--v2222-released-on-109-and-windows)
 - [Session 2026-10-09 — the release check stores only a success](#session-2026-10-09--the-release-check-stores-only-a-success)
 - [Session 2026-10-08 — DXCA says when a newer release is out](#session-2026-10-08--dxca-says-when-a-newer-release-is-out)
@@ -110,6 +111,9 @@
 </details>
 
 **Created:** 2026-08-26 · **Last updated:** 2026-10-09 · **Status:**
+**`main` is ahead of v2.22.2 by one change: Telegram alerts from a decoder
+carry the DX's audio offset (`DF 1487 Hz`). Unreleased, on no host**
+(*Session 2026-10-09 (evening)*). Before that:
 **v2.22.2 — DXCA says when a newer release is out. Tagged and released with
 the Windows zip, 2026-10-09 05:15 IST; running on .109 (the production
 container), the Windows box `.170` and the three remote Pis** — adersh,
@@ -721,6 +725,39 @@ and the web GUI's design system from the same repo's
 2026-09-22**, having run on noderedpi4 (192.168.1.169) from the 2026-08-27
 cutover. noderedpi4's install is stopped and disabled, kept as the
 rollback. The 1.x macOS app is the retained fallback (maintenance mode).
+
+## Session 2026-10-09 (evening) — Telegram alerts carry the DX's audio offset
+
+**No version bump.** `Cargo.toml` stays 2.22.2, so there is no tag and no host
+runs this yet.
+
+Manoj: *"add tx freq offset of dx station in alerts"*. A Telegram alert from a
+decoder now ends its body line with the DX station's audio offset:
+
+```
+🔴 NEW DXCC: 3Y0J
+Bouvet  14.075 MHz  20M  FT8  -10 dB  DF 1487 Hz
+```
+
+- **Why it was missing.** The MHz figure is dial + offset rounded to the kHz,
+  so the offset was in the message and rounded away. `Spot::delta_frequency_hz`
+  has carried it from the WSJT-X Decode message all along; only `alert_html`
+  (`users.rs`) changed.
+- **Labelled `DF`**, MSHV's column name for it, which Manoj reads every day.
+  WSJT-X calls the same column `Freq`, which would be confused with the MHz
+  figure beside it.
+- **`0` means unknown and is never printed.** A cluster spot becomes a
+  synthetic decode with the field at 0, and no FT8/FT4 signal sits at 0 Hz
+  audio. Many FT8 cluster comments do carry an offset (`FT8 -12 dB 1567 Hz`).
+  They aren't parsed: that would be a separate change.
+- **Telegram only.** FlexRadio and TCI already mark the panadapter at
+  dial + offset. The **Alerts history** table stores `frequency_hz` and has no
+  offset column, so showing `DF` there needs a schema column and a UI column.
+  Not done; it's Manoj's call.
+
+Two tests pin it: `a_decoded_alert_carries_the_dx_audio_offset` and
+`a_cluster_alert_shows_no_offset`. `just gate` passed. README: a paragraph
+under *Who spotted it*, after the Telegram examples.
 
 ## Session 2026-10-09 (later) — v2.22.2 released, on .109 and Windows
 
