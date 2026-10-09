@@ -133,8 +133,9 @@ builds never check by themselves (*Sessions 2026-10-08 and 2026-10-09*);
 `dxca reset-password` for a locked-out admin (VU3ESV's PR #9, *Session
 2026-10-03*); and VU3ESV's PR #8 — every alert is recorded for every channel
 it went to, and the Alerts table filters by column (*Session 2026-09-25*).
-Deploy record in *Session 2026-10-09 (later)*. A cloud QSO inbox is parked
-as a todo under *Open items* (2026-10-07). Previously:
+Deploy record in *Session 2026-10-09 (later)*. The cloud QSO inbox parked
+under *Open items* on 2026-10-07 became its own private repo,
+`vu2cpl/qso-inbox`, on 2026-10-09. Previously:
 **Production moved off noderedpi4 into a Docker container on `ubersdr`
 (192.168.1.109), 2026-09-22, 11:09 IST.** noderedpi4's dxca is stopped and
 disabled, kept as the rollback. The decoders and the Mac's telnet client
@@ -2685,6 +2686,10 @@ each box got the drill — backup with md5, rollback binary kept,
 *Session 2026-10-09 (evening)*.
 
 ### TODO: a cloud QSO inbox — QLog on the Pi into RUMlog (2026-10-07)
+
+**Taken up 2026-10-09 as its own private repo, `vu2cpl/qso-inbox`
+(`~/projects/qso-inbox`).** Its `PLAN.md` and `HANDOVER.md` carry it from here;
+nothing below is maintained. The original entry:
 
 **Parked on Manoj's word** (*"keep it as a todo"*). Not a dxca feature: build
 it as its own private repo, borrowing `dxca-core`'s `adif.rs` and `wsjtx.rs`
