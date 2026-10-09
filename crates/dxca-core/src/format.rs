@@ -33,7 +33,18 @@ pub fn format(spot: &Spot) -> String {
     let spotter: String = raw.chars().take(13).collect(); // DX-Spider spotter limit
 
     let freq_str = format!("{:.1}", spot.frequency_khz());
-    let comment = format!("{} {} dB", spot.mode, spot.snr_db);
+    // The comment ends with the DX station's audio offset when one is known,
+    // labelled `DF` as the alerts and the Alerts history label it (MSHV's
+    // name for the column). The frequency cell can't carry it: dial + offset
+    // rounded to 0.1 kHz, so 14074 + 1487 Hz reads 14075.5. `dx_offset_hz`
+    // is `None` for a cluster spot whose comment said nothing, never
+    // `Some(0)`, so no line ever says `DF 0 Hz`. `<n> Hz` is the labelled
+    // form `offset_from_comment` reads, so a DXCA downstream of this one
+    // recovers the offset from the line as it would from a human's comment.
+    let comment = match spot.dx_offset_hz() {
+        Some(hz) => format!("{} {} dB DF {hz} Hz", spot.mode, spot.snr_db),
+        None => format!("{} {} dB", spot.mode, spot.snr_db),
+    };
 
     format!(
         "DX de {} {} {}{} {}Z",
@@ -88,6 +99,75 @@ mod tests {
         assert!(line.ends_with("Z"));
         // The spotter is one token.
         assert_eq!(line.split_whitespace().nth(2), Some("MSHV2333:"));
+    }
+
+    /// Every field a decoder fills, so a test can vary the one it is about.
+    fn k1jt(delta_frequency_hz: u32, comment: &str) -> Spot {
+        Spot {
+            time_unix: 14 * 3600 + 28 * 60,
+            snr_db: -10,
+            delta_time_s: 0.0,
+            delta_frequency_hz,
+            mode: "FT8".into(),
+            mode_inferred: false,
+            message: "CQ K1JT FN20".into(),
+            is_cq: true,
+            comment: comment.into(),
+            low_confidence: false,
+            off_air: false,
+            dial_frequency_hz: 14_074_000,
+            source_name: "MSHV".into(),
+            spotter: None,
+            is_skimmer: false,
+            grid: None,
+            iota: None,
+        }
+    }
+
+    /// A decoder's offset reaches the line as `DF <n> Hz` after the SNR,
+    /// inside the 28-column comment cell, with the time still last. The
+    /// frequency cell is dial + offset as before — the offset is added, not
+    /// moved.
+    #[test]
+    fn the_comment_carries_the_decoders_offset() {
+        let line = format(&k1jt(1487, ""));
+        assert_eq!(
+            line,
+            "DX de MSHV:          14075.5   K1JT          FT8 -10 dB DF 1487 Hz        1428Z"
+        );
+    }
+
+    /// A cluster spot has no decoder offset; one read from its comment goes
+    /// out the same way, so a relayed skimmer spot keeps its offset.
+    #[test]
+    fn the_comment_carries_a_cluster_spots_offset_too() {
+        let line = format(&k1jt(0, "-11 dB 1794 FT8"));
+        assert!(line.contains("FT8 -10 dB DF 1794 Hz "), "got {line}");
+    }
+
+    /// `0` means unknown, never a signal at the bottom of the passband:
+    /// a cluster spot with a silent comment gets no `DF` at all.
+    #[test]
+    fn no_offset_means_no_df() {
+        let line = format(&k1jt(0, "QSL via bureau"));
+        assert!(line.contains("FT8 -10 dB      "), "got {line}");
+        assert!(!line.contains("DF"), "got {line}");
+    }
+
+    /// What this writes, `offset_from_comment` reads: a DXCA fed by another
+    /// DXCA's telnet server sees the offset as if a human had typed it.
+    #[test]
+    fn the_written_offset_reads_back() {
+        let line = format(&k1jt(1487, ""));
+        // Tokens: DX de MSHV: 14075.5 K1JT, then the comment, then the time.
+        let comment = line
+            .split_whitespace()
+            .skip(5)
+            .take(6)
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert_eq!(comment, "FT8 -10 dB DF 1487 Hz");
+        assert_eq!(crate::spot::offset_from_comment(&comment), Some(1487));
     }
 
     #[test]

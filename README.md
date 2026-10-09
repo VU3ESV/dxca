@@ -1028,6 +1028,14 @@ FlexRadio and TCI need no `DF`: they already place the mark at the spot's
 frequency. The **Alerts** history has a `DF` column too (see [Alert
 history](#alert-history)). (New in v2.22.3.)
 
+**The cluster line carries it too.** A decoder's spot reaches the telnet
+server, the `cluster`-format UDP destinations and MQTT's `<base>/cluster`
+with the offset at the end of the comment, `FT8 -10 dB DF 1487 Hz`, so a
+logger that shows the comment shows where to click. A relayed cluster spot
+goes out with the offset read from its comment, in that same labelled form,
+and a spot with no known offset keeps the plain `FT8 -10 dB`. (After
+v2.22.3.)
+
 The search box above the table filters on **either** — type a DX callsign to
 follow one station, or a spotter to see everything one skimmer is hearing.
 
@@ -1577,8 +1585,12 @@ Each spot is published **twice**, to sibling topics under the base (default
 
 | topic | payload |
 |---|---|
-| `<base>/json` | `{"callsign":"K1JT","frequency_hz":14074000,"band":"20M","mode":"FT8","snr_db":-10,"comment":"FT8 -10 dB","is_cq":true,…}` |
-| `<base>/cluster` | `DX de DXCA:  14074.0  K1JT  FT8 -10 dB  1428Z` |
+| `<base>/json` | `{"callsign":"K1JT","frequency_hz":14075487,"band":"20M","mode":"FT8","snr_db":-10,"comment":"FT8 -10 dB","is_cq":true,…}` |
+| `<base>/cluster` | `DX de DXCA:  14075.5  K1JT  FT8 -10 dB DF 1487 Hz  1428Z` |
+
+The cluster line's `DF 1487 Hz` is the DX station's audio offset, the same
+`DF` the alerts carry (see [Who spotted it](#who-spotted-it)); it is absent
+when no offset is known. `frequency_hz` is already dial + offset.
 
 **For a FlexRadio panadapter, the telnet cluster server is the shorter
 route.** Aether takes a DX cluster directly, so pointing it at DXCA's telnet

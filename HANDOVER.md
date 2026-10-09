@@ -2,9 +2,10 @@
 *For continuation in a new Claude session*
 
 <details>
-<summary><b>Contents</b> — 104 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
+<summary><b>Contents</b> — 105 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
 
 - [What this is](#what-this-is)
+- [Session 2026-10-09 (night) — the cluster line carries the DX's audio offset](#session-2026-10-09-night--the-cluster-line-carries-the-dxs-audio-offset)
 - [Session 2026-10-09 (evening) — alerts carry the DX's audio offset](#session-2026-10-09-evening--alerts-carry-the-dxs-audio-offset)
 - [Session 2026-10-09 (later) — v2.22.2 released, on .109 and Windows](#session-2026-10-09-later--v2222-released-on-109-and-windows)
 - [Session 2026-10-09 — the release check stores only a success](#session-2026-10-09--the-release-check-stores-only-a-success)
@@ -733,6 +734,48 @@ and the web GUI's design system from the same repo's
 2026-09-22**, having run on noderedpi4 (192.168.1.169) from the 2026-08-27
 cutover. noderedpi4's install is stopped and disabled, kept as the
 rollback. The 1.x macOS app is the retained fallback (maintenance mode).
+
+## Session 2026-10-09 (night) — the cluster line carries the DX's audio offset
+
+Manoj: *"does the spots going to destinations also have DF field in
+comments?"* They did not — the line's comment was `FT8 -10 dB`, the offset
+folded into the frequency cell and rounded away there, exactly the gap the
+evening's alert change closed for Telegram. Then: *"add the DF to the
+comment in both formatters."*
+
+- **What changed.** `format()` in `dxca-core/src/format.rs` writes
+  `FT8 -10 dB DF 1487 Hz` when `Spot::dx_offset_hz()` is `Some`, and the
+  old `FT8 -10 dB` when it is `None`. `pipeline.rs` builds that one line and
+  hands it to the telnet server, every UDP destination in `cluster` format
+  and MQTT's `<base>/cluster`, so all three carry it. **Not** the MQTT JSON
+  `comment` (that is the spot's own inbound comment, untouched), not the
+  WSJT-X-format UDP destinations (dial = the exact frequency, Decode `DF`
+  0, as the builder's header explains) and not passthrough.
+- **Why `DF <n> Hz` and not the skimmer frame `-10 dB 1487 FT8`.** Same
+  label as the alerts and the Alerts history column, and mode-first is the
+  order every logger has parsed from DXCA since 1.x. `<n> Hz` is the
+  labelled form `offset_from_comment` reads, so a DXCA fed by another
+  DXCA's telnet server (or by the 1.x app's) recovers the offset as if a
+  human had typed it — `the_written_offset_reads_back` pins that.
+- **Relayed cluster spots carry theirs too.** `dx_offset_hz` falls back to
+  the comment, so a VU2CPL-skimmer spot goes out as `FT8 -11 dB DF 1794 Hz`
+  (`the_comment_carries_a_cluster_spots_offset_too`). A silent comment gets
+  no `DF` at all, never `DF 0 Hz` (`no_offset_means_no_df`).
+- **Column budget.** The comment cell is 28 wide; the longest realistic
+  case, `FST4W -24 dB DF 2999 Hz`, is 23. The time still lands last, where
+  RUMlog's `\d{4}Z$` looks for it (`the_comment_carries_the_decoders_offset`
+  asserts the whole line).
+- **The 1.x Mac app got the same change** the same night
+  (`ClusterFormatter.swift`, `DF` only when `deltaFrequency > 0`; its
+  cluster-sourced spots are built with 0). Unreleased there — it rides with
+  the next 1.x release, like the update-dialog change above it.
+
+`just gate` passed. README: the *DF* paragraph under *Who spotted it* says
+the cluster line carries it, and the MQTT table has the example. **Not
+released**: v2.22.3 stays the latest, and the fleet is on it. A release
+(bump, tag, Windows zip, `## Updating` notes — see the checklist memory) and
+the usual .109-first deploy are the next step when Manoj wants the line on
+the air.
 
 ## Session 2026-10-09 (evening) — alerts carry the DX's audio offset
 
