@@ -2,7 +2,7 @@
 *For continuation in a new Claude session*
 
 <details>
-<summary><b>Contents</b> — 103 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
+<summary><b>Contents</b> — 104 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
 
 - [What this is](#what-this-is)
 - [Session 2026-10-09 (evening) — alerts carry the DX's audio offset](#session-2026-10-09-evening--alerts-carry-the-dxs-audio-offset)
@@ -44,6 +44,7 @@
 - [Open items → next session](#open-items--next-session)
   - [DONE: v2.22.2 on the three remote Pis (2026-10-09)](#done-v2222-on-the-three-remote-pis-2026-10-09)
   - [DONE in v2.22.2: the GitHub release check (2026-10-08)](#done-in-v2222-the-github-release-check-2026-10-08)
+  - [OPEN: v2.22.3 on the three remote Pis (2026-10-09)](#open-v2223-on-the-three-remote-pis-2026-10-09)
   - [TODO: a cloud QSO inbox — QLog on the Pi into RUMlog (2026-10-07)](#todo-a-cloud-qso-inbox--qlog-on-the-pi-into-rumlog-2026-10-07)
   - [OPEN: a green radio chip is the queue, not the radio (2026-09-25)](#open-a-green-radio-chip-is-the-queue-not-the-radio-2026-09-25)
   - [DONE in v2.22.2: every alert recorded for every channel — PR #8 (2026-09-25)](#done-in-v2222-every-alert-recorded-for-every-channel--pr-8-2026-09-25)
@@ -114,10 +115,11 @@
 **v2.22.3 — alerts carry the DX's audio offset: `DF 1487 Hz` in Telegram
 and a `DF` column in the Alerts history, from the decoder or a cluster spot's
 comment. Adds `alerts_sent.offset_hz`, which migrates itself on first open.
-Tagged and released with the Windows zip, 2026-10-09; deployed NOWHERE on
-purpose** — Manoj: *"dont install"*, so that .109 on 2.22.2 can show whether
-the new release check registers it (*Session 2026-10-09 (evening)*). Before
-that:
+Tagged and released with the Windows zip, 2026-10-09 07:44 IST; held back
+until the release check on .109 had shown its first real banner, then
+deployed: .109 (the production container) 08:57 IST and Windows `.170`
+08:59 IST, both verified. The three remote Pis wait on their tunnels** —
+see *Open items* (*Session 2026-10-09 (evening)*). Before that:
 **v2.22.2 — DXCA says when a newer release is out. Tagged and released with
 the Windows zip, 2026-10-09 05:15 IST; running on .109 (the production
 container), the Windows box `.170` and the three remote Pis** — adersh,
@@ -749,6 +751,32 @@ had not asked. He pressed **Check now**: *"i got it now"*. From outside,
 `update: {tag: v2.22.3, current: 2.22.2, skipped: false, …}` and GitHub's
 counter read 59/60 — one request, his. The first real banner the feature
 has shown, as the v2.22.2 notes predicted.
+
+**Deployed, after the banner had been seen** (Manoj: *"install on 109"*,
+then *"and then on all other machines"*):
+
+| Box | Before → after | Nodes Live | DB backup | Up (IST) |
+|---|---|---|---|---|
+| .109 container (x86_64) | 2.22.2 → **2.22.3** | 8/8 → 8/8 | `dxca.db.pre-v2.22.3`, md5 `d51e2967…` equal, no WAL | 08:57 |
+| Windows .170 | 2.22.2 → **2.22.3** | 2/2 → 2/2 | `dxca.db.pre-v2.22.3`, md5 `485da4b3…` equal | 08:59 |
+
+.109: `deploy/docker-deploy.sh` from the main clone (the key file is there,
+and `DXCA_CLUBLOG_API_KEY` exported as well), code identical to the tag
+(`git diff v2.22.3..HEAD -- crates web-ui Cargo.*` empty). Smoke test OK,
+container restarted on `dxca:2.22.3`; `dxca:2.22.2` kept as the rollback
+image. The start line names all eight nodes; no error or warning. The
+`alerts_sent.offset_hz` column was added on first open — 500 rows, none
+with an offset yet, as expected. `/api/status` now carries `update: null`:
+the stored latest equals the running version, so the banner went away by
+itself, as designed. Windows: `deploy/win-deploy.sh`, binary swapped,
+previous kept at `C:\DXCA\dxca.exe.bak`, task restarted, dashboard
+serving; the script's own check passed. `cty 402` on both.
+
+**Rollback, .109:** `sudo docker stop dxca && sudo docker rm dxca`, then
+the `docker create` line from `docker-deploy.sh` with `dxca:2.22.2`, then
+`start`; 2.22.2 ignores the new column, so the live database is fine, and
+`dxca.db.pre-v2.22.3` is there anyway. **Windows:** stop the task, `move /y
+dxca.exe.bak dxca.exe`, start it.
 
 **Found while confirming: the log line trails Check now by up to an hour.**
 `spawn`'s loop prints `dxca: DXCA x is available …` after each hourly pass
@@ -2625,6 +2653,16 @@ nothing — revised 2026-10-09). An install shows a banner
 only once a release newer than the one it runs is published, so the first
 notice anyone sees will be for the release *after* the one that ships this.
 See *Session 2026-10-08* and *Session 2026-10-09*.
+
+### OPEN: v2.22.3 on the three remote Pis (2026-10-09)
+
+.109 and Windows are on 2.22.3 (*Session 2026-10-09 (evening)*). At 09:00
+IST adersh, vu2wj and vu2oy had no tunnel route and no ping. Manoj was
+asked to bring the three tunnels up; then the 09-22 drill per box:
+`dxca.db` → `dxca.db.pre-v2.22.3` with md5 checked, `pi-deploy.sh --no-seed`,
+`/api/status` version and node count after. vu2oy is bookworm/glibc 2.36 —
+the target floor stays. Each of the three will show the v2.22.3 banner to
+its admin at its own daily check until then; that is the feature working.
 
 ### TODO: a cloud QSO inbox — QLog on the Pi into RUMlog (2026-10-07)
 
