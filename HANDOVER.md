@@ -41,7 +41,7 @@
 - [The installs (2026-08-28; VU2OY added 2026-08-30; production moved to .109 2026-09-22)](#the-installs-2026-08-28-vu2oy-added-2026-08-30-production-moved-to-109-2026-09-22)
 - [Release convention (2026-08-28, standing)](#release-convention-2026-08-28-standing)
 - [Open items → next session](#open-items--next-session)
-  - [OPEN: v2.22.2 on the three remote Pis (2026-10-09)](#open-v2222-on-the-three-remote-pis-2026-10-09)
+  - [DONE: v2.22.2 on the three remote Pis (2026-10-09)](#done-v2222-on-the-three-remote-pis-2026-10-09)
   - [DONE in v2.22.2: the GitHub release check (2026-10-08)](#done-in-v2222-the-github-release-check-2026-10-08)
   - [OPEN: a green radio chip is the queue, not the radio (2026-09-25)](#open-a-green-radio-chip-is-the-queue-not-the-radio-2026-09-25)
   - [DONE in v2.22.2: every alert recorded for every channel — PR #8 (2026-09-25)](#done-in-v2222-every-alert-recorded-for-every-channel--pr-8-2026-09-25)
@@ -111,9 +111,10 @@
 **Created:** 2026-08-26 · **Last updated:** 2026-10-09 · **Status:**
 **v2.22.2 — DXCA says when a newer release is out. Tagged and released with
 the Windows zip, 2026-10-09 05:15 IST; running on .109 (the production
-container) and the Windows box `.170`.** The three remote Pis are still on
-2.22.1: their WireGuard tunnels were down, and bringing them up needs
-Manoj's `sudo wg-quick up` (open item). The release ships the GitHub release
+container), the Windows box `.170` and the three remote Pis** — adersh,
+vu2wj and vu2oy followed at 05:32–05:35 IST once Manoj had brought their
+WireGuard tunnels up (*DONE: v2.22.2 on the three remote Pis*). The whole
+fleet is on 2.22.2. The release ships the GitHub release
 check — admins see a banner when a newer DXCA is out, one log line, never an
 install; only a successful check is stored, failures retry hourly, dev
 builds never check by themselves (*Sessions 2026-10-08 and 2026-10-09*);
@@ -774,10 +775,13 @@ Windows zip and no checksum file, so this release does the same.
   Live, a clean start line in `run.log`, cty 402, `fcc_calls: 0` (the
   expected not-shipped state). Rollback: `C:\DXCA\dxca.exe.bak` is the
   2.22.0 exe.
-- **adersh `.151`, vu2wj `.201`, vu2oy `192.168.220.51`: skipped, still
-  2.22.1.** No tunnel was up — all three addresses routed via `en0` to the
-  default gateway, no ping, no `/api/status` — and `sudo wg-quick up` needs
-  Manoj's password. Open item.
+- **adersh `.151`, vu2wj `.201`, vu2oy `192.168.220.51`: skipped at 05:18,
+  deployed at 05:32–05:35.** At 05:18 no tunnel was up: all three addresses
+  routed via `en0` to the default gateway, with no ping and no
+  `/api/status`, and `sudo wg-quick up` needs Manoj's password. He brought
+  the tunnels up, and all three went to **2.22.2** with every node Live
+  (5/5, 3/3, 4/4) and their config md5s unchanged. Record in *DONE: v2.22.2
+  on the three remote Pis*.
 - **noderedpi4: not deployed, on purpose.** Its dxca is the stopped,
   disabled rollback for .109, and `pi-deploy.sh` would re-enable it as a
   second sender.
@@ -2427,19 +2431,68 @@ Status section led with v2.20.4 for eighteen days (backfilled 2026-09-21).
 
 ## Open items → next session
 
-### OPEN: v2.22.2 on the three remote Pis (2026-10-09)
+### DONE: v2.22.2 on the three remote Pis (2026-10-09)
 
-v2.22.2 is on .109 and the Windows box. **adersh `192.168.1.151`, vu2wj
-`192.168.1.201` and vu2oy `192.168.220.51` are still on 2.22.1**: on
-2026-10-09 none of the three tunnels was up (each address routed via `en0`
-to the default gateway, no ping, no `/api/status`), and `sudo wg-quick up`
-needs Manoj's password. Once he has brought them up — check `sudo wg show`
-for a recent handshake, not just the route — the drill per box is the
-09-22 one: ping, `cp -p data/dxca.db data/dxca.db.pre-v2.22.2` with md5
-equal, the outgoing binary kept as `dxca.rollback-v2.22.1`, then
-`deploy/pi-deploy.sh --no-seed <user>@<ip>` from a checkout of `v2.22.2`
-(or `main`, while it carries only docs since the tag), and verify version, nodes Live, config md5 unchanged, journal clean. Ask
-before assuming vu2wj is on.
+**Resolved 2026-10-09, 05:32–05:35 IST.** At the 05:18 deploy none of the
+three tunnels was up; Manoj then brought all three up (*"tunnels are up,
+deploy dxca"*). Each address now routed via its own `utun` (8, 9, 10),
+answered ping and reported 2.22.1 on `/api/status`. **The whole fleet is on
+2.22.2.**
+
+The binary was built once, from a detached `git worktree` of the `v2.22.2`
+tag in the session scratchpad, and the worktree was removed afterwards. The
+build ran with the key exported as `DXCA_CLUBLOG_API_KEY` (see the gotcha
+below). The aarch64 binary is 8,481,128 bytes, md5 `69fb32f8…`, and needs
+GLIBC_2.34 at most, so it fits bookworm's 2.36. It carries the 40 obfuscated
+key bytes, no plaintext key and no placeholder UI. `pi-deploy.sh` rebuilt it
+three times, each time to the same md5. Each box got the 09-22 drill, one at
+a time:
+
+| Box | Before → after | Nodes Live | Config md5 (unchanged) | Up (IST) | Update check |
+|---|---|---|---|---|---|
+| adersh `192.168.1.151` (trixie) | 2.22.1 → **2.22.2** | 5/5 → 5/5 | `2f8c037c…` | 05:32:40 | 05:33:11 OK |
+| vu2wj `192.168.1.201` (trixie) | 2.22.1 → **2.22.2** | 3/3 → 3/3 | `094c2a23…` | 05:33:39 | 05:34:11 OK |
+| vu2oy `192.168.220.51` (bookworm) | 2.22.1 → **2.22.2** | 4/4 → 4/4 | `65935bf2…` | 05:34:38 | 05:35:10 OK |
+
+On each box, before the deploy, `data/dxca.db` was copied to
+`dxca.db.pre-v2.22.2` (md5 equal, no WAL or journal file) and the outgoing
+binary was kept as `/opt/dxca/dxca.rollback-v2.22.1` (md5 `572f1e11…`, the
+same 2.22.1 build on all three). The manifest was the binary, the unit and
+`install.sh` only. `~/dxca-deploy` holds just those three files afterwards.
+The journal on each shows the old process's `shut down cleanly`, then the
+2.22.2 start line naming every node, with no panic, error or warning and
+`NRestarts=0`. `alerts_sent.channels` was added on first open, and `cty`,
+FCC, IOTA, LoTW and the one account were unchanged. vu2oy gained a fourth
+node, `VU2OY-9`, since the 09-22 deploy (3/3 then); its admin added it, and
+it was Live before and after.
+
+**Checking the update check on a Pi.** It logs nothing when the running
+release is current, and nothing on a failure. So the evidence is the `meta`
+table: `update_last_success_unix`, `update_latest_release` (`v2.22.2`) and
+`update_latest_notes`, written about 31 s after each start. The Pis have no
+`sqlite3` CLI. Read the table with `python3` and
+`sqlite3.connect("file:/opt/dxca/data/dxca.db?mode=ro", uri=True)` instead.
+`/api/status` then carries `update: null`, where 2.22.1 had no key.
+
+**Gotcha — a worktree build needs the key in the environment.**
+`.clublog-api-key` is gitignored, so a fresh `git worktree` or clone lacks
+it. Without the key, `build.rs` silently embeds an empty one, and the remote
+admins, who have no key of their own, would lose the cty refresh. Export
+`DXCA_CLUBLOG_API_KEY="$(cat <main clone>/.clublog-api-key)"` in the shell
+that runs `pi-deploy.sh`. Check the build with the length of
+`OBFUSCATED_CLUBLOG_KEY` in `target/…/build/dxca-server-*/out/clublog_key.rs`
+(40), never by printing the key.
+
+**Rollback, per box:** `sudo systemctl stop dxca && sudo install -m 755
+/opt/dxca/dxca.rollback-v2.22.1 /opt/dxca/dxca && sudo systemctl start
+dxca`. v2.22.1 runs on the migrated database (see .109's note in *Session
+2026-10-09 (later)*). `dxca.db.pre-v2.22.2` is there if the database has to
+go back too. Not needed: every check passed.
+
+The tunnel check was route + ping + `/api/status`, not `sudo wg show`,
+which needs Manoj's password. That is enough when all three answer: the
+09-22 trap was a route that existed while the tunnel did not pass traffic,
+and these did.
 
 ### DONE in v2.22.2: the GitHub release check (2026-10-08)
 
