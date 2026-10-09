@@ -739,6 +739,25 @@ as an update"*, then *"dont install"*. The automatic check runs daily, so
 **Check now** on Settings › Server › Reference data is the way to see it
 today. Deploying afterwards is the usual drill, .109 first.
 
+**It registered (2026-10-09, ~08:55 IST).** Manoj: *"its on 2.22.2, no
+banners shown"* — correct at that moment: .109's last successful check was
+05:17 IST (36 s after the v2.22.2 restart, answer v2.22.2, nothing newer),
+the next automatic one was ~20 h away, the container had logged no update
+line, and GitHub's counter from the shack's address stood at 60/60 — it
+had not asked. He pressed **Check now**: *"i got it now"*. From outside,
+`/api/status` on .109 then carried
+`update: {tag: v2.22.3, current: 2.22.2, skipped: false, …}` and GitHub's
+counter read 59/60 — one request, his. The first real banner the feature
+has shown, as the v2.22.2 notes predicted.
+
+**Found while confirming: the log line trails Check now by up to an hour.**
+`spawn`'s loop prints `dxca: DXCA x is available …` after each hourly pass
+from the *stored* record (`available(&checker.db)`), and `Check now` only
+stores. So the banner is immediate and the log line arrives at the loop's
+next tick. Not changed — one line per run is the right rule and the loop is
+the right owner — but the README's *Update check* now says so, because
+"banner but no log line" reads like a fault from `docker logs`.
+
 Manoj: *"add tx freq offset of dx station in alerts"*. A Telegram alert from a
 decoder now ends its body line with the DX station's audio offset:
 

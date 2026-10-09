@@ -1693,7 +1693,10 @@ a failure is never stored), and **Check now**, which asks immediately and
 does report a failure; a failed Check now does not put the next automatic
 check off. **Skip this version** hides the banner for that one release — the
 next one brings it back — and **Show again** on the card undoes it. After you
-upgrade, the notice goes away by itself.
+upgrade, the notice goes away by itself. The banner follows **Check now** at
+once; the log line is the daily loop's, written at its next hourly pass once
+a newer release is stored, so after a Check now it can trail the banner by up
+to an hour.
 
 To switch the automatic check off, add to `config/dxca.toml` and restart:
 
