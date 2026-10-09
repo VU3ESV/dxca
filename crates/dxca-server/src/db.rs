@@ -880,6 +880,14 @@ pub struct SentAlert {
     /// would put a plausible lie in the history; `None` renders as an em dash.
     #[serde(default)]
     pub snr_db: Option<i64>,
+    /// The DX station's audio offset in Hz, from the decoder or a cluster
+    /// comment (`Spot::dx_offset_hz`) — the history's `DF` column.
+    ///
+    /// `None` when the spot did not say, and for every row written before
+    /// the column existed. Same reasoning as `snr_db`: no FT8 signal sits at
+    /// 0 Hz, so a stored 0 would be a plausible lie, not an empty cell.
+    #[serde(default)]
+    pub offset_hz: Option<i64>,
     /// The award key an award-level alert fired on — the grid square, state
     /// or IOTA reference. Empty for the DXCC levels and for rows written
     /// before the award axes existed.
@@ -999,7 +1007,8 @@ CREATE TABLE IF NOT EXISTS alerts_sent (
     spotter TEXT NOT NULL DEFAULT '',
     snr_db INTEGER,
     award_ref TEXT NOT NULL DEFAULT '',
-    channels TEXT NOT NULL DEFAULT '[]'
+    channels TEXT NOT NULL DEFAULT '[]',
+    offset_hz INTEGER
 );
 CREATE INDEX IF NOT EXISTS alerts_sent_user_time
     ON alerts_sent (user_id, time_unix DESC);
@@ -1059,6 +1068,9 @@ const ADDED_COLUMNS: &[(&str, &str, &str)] = &[
         "channels",
         "channels TEXT NOT NULL DEFAULT '[]'",
     ),
+    // Nullable, no default, for snr_db's reason: no historical row recorded
+    // an offset, and NULL is the only value that says so.
+    ("alerts_sent", "offset_hz", "offset_hz INTEGER"),
 ];
 
 /// Bring an existing database up to the current shape. Runs on every open;
@@ -1295,8 +1307,8 @@ impl Db {
             "INSERT INTO alerts_sent
                (user_id, time_unix, callsign, frequency_hz, mode, band,
                 dxcc_name, level, source, spotter, snr_db, award_ref,
-                delivered, error, channels)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+                delivered, error, channels, offset_hz)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
             params![
                 user_id,
                 a.time_unix,
@@ -1316,6 +1328,7 @@ impl Db {
                 // structs, but a history row is worth more than its detail:
                 // fall back to an empty list rather than lose the alert.
                 serde_json::to_string(&a.channels).unwrap_or_else(|_| "[]".into()),
+                a.offset_hz,
             ],
         )
         .map_err(|e| format!("record alert: {e}"))?;
@@ -1337,7 +1350,7 @@ impl Db {
             .prepare(
                 "SELECT time_unix, callsign, frequency_hz, mode, band,
                         dxcc_name, level, source, spotter, snr_db, award_ref,
-                        delivered, error, channels
+                        delivered, error, channels, offset_hz
                  FROM alerts_sent WHERE user_id = ?1
                  ORDER BY time_unix DESC, id DESC LIMIT ?2",
             )
@@ -1362,6 +1375,7 @@ impl Db {
                     // that wrote something unreadable, degrades to "no detail"
                     // rather than failing the whole query.
                     channels: serde_json::from_str(&r.get::<_, String>(13)?).unwrap_or_default(),
+                    offset_hz: r.get(14)?,
                 })
             })
             .map_err(db_err)?;
@@ -2485,6 +2499,9 @@ mod tests {
             rows[0].snr_db, None,
             "a pre-migration row must not claim a 0 dB report"
         );
+        // NULL for the same reason: nobody recorded an offset then, and the
+        // history must show a dash, not `DF 0`.
+        assert_eq!(rows[0].offset_hz, None, "a pre-migration row has no offset");
 
         // And a new row round-trips the spotter.
         db.record_sent_alert(
@@ -2500,6 +2517,7 @@ mod tests {
                 source: "N2WQ-2".into(),
                 spotter: "VU2XYZ".into(),
                 snr_db: Some(-11),
+                offset_hz: Some(1032),
                 award_ref: String::new(),
                 delivered: true,
                 error: String::new(),
@@ -2515,6 +2533,7 @@ mod tests {
         let rows = db.sent_alerts(1, 10).unwrap();
         assert_eq!(rows[0].spotter, "VU2XYZ", "newest first");
         assert_eq!(rows[0].snr_db, Some(-11), "and the SNR round-trips");
+        assert_eq!(rows[0].offset_hz, Some(1032), "and the offset round-trips");
 
         // Idempotent: opening again must not try to add it twice.
         drop(db);
@@ -2577,6 +2596,7 @@ mod tests {
                 source: "VE7CC".into(),
                 spotter: String::new(),
                 snr_db: Some(-7),
+                offset_hz: None,
                 award_ref: String::new(),
                 delivered: false,
                 error: String::new(),
@@ -2640,6 +2660,7 @@ mod tests {
             source: "VE7CC".into(),
             spotter: "LB9KJ".into(),
             snr_db: Some(0),
+            offset_hz: None,
             award_ref: String::new(),
             delivered: false,
             error: String::new(),
@@ -2692,6 +2713,7 @@ mod tests {
             source: "VU2OY".into(),
             spotter: String::new(),
             snr_db: Some(-7),
+            offset_hz: None,
             award_ref: String::new(),
             delivered,
             error: error.into(),

@@ -981,21 +981,36 @@ there is no spotting station to name. The time is the spot's, not the
 delivery time, so a retried or queued alert still says when the station was
 heard.
 
-**An alert from one of your decoders also carries the DX station's audio
-offset**: `DF` (MSHV's name for it) at the end of the line. That's the
-number you click in the waterfall to answer. The MHz figure can't tell you:
-it is the dial plus the offset, rounded to the kHz, so 14.074 + 1487 Hz reads
-as 14.075.
+**Alerts also carry the DX station's audio offset**: `DF` (MSHV's name for
+it) at the end of the line. That's the number you click in the waterfall to
+answer. The MHz figure can't tell you: it is the dial plus the offset,
+rounded to the kHz, so 14.074 + 1487 Hz reads as 14.075.
 
 ```
 🔴 NEW DXCC: 3Y0J
 Bouvet  14.075 MHz  20M  FT8  -10 dB  DF 1487 Hz
 ```
 
-Alerts from cluster spots show no `DF`. A cluster spot reaches DXCA without an
-offset, and printing `DF 0 Hz` would point at the bottom of the passband.
-FlexRadio and TCI need no `DF`: they already place the mark at the dial plus
-the offset. (Unreleased: on `main` after v2.22.2.)
+Your decoders report the offset with every decode. A cluster spot has no
+offset field, so DXCA reads it from the spot's comment when the comment
+gives one, in any of these forms:
+
+| Comment | Where it comes from | `DF` |
+|---|---|---|
+| `FT8 1500Hz BL11`, `1500 Hz` | typed by a human | 1500 |
+| `-15 dB 1032 FT8` | a skimmer that spots at dial + offset | 1032 |
+| `-18 dB 6 FT8 2167`, `-13 dB 6 FT8 CQ KN34 1497` | a skimmer that spots at the dial | 2167, 1497 |
+
+The two unlabelled skimmer forms are read only in exactly that frame (an
+SNR, `dB`, one field, then `FT8` or `FT4`), so a number in any other comment
+is never mistaken for an offset. On the shack's feed that covers nearly
+every FT8 cluster spot: 1,932 of 1,936 in a sample of 2,000. A spot whose
+comment says nothing shows no `DF` at all rather than `DF 0 Hz`, which would
+point at the bottom of the passband.
+
+FlexRadio and TCI need no `DF`: they already place the mark at the spot's
+frequency. The **Alerts** history has a `DF` column too (see [Alert
+history](#alert-history)). (Unreleased: on `main` after v2.22.2.)
 
 The search box above the table filters on **either** — type a DX callsign to
 follow one station, or a spotter to see everything one skimmer is hearing.
@@ -1516,6 +1531,12 @@ to was not recorded then — their ✓ or Failed is Telegram's alone.
 Failed sends are kept and marked, with the reason on hover — Telegram's own
 error text, or which radio was not reachable. A bad chat id otherwise fails
 quietly forever.
+
+**DF** is the DX station's audio offset in Hz, the same figure the Telegram
+alert ends with: from your decoder, or from a cluster spot's comment (see
+[Who spotted it](#who-spotted-it)). It shows `—` when the spot gave no
+offset, and for every alert recorded before the column existed. (Unreleased:
+on `main` after v2.22.2.)
 
 The boxes under the column headings narrow the rows on screen: type part of
 a call, spotter or entity name, or pick a source, mode, band, level, channel

@@ -771,6 +771,7 @@ impl UserService {
                 source: spot.source_name.clone(),
                 spotter: spot.spotter.clone().unwrap_or_default(),
                 snr_db: Some(spot.snr_db as i64),
+                offset_hz: spot.dx_offset_hz().map(i64::from),
                 award_ref: c.award_ref.clone().unwrap_or_default(),
                 // Both are derived from `channels` by `summarise`, once every
                 // channel has reported. Seeding them here would be a claim
@@ -1173,16 +1174,14 @@ fn alert_html(c: &Classification, call: &str, spot: &Spot, is_lotw: bool) -> Str
     // The DX station's audio offset — the number you click in the waterfall
     // to answer it. The MHz figure cannot say it: that is dial + offset
     // rounded to the kHz, so 14.074 + 1487 Hz reads as 14.075 and the 487
-    // is gone. Shown as MSHV's `DF`, the column it sits under there.
-    //
-    // Zero means "no offset known", not 0 Hz: a cluster spot becomes a
-    // synthetic decode with the field at 0, and no FT8/FT4 signal sits at
-    // 0 Hz audio. An empty `DF 0 Hz` would send the operator to the bottom
-    // edge of the passband for a station that may be anywhere.
-    let df = match spot.delta_frequency_hz {
-        0 => String::new(),
-        hz => format!("  DF {hz} Hz"),
-    };
+    // is gone. Shown as MSHV's `DF`, the column it sits under there. From
+    // the decoder, or from a cluster spot's comment when it carries one;
+    // nothing at all when neither does, rather than a `DF 0 Hz` pointing at
+    // the bottom of the passband.
+    let df = spot
+        .dx_offset_hz()
+        .map(|hz| format!("  DF {hz} Hz"))
+        .unwrap_or_default();
     let body = format!(
         "{}{freq}  {band}  {}  {} dB{df}",
         if dxcc.is_empty() {
@@ -1293,9 +1292,22 @@ mod alert_message_tests {
         assert!(html.contains("-10 dB  DF 1487 Hz\n"), "got {html}");
     }
 
-    /// A cluster spot has no offset: it arrives as a synthetic decode with
-    /// the field at 0. Printing `DF 0 Hz` would point at the bottom edge of
-    /// the passband for a station that could be anywhere in it.
+    /// A skimmer's comment carries the offset the synthetic decode lost —
+    /// `-15 dB 1032 FT8` on the shack's own feed.
+    #[test]
+    fn a_cluster_alert_takes_the_offset_from_the_comment() {
+        let s = Spot {
+            comment: "-15 dB 1032 FT8".into(),
+            ..spot("VU2CPL", Some("VU2CPL"))
+        };
+        let html = alert_html(&classification(), "3Y0J", &s, false);
+        assert!(html.contains("-10 dB  DF 1032 Hz\n"), "got {html}");
+    }
+
+    /// A cluster spot whose comment says nothing has no offset: it arrives as
+    /// a synthetic decode with the field at 0. Printing `DF 0 Hz` would point
+    /// at the bottom edge of the passband for a station that could be
+    /// anywhere in it.
     #[test]
     fn a_cluster_alert_shows_no_offset() {
         let html = alert_html(

@@ -129,10 +129,10 @@ ROUTES = {
     "/api/me/alerts": lambda: {"alerts": [
         {"time_unix": NOW - 900, "callsign": "RI1FJL", "frequency_hz": 14074000, "mode": "FT8",
          "band": "20M", "dxcc_name": "FRANZ JOSEF LAND", "level": "newDXCC", "source": "W3LPL",
-         "spotter": "RA3MU", "snr_db": -11, "delivered": True, "error": None},
+         "spotter": "RA3MU", "snr_db": -11, "offset_hz": 1032, "delivered": True, "error": None},
         {"time_unix": NOW - 4000, "callsign": "ZS6TIG", "frequency_hz": 21074000, "mode": "FT8",
          "band": "15M", "dxcc_name": "REPUBLIC OF SOUTH AFRICA", "level": "newBand", "source": "VU2OY",
-         "spotter": "VU2OY", "snr_db": None, "delivered": False, "error": "Telegram 429: too many requests"}]},
+         "spotter": "VU2OY", "snr_db": None, "offset_hz": None, "delivered": False, "error": "Telegram 429: too many requests"}]},
     "/api/spot-stats": lambda: {
         "total": 708, "span_secs": 1920,
         "bands": [{"key": b, "count": 200 - i * 12} for i, b in enumerate(BANDS[:12])],

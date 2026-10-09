@@ -5,7 +5,7 @@
 <summary><b>Contents</b> — 103 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
 
 - [What this is](#what-this-is)
-- [Session 2026-10-09 (evening) — Telegram alerts carry the DX's audio offset](#session-2026-10-09-evening--telegram-alerts-carry-the-dxs-audio-offset)
+- [Session 2026-10-09 (evening) — alerts carry the DX's audio offset](#session-2026-10-09-evening--alerts-carry-the-dxs-audio-offset)
 - [Session 2026-10-09 (later) — v2.22.2 released, on .109 and Windows](#session-2026-10-09-later--v2222-released-on-109-and-windows)
 - [Session 2026-10-09 — the release check stores only a success](#session-2026-10-09--the-release-check-stores-only-a-success)
 - [Session 2026-10-08 — DXCA says when a newer release is out](#session-2026-10-08--dxca-says-when-a-newer-release-is-out)
@@ -111,9 +111,11 @@
 </details>
 
 **Created:** 2026-08-26 · **Last updated:** 2026-10-09 · **Status:**
-**`main` is ahead of v2.22.2 by one change: Telegram alerts from a decoder
-carry the DX's audio offset (`DF 1487 Hz`). Unreleased, on no host**
-(*Session 2026-10-09 (evening)*). Before that:
+**`main` is ahead of v2.22.2: alerts carry the DX's audio offset — `DF 1487
+Hz` in Telegram and a `DF` column in the Alerts history, from the decoder or
+a cluster spot's comment. Adds `alerts_sent.offset_hz`, which migrates itself
+on first open. Unreleased, on no host** (*Session 2026-10-09 (evening)*).
+Before that:
 **v2.22.2 — DXCA says when a newer release is out. Tagged and released with
 the Windows zip, 2026-10-09 05:15 IST; running on .109 (the production
 container), the Windows box `.170` and the three remote Pis** — adersh,
@@ -726,7 +728,7 @@ and the web GUI's design system from the same repo's
 cutover. noderedpi4's install is stopped and disabled, kept as the
 rollback. The 1.x macOS app is the retained fallback (maintenance mode).
 
-## Session 2026-10-09 (evening) — Telegram alerts carry the DX's audio offset
+## Session 2026-10-09 (evening) — alerts carry the DX's audio offset
 
 **No version bump.** `Cargo.toml` stays 2.22.2, so there is no tag and no host
 runs this yet.
@@ -748,16 +750,58 @@ Bouvet  14.075 MHz  20M  FT8  -10 dB  DF 1487 Hz
   figure beside it.
 - **`0` means unknown and is never printed.** A cluster spot becomes a
   synthetic decode with the field at 0, and no FT8/FT4 signal sits at 0 Hz
-  audio. Many FT8 cluster comments do carry an offset (`FT8 -12 dB 1567 Hz`).
-  They aren't parsed: that would be a separate change.
-- **Telegram only.** FlexRadio and TCI already mark the panadapter at
-  dial + offset. The **Alerts history** table stores `frequency_hz` and has no
-  offset column, so showing `DF` there needs a schema column and a UI column.
-  Not done; it's Manoj's call.
+  audio.
+- **FlexRadio and TCI unchanged.** They already mark the panadapter at the
+  spot's frequency.
 
-Two tests pin it: `a_decoded_alert_carries_the_dx_audio_offset` and
-`a_cluster_alert_shows_no_offset`. `just gate` passed. README: a paragraph
-under *Who spotted it*, after the Telegram examples.
+**Same evening, second pass** (Manoj: *"add history column and use comments
+if available"*):
+
+- **Cluster comments.** `Spot::dx_offset_hz()` (`dxca-core/src/spot.rs`)
+  returns the decoder's `delta_frequency_hz` when non-zero, else
+  `offset_from_comment`. The shapes came from 2,000 live spots on .109
+  (`/api/spots?limit=2000` needs no login), not from guessing:
+  - `FT8 1500Hz BL11`: labelled, typed by a human (JG1TSG).
+  - `-15 dB 1032 FT8`: VU2CPL and VU24DX skimmers. They spot at dial +
+    offset, and all 1,106 in the sample agreed with their spot frequency.
+  - `-18 dB 6 FT8 2167`: VU2OY's skimmer. It spots at the dial itself (all
+    824 on a round dial), so the comment is the only place the offset
+    survives. What the `6` means wasn't established; it's always a single
+    digit, and the 100 Hz floor on unlabelled offsets is what stops it being
+    read as one.
+
+  1,932 of the 1,936 FT8 cluster spots yield an offset. The unlabelled forms
+  are read only inside `<snr> dB <n> FT8|FT4`, so RBN's `FT8 -5 dB CQ`, CW
+  skimmers' `25 WPM` and human comments are never read. No regex: the
+  workspace has no regex dependency and this didn't justify one.
+- **Display only, deliberately.** The parsed offset is never written into
+  `delta_frequency_hz`. `Spot::frequency_hz()` adds that field to the dial,
+  so the VU2CPL-style spots, already at dial + offset, would be counted
+  twice, moving their band, dedupe key and radio marks. The doc comment on
+  `dx_offset_hz` says so.
+- **History column.** `SentAlert.offset_hz: Option<i64>`, column
+  `alerts_sent.offset_hz INTEGER` (nullable, no default, for `snr_db`'s
+  reason) in `SCHEMA` and `ADDED_COLUMNS`. The old-database migration test
+  now checks the column too. Alerts.svelte has a `DF` column after dB,
+  right-aligned with Freq and dB, `—` when unknown, no filter control. The
+  mock server's two alerts carry `offset_hz`. Checked in the browser pane
+  against `scripts/dxca-mock-server.py`.
+
+Tests: `offset_from_comment_table` (every live shape plus near misses:
+`kHz`, `FT8 USA250 NM`, RBN, CW WPM, out of range),
+`dx_offset_prefers_the_decoder_and_falls_back_to_the_comment`,
+`a_decoded_alert_carries_the_dx_audio_offset`,
+`a_cluster_alert_takes_the_offset_from_the_comment`,
+`a_cluster_alert_shows_no_offset`, and the extended migration test. `just
+gate` passed. README: *Who spotted it* (the comment forms) and *Alert
+history* (the column).
+
+**Note for whoever runs the next UI check:** the browser pane's
+`preview_start` reads `.claude/launch.json` from the session's own
+directory. A session that started in another repo can't use dxca's
+`web-ui-dev` entry. Run `scripts/dxca-mock-server.py` and `pnpm -C web-ui
+dev` in the background instead, and open `http://localhost:5173`. Vite
+binds `localhost`, not `127.0.0.1`.
 
 ## Session 2026-10-09 (later) — v2.22.2 released, on .109 and Windows
 
