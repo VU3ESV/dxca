@@ -5,7 +5,7 @@
 <summary><b>Contents</b> — 105 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
 
 - [What this is](#what-this-is)
-- [Session 2026-10-09 (night) — the cluster line carries the DX's audio offset](#session-2026-10-09-night--the-cluster-line-carries-the-dxs-audio-offset)
+- [Session 2026-10-09 (night) — relayed comments verbatim, decodes in Aggregator's shape](#session-2026-10-09-night--relayed-comments-verbatim-decodes-in-aggregators-shape)
 - [Session 2026-10-09 (evening) — alerts carry the DX's audio offset](#session-2026-10-09-evening--alerts-carry-the-dxs-audio-offset)
 - [Session 2026-10-09 (later) — v2.22.2 released, on .109 and Windows](#session-2026-10-09-later--v2222-released-on-109-and-windows)
 - [Session 2026-10-09 — the release check stores only a success](#session-2026-10-09--the-release-check-stores-only-a-success)
@@ -735,47 +735,85 @@ and the web GUI's design system from the same repo's
 cutover. noderedpi4's install is stopped and disabled, kept as the
 rollback. The 1.x macOS app is the retained fallback (maintenance mode).
 
-## Session 2026-10-09 (night) — the cluster line carries the DX's audio offset
+## Session 2026-10-09 (night) — relayed comments verbatim, decodes in Aggregator's shape
 
 Manoj: *"does the spots going to destinations also have DF field in
-comments?"* They did not — the line's comment was `FT8 -10 dB`, the offset
-folded into the frequency cell and rounded away there, exactly the gap the
-evening's alert change closed for Telegram. Then: *"add the DF to the
-comment in both formatters."*
+comments?"* They did not: the line's comment was always the synthesised
+`FT8 -10 dB`, for a decoder's spot and a relayed cluster spot alike, so a
+skimmer's `-15 dB 1032 FT8` left here as `FT8 -15 dB` and the offset (and
+any grid) went with it. Three passes in one evening, none released:
 
-- **What changed.** `format()` in `dxca-core/src/format.rs` writes
-  `FT8 -10 dB DF 1487 Hz` when `Spot::dx_offset_hz()` is `Some`, and the
-  old `FT8 -10 dB` when it is `None`. `pipeline.rs` builds that one line and
-  hands it to the telnet server, every UDP destination in `cluster` format
-  and MQTT's `<base>/cluster`, so all three carry it. **Not** the MQTT JSON
-  `comment` (that is the spot's own inbound comment, untouched), not the
-  WSJT-X-format UDP destinations (dial = the exact frequency, Decode `DF`
-  0, as the builder's header explains) and not passthrough.
-- **Why `DF <n> Hz` and not the skimmer frame `-10 dB 1487 FT8`.** Same
-  label as the alerts and the Alerts history column, and mode-first is the
-  order every logger has parsed from DXCA since 1.x. `<n> Hz` is the
-  labelled form `offset_from_comment` reads, so a DXCA fed by another
-  DXCA's telnet server (or by the 1.x app's) recovers the offset as if a
-  human had typed it — `the_written_offset_reads_back` pins that.
-- **Relayed cluster spots carry theirs too.** `dx_offset_hz` falls back to
-  the comment, so a VU2CPL-skimmer spot goes out as `FT8 -11 dB DF 1794 Hz`
-  (`the_comment_carries_a_cluster_spots_offset_too`). A silent comment gets
-  no `DF` at all, never `DF 0 Hz` (`no_offset_means_no_df`).
-- **Column budget.** The comment cell is 28 wide; the longest realistic
-  case, `FST4W -24 dB DF 2999 Hz`, is 23. The time still lands last, where
-  RUMlog's `\d{4}Z$` looks for it (`the_comment_carries_the_decoders_offset`
-  asserts the whole line).
-- **The 1.x Mac app got the same change** the same night
-  (`ClusterFormatter.swift`, `DF` only when `deltaFrequency > 0`; its
-  cluster-sourced spots are built with 0). Unreleased there — it rides with
-  the next 1.x release, like the update-dialog change above it.
+1. *"Add the DF to the comment in both formatters"* → `FT8 -10 dB DF 1487
+   Hz` (commit `f11cf79`), the label the alerts use.
+2. Shown what the inbound comments look like: *"keep the original comment
+   and no need for any DF or Hz in comments. the logging softwares are made
+   to take it that way."* → relayed comments verbatim, decodes as
+   `-10 dB 1487 FT8`.
+3. *"sequence it exactly like vu2oy format"* and *"what is 6 in vu2oy
+   spot?"* → this.
 
-`just gate` passed. README: the *DF* paragraph under *Who spotted it* says
-the cluster line carries it, and the MQTT table has the example. **Not
-released**: v2.22.3 stays the latest, and the fleet is on it. A release
-(bump, tag, Windows zip, `## Updating` notes — see the checklist memory) and
-the usual .109-first deploy are the next step when Manoj wants the line on
-the air.
+**VU2OY's node is RBN Aggregator.** `nc vu2oy.ddns.net 7550` answers
+`Welcome to Aggregator. You are client #900.` / `de SKIMMER via Aggregator
+>` and streams lines like
+
+```
+DX de VU2OY-#:   14074.0  YC2VTS         -7 dB   6 FT8          1758  0607Z
+DX de VU2OY-#:   28074.0  UN7LZ          -6 dB   6 FT8  CQ MO13 2332  0607Z
+DX de VU2OY-#:   18100.0  UW5KW         -19 dB   6 FT8  CQ      1364  0607Z
+```
+
+**The `6` is the symbol rate in baud**, in the column where Aggregator puts
+a CW spot's WPM and a RTTY spot's BPS: FT8 is 6.25 baud. The evening
+session's "wasn't established" is now established — every one of VU2OY's
+635 spots in a 2,000-spot sample carried `6`, all were FT8, and the shape
+is Aggregator's own. Aggregator spots at the **dial** (14074.0) with the
+offset **last** in the comment, after `CQ` and the CQ's grid when there was
+one (325 of 635 said `CQ`, 310 did not; no grid ever appeared without `CQ`).
+
+**What `format()` does now** (`dxca-core/src/format.rs`):
+
+- **A relayed spot's comment goes out verbatim**, keyed on `spotter.is_some()`
+  (every cluster spot has one; no decode does), even when it is empty —
+  never a made-up `CQ` or rate for a hand-typed spot with no comment.
+- **A decode's comment is Aggregator's, column for column:** SNR `%3d`,
+  ` dB`, the rate `%4d` (FT8 `6`; FT4 `21` = 20.833 rounded, **not yet
+  read off a live line** — no FT4 in the sample; check when one comes
+  through), the mode, two spaces, `CQ`/`CQ <grid>` left-aligned in 8 (blank
+  for a reply), the offset `%4d`. 28 columns for a 3-letter mode, the cell
+  exactly. Modes Aggregator never spots get no rate token (Q65, MSK144 …),
+  which keeps `framed_offset`'s `<snr> dB <n> FT8|FT4` frame honest and the
+  width inside the cell (`MSK144` comes to 27). `dx_offset_hz` `None` →
+  no offset column, never `0`.
+- **The frequency cell is the dial** (`dial_frequency_hz`), for every spot.
+  A relayed spot's dial *is* its spotted frequency (delta 0), so nothing
+  changes there. A decode used to go out at dial + offset (14075.8); with
+  the offset in the comment relative to the dial that would be counted
+  twice by a logger reading the comment — the hazard `dx_offset_hz`'s doc
+  describes from the inbound side — and 14074.0 is where the rig belongs
+  for FT8 anyway. **This is the one behaviour change a logger will notice:
+  decoder spots now arrive at the FT8 dial, not 1–3 kHz above it.** Alerts,
+  the Spots table, dedupe, band and the MQTT JSON's `frequency_hz` still
+  use dial + offset.
+- Reaches the telnet server, cluster-format UDP destinations and MQTT's
+  `<base>/cluster`. Not the MQTT JSON `comment` (the inbound comment, as
+  always), the WSJT-X-format UDP destinations or passthrough.
+- Round trip: `offset_from_comment` reads the written line back exactly as
+  it reads VU2OY's (`the_written_offset_reads_back`, three shapes).
+
+**The 1.x Mac app got the same change** (`ClusterFormatter.swift`, with a
+`SpotMessage.comment` the cluster ingest fills and a `cqGrid` for the CQ's
+grid). Unreleased there too.
+
+Tests: `spider_layout` (whole line), `a_decoded_spot_takes_aggregators_shape`
+(four shapes, each 28 columns), `the_rate_column_follows_the_mode`,
+`the_frequency_cell_is_the_dial`, `a_relayed_spots_comment_goes_out_as_it_came`
+(five live shapes plus empty), `no_offset_means_no_offset_column`,
+`the_written_offset_reads_back`. `just gate` passed. README: *Who spotted
+it* (the `6`, the shape, the dial) and the MQTT table; `spot.rs` doc on the
+unlabelled-offset floor. **Not released**: v2.22.3 stays the latest and the
+fleet is on it; a release (bump, tag, Windows zip, `## Updating` notes —
+see the checklist memory) and the .109-first deploy are the next step when
+Manoj wants the line on the air.
 
 ## Session 2026-10-09 (evening) — alerts carry the DX's audio offset
 

@@ -205,9 +205,11 @@ pub fn grid_from_message(message: &str) -> Option<String> {
 const MAX_OFFSET_HZ: u32 = 5_000;
 
 /// The floor for an **unlabelled** offset. In the `-18 dB 6 FT8 2167` shape
-/// the field between dB and the mode is a single digit that is not an
-/// offset, and this floor is what stops the dB-mode rule reading it as one.
-/// No skimmer offset in the 2026-10-09 sample was below 185 Hz.
+/// (RBN Aggregator's, VU2OY's node) the field between dB and the mode is
+/// the symbol rate in baud — `6` for FT8's 6.25, where a CW spot shows its
+/// WPM — not an offset, and this floor is what stops the dB-mode rule
+/// reading it as one. No skimmer offset in the 2026-10-09 sample was below
+/// 185 Hz.
 const MIN_UNLABELLED_OFFSET_HZ: u32 = 100;
 
 /// The DX station's audio offset from a cluster comment, in Hz.

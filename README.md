@@ -1015,7 +1015,7 @@ gives one, in any of these forms:
 |---|---|---|
 | `FT8 1500Hz BL11`, `1500 Hz` | typed by a human | 1500 |
 | `-15 dB 1032 FT8` | a skimmer that spots at dial + offset | 1032 |
-| `-18 dB 6 FT8 2167`, `-13 dB 6 FT8 CQ KN34 1497` | a skimmer that spots at the dial | 2167, 1497 |
+| `-18 dB 6 FT8 2167`, `-13 dB 6 FT8 CQ KN34 1497` | RBN Aggregator (VU2OY's node), which spots at the dial; the `6` is FT8's symbol rate in baud, in the column a CW spot uses for WPM | 2167, 1497 |
 
 The two unlabelled skimmer forms are read only in exactly that frame (an
 SNR, `dB`, one field, then `FT8` or `FT4`), so a number in any other comment
@@ -1028,13 +1028,24 @@ FlexRadio and TCI need no `DF`: they already place the mark at the spot's
 frequency. The **Alerts** history has a `DF` column too (see [Alert
 history](#alert-history)). (New in v2.22.3.)
 
-**The cluster line carries it too.** A decoder's spot reaches the telnet
-server, the `cluster`-format UDP destinations and MQTT's `<base>/cluster`
-with the offset at the end of the comment, `FT8 -10 dB DF 1487 Hz`, so a
-logger that shows the comment shows where to click. A relayed cluster spot
-goes out with the offset read from its comment, in that same labelled form,
-and a spot with no known offset keeps the plain `FT8 -10 dB`. (After
-v2.22.3.)
+**The cluster line carries it too, in Aggregator's shape.** A relayed
+cluster spot reaches the telnet server, the `cluster`-format UDP
+destinations and MQTT's `<base>/cluster` with its comment exactly as it
+arrived — the forms above are what logging software is written to read, so
+DXCA no longer rewrites them to `FT8 -15 dB`. A decoder's spot has no
+comment, so DXCA writes one the way RBN Aggregator does, column for column:
+
+```
+DX de MSHV:          14074.0   UN7LZ          -6 dB   6 FT8  CQ MO13 2332 1428Z
+DX de MSHV:          14074.0   YC2VTS         -7 dB   6 FT8          1758 1428Z
+```
+
+SNR, the symbol rate (`6` for FT8, `21` for FT4), the mode, `CQ` and its
+grid when the message was a CQ, and the DX station's audio offset last.
+**The frequency column is the dial**, as Aggregator spots it, with the
+offset in the comment relative to it — up to v2.22.3 the line carried dial
++ offset (14075.8) and no offset, so a logger tuned the rig off the FT8
+dial. (After v2.22.3.)
 
 The search box above the table filters on **either** — type a DX callsign to
 follow one station, or a spotter to see everything one skimmer is hearing.
@@ -1586,11 +1597,13 @@ Each spot is published **twice**, to sibling topics under the base (default
 | topic | payload |
 |---|---|
 | `<base>/json` | `{"callsign":"K1JT","frequency_hz":14075487,"band":"20M","mode":"FT8","snr_db":-10,"comment":"FT8 -10 dB","is_cq":true,…}` |
-| `<base>/cluster` | `DX de DXCA:  14075.5  K1JT  FT8 -10 dB DF 1487 Hz  1428Z` |
+| `<base>/cluster` | `DX de DXCA:  14074.0  K1JT  -10 dB   6 FT8  CQ FN20 1487  1428Z` |
 
-The cluster line's `DF 1487 Hz` is the DX station's audio offset, the same
-`DF` the alerts carry (see [Who spotted it](#who-spotted-it)); it is absent
-when no offset is known. `frequency_hz` is already dial + offset.
+The cluster line's comment is the spot's own when it came from a cluster
+node, and RBN Aggregator's shape (SNR, symbol rate, mode, `CQ` and grid,
+the DX station's audio offset — see [Who spotted it](#who-spotted-it)) for
+a decoder's spot, with the dial in the frequency column. `frequency_hz` in
+the JSON is dial + offset.
 
 **For a FlexRadio panadapter, the telnet cluster server is the shorter
 route.** Aether takes a DX cluster directly, so pointing it at DXCA's telnet
