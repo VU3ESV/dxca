@@ -877,6 +877,20 @@ to run) or the Pi is off, which the deploy memory warns is the ordinary
 state of a third-party box. It stays on v2.22.3; deploy it with the same
 drill when it answers a ping.
 
+**Two more tries, 13:55–14:05 IST, after Manoj bounced `Shaji_vu2wj` a
+second time:** same result — `utun9` up on `10.95.51.2`, the `/32` route in
+place, 23 pings in all lost, ssh and `:7580` timing out. What the Mac *can*
+see without sudo: the config's endpoint `vu2wj.ddns.net:51820` resolves
+(`117.221.180.82`) and that address answers ping in 18 ms, so the site's
+WAN is up and the ISP is not the problem. The tunnel carries nothing
+through it, which leaves the Pi's own WireGuard not answering the
+handshake — the Pi off, or PiVPN down on it — or a stale DDNS record (the
+updater runs on that Pi, so a powered-off Pi gives both symptoms at once).
+`sudo wg show Shaji_vu2wj` on this Mac settles it: no recent handshake
+after a bounce means the far end, and the next step is Shaji, not this
+Mac. Nothing on the box was touched — the deploy stops at a ping gate
+before any backup or install.
+
 ## Session 2026-10-09 (evening) — alerts carry the DX's audio offset
 
 **Shipped as v2.22.3** the same evening, tagged and released with the Windows
