@@ -770,8 +770,30 @@ licence address, although decoder and cluster spots often carry the DX's grid.
   deployed from here, on purpose** — Manoj: *"will try a auto update
   notification and install this time"*: the release is there for .109's
   update check to find, and the install follows from the banner rather
-  than from `docker-deploy.sh`. The fleet is on v2.23.0 (vu2wj on 2.22.3)
-  until that happens.
+  than from `docker-deploy.sh`.
+- **The banner worked, then the fleet was updated anyway** (Manoj, 09:44 IST:
+  *"update dxca to all"*). Before the deploy `/api/status` on .109 carried
+  `update: {current: 2.23.0, tag: v2.23.1, skipped: false, url: …}` — the
+  check had found the release on its own within fourteen minutes of
+  publication — and after it `update: null`. Same drill as v2.23.0, one host
+  at a time, `git describe` = `v2.23.1-1-g67bb229` (the docs commit on top
+  of the tag; code identical):
+
+  | Box | Before → after | Nodes Live | Backup / rollback | Up (IST) |
+  |---|---|---|---|---|
+  | .109 container | 2.23.0 → **2.23.1** | 8/8 → 8/8 | `dxca.db.pre-v2.23.1` md5 `b400a45a…` equal, no WAL; image `dxca:2.23.0` kept | 09:45 |
+  | Windows .170 | 2.23.0 → **2.23.1** | 2/2 → 2/2 | `C:\\DXCA\\dxca.exe.bak` | 09:46 |
+  | adersh `.151` | 2.23.0 → **2.23.1** | 5/5 → 5/5 | `dxca.db.pre-v2.23.1` md5 `d5d18d53…` equal, no WAL; `dxca.rollback-v2.23.0` | 09:46 |
+  | vu2oy `192.168.220.51` | 2.23.0 → **2.23.1** | 4/4 → 4/4 | `dxca.db.pre-v2.23.1` md5 `57a398ab…` equal, no WAL; `dxca.rollback-v2.23.0` | 09:47 |
+  | vu2wj `.201` | **no ping — skipped, still 2.22.3** | — | — | — |
+
+  Every start line names the host's nodes, no error, warning or panic,
+  `NRestarts=0` on the Pis, every config md5 unchanged, nothing seeded. The
+  2.23.1 aarch64 binary is 8,506,848 bytes, md5 `50896fb7…`. adersh's
+  journal also shows `flex 192.168.1.123:4992: connect failed: No route to
+  host` — his FlexRadio destination is off or moved; his LAN, not this
+  deploy, and it logged the same before. vu2wj is as yesterday: route up,
+  no answer; see the 2026-10-09 (night) section for the diagnosis.
 
 ## Session 2026-10-09 (night) — relayed comments verbatim, decodes in Aggregator's shape
 
