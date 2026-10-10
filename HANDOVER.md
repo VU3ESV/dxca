@@ -760,7 +760,13 @@ licence address, although decoder and cluster spots often carry the DX's grid.
 - **Tests:** three in `awards.rs` (unambiguous grid beats the licence; a
   multi-state grid only narrows it; no or non-US grid changes nothing,
   incl. RR73, RO62, BL11). `just gate` green.
-- **Shipped as v2.23.1** (2026-10-10, tag, Windows zip, release page). **Not
+- **Shipped as v2.23.1** (2026-10-10 09:30 IST): `Cargo.toml` 2.23.0 → 2.23.1,
+  README `## Status` entry in the same commit this time (`0a86b7f`), annotated
+  tag `v2.23.1`, `just gate` green before it. `deploy/win-bundle.sh` →
+  `dxca-2.23.1-windows-x64.zip` (5,245,507 bytes, sha256 `9ea4a3d9…`, no
+  placeholder page); `gh release create --latest`, notes on the v2.22.3
+  template with `## Updating`; the asset downloaded back hashes equal and
+  `releases/latest` answers v2.23.1. **Not
   deployed from here, on purpose** — Manoj: *"will try a auto update
   notification and install this time"*: the release is there for .109's
   update check to find, and the install follows from the banner rather
