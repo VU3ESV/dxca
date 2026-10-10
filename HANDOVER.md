@@ -2,9 +2,10 @@
 *For continuation in a new Claude session*
 
 <details>
-<summary><b>Contents</b> — 105 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
+<summary><b>Contents</b> — 106 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
 
 - [What this is](#what-this-is)
+- [Session 2026-10-10 — WAS uses the spot's grid before the licence address](#session-2026-10-10--was-uses-the-spots-grid-before-the-licence-address)
 - [Session 2026-10-09 (night) — relayed comments verbatim, decodes in Aggregator's shape](#session-2026-10-09-night--relayed-comments-verbatim-decodes-in-aggregators-shape)
 - [Session 2026-10-09 (evening) — alerts carry the DX's audio offset](#session-2026-10-09-evening--alerts-carry-the-dxs-audio-offset)
 - [Session 2026-10-09 (later) — v2.22.2 released, on .109 and Windows](#session-2026-10-09-later--v2222-released-on-109-and-windows)
@@ -735,6 +736,81 @@ and the web GUI's design system from the same repo's
 cutover. noderedpi4's install is stopped and disabled, kept as the
 rollback. The 1.x macOS app is the retained fallback (maintenance mode).
 
+## Session 2026-10-10 — WAS uses the spot's grid before the licence address
+
+Manoj, after JTDX-VU got Show US State (jtdx-vu `1782dc05`): *"can we use
+the grid in dxca"*. Until now a spot's state came only from the FCC
+licence address, although decoder and cluster spots often carry the DX's grid.
+
+- **`awards::resolve_state (grid, licence)`**: a square inside one state
+  gives that state, so `W1AW/7` in DM42 is AZ, a call `StateTable::lookup`
+  rightly refuses. A square over several states accepts the licence state only if it
+  is one of them, else none: a New State there would be a guess. No grid,
+  or a non-US grid, leaves the licence answer exactly as before.
+  `classify ()` uses it for the WAS axis **and** the US zone (zone came from
+  the FCC state). The lookup still runs only when state or zone alerts are on.
+- **The table**: `crates/dxca-core/data/us_grid_states.txt`, `include_str!`
+  (no I/O in core), parsed once into a `OnceLock` map. 750 squares from US
+  Census `cb_2023_us_state_500k`, states with at least 2 % of the square's US land,
+  largest first; AK incl. west of 180 (RO6x), HI; DC counted as MD. The
+  generator is `scripts/build_us_grid_states.py` (copied from jtdx-vu
+  `tools/`). It is a 4-char table: a 6-char grid is cut to its square, so
+  border squares stay ambiguous. A sub-square table for the 191 multi-state
+  squares is a possible refinement.
+- **Tests:** three in `awards.rs` (unambiguous grid beats the licence; a
+  multi-state grid only narrows it; no or non-US grid changes nothing,
+  incl. RR73, RO62, BL11). `just gate` green.
+- **Shipped as v2.23.1** (2026-10-10 09:30 IST): `Cargo.toml` 2.23.0 → 2.23.1,
+  README `## Status` entry in the same commit this time (`0a86b7f`), annotated
+  tag `v2.23.1`, `just gate` green before it. `deploy/win-bundle.sh` →
+  `dxca-2.23.1-windows-x64.zip` (5,245,507 bytes, sha256 `9ea4a3d9…`, no
+  placeholder page); `gh release create --latest`, notes on the v2.22.3
+  template with `## Updating`; the asset downloaded back hashes equal and
+  `releases/latest` answers v2.23.1. **Not
+  deployed from here, on purpose** — Manoj: *"will try a auto update
+  notification and install this time"*: the release is there for .109's
+  update check to find, and the install follows from the banner rather
+  than from `docker-deploy.sh`.
+- **The banner worked, then the fleet was updated anyway** (Manoj, 09:44 IST:
+  *"update dxca to all"*). Before the deploy `/api/status` on .109 carried
+  `update: {current: 2.23.0, tag: v2.23.1, skipped: false, url: …}` — the
+  check had found the release on its own within fourteen minutes of
+  publication — and after it `update: null`. Same drill as v2.23.0, one host
+  at a time, `git describe` = `v2.23.1-1-g67bb229` (the docs commit on top
+  of the tag; code identical):
+
+  | Box | Before → after | Nodes Live | Backup / rollback | Up (IST) |
+  |---|---|---|---|---|
+  | .109 container | 2.23.0 → **2.23.1** | 8/8 → 8/8 | `dxca.db.pre-v2.23.1` md5 `b400a45a…` equal, no WAL; image `dxca:2.23.0` kept | 09:45 |
+  | Windows .170 | 2.23.0 → **2.23.1** | 2/2 → 2/2 | `C:\\DXCA\\dxca.exe.bak` | 09:46 |
+  | adersh `.151` | 2.23.0 → **2.23.1** | 5/5 → 5/5 | `dxca.db.pre-v2.23.1` md5 `d5d18d53…` equal, no WAL; `dxca.rollback-v2.23.0` | 09:46 |
+  | vu2oy `192.168.220.51` | 2.23.0 → **2.23.1** | 4/4 → 4/4 | `dxca.db.pre-v2.23.1` md5 `57a398ab…` equal, no WAL; `dxca.rollback-v2.23.0` | 09:47 |
+  | vu2wj `.201` (trixie) | 2.22.3 → **2.23.1**, 10:06 after the tunnel was fixed (below) | 3/3 → 3/3 | `dxca.db.pre-v2.23.1` md5 `f3899f9d…` equal, no WAL; `dxca.rollback-v2.22.3` (md5 `8c2d945c…`) | 10:06 |
+
+  Every start line names the host's nodes, no error, warning or panic,
+  `NRestarts=0` on the Pis, every config md5 unchanged, nothing seeded. The
+  2.23.1 aarch64 binary is 8,506,848 bytes, md5 `50896fb7…`. adersh's
+  journal also shows `flex 192.168.1.123:4992: connect failed: No route to
+  host` — his FlexRadio destination is off or moved; his LAN, not this
+  deploy, and it logged the same before.
+- **vu2wj, solved: a stale tunnel endpoint, not a dead Pi.** At 09:50
+  `vu2wj.ddns.net` resolved to `59.94.192.100`, where the day before it
+  had been `117.221.180.82`. The Pi runs the DDNS updater, so a changed
+  record meant the Pi was alive — and `wg-quick` resolves the endpoint name
+  only when the tunnel comes up, so the Mac had been sending handshakes to
+  yesterday's address through every bounce *before* the IP changed. One more
+  `sudo wg-quick down Shaji_vu2wj && sudo wg-quick up Shaji_vu2wj` (Manoj)
+  re-resolved it and the Pi answered at once: 2.22.3, 3/3 Live, its own
+  banner already showing v2.23.0 from its daily check. Then the drill:
+  backup, `dxca.rollback-v2.22.3`, `pi-deploy.sh --no-seed`
+  10:05:51–10:06:08, `shut down cleanly`, the 2.23.1 start line naming
+  its three nodes, no error or warning, `NRestarts=0`, config md5
+  unchanged (`094c2a23…`), nothing seeded, banner cleared. **The whole
+  fleet is on v2.23.1 as of 10:06 IST.** Lesson for the next silent
+  tunnel: before anything else, `dig +short <endpoint>` and compare with
+  what the tunnel was brought up against; a changed answer means bounce,
+  not a dead box.
+
 ## Session 2026-10-09 (night) — relayed comments verbatim, decodes in Aggregator's shape
 
 Manoj: *"does the spots going to destinations also have DF field in
@@ -810,10 +886,86 @@ Tests: `spider_layout` (whole line), `a_decoded_spot_takes_aggregators_shape`
 (five live shapes plus empty), `no_offset_means_no_offset_column`,
 `the_written_offset_reads_back`. `just gate` passed. README: *Who spotted
 it* (the `6`, the shape, the dial) and the MQTT table; `spot.rs` doc on the
-unlabelled-offset floor. **Not released**: v2.22.3 stays the latest and the
-fleet is on it; a release (bump, tag, Windows zip, `## Updating` notes —
-see the checklist memory) and the .109-first deploy are the next step when
-Manoj wants the line on the air.
+unlabelled-offset floor.
+
+**Shipped as v2.23.0 the same afternoon** (Manoj: *"release it and install
+on 109"*). A minor bump, not a patch: what every connected logger receives
+changed. `Cargo.toml` 2.22.3 → 2.23.0, release commit `7ad3a5e`, annotated
+tag `v2.23.0` (`4418377`), both pushed. The README `## Status` entry
+missed that commit — the script that writes it stopped on a wrong
+assertion of mine and the commit went ahead on the version bump alone —
+and landed in the docs commit after the deploy, so the tag's tree lacks it
+and `main`'s has it. `deploy/win-bundle.sh` → `dxca-2.23.0-windows-x64.zip`
+(5,244,657 bytes, sha256
+`e2440ce3e8dc77cde55c95a75671228f8265a39d079068cb686352ae1b837ef5`, no
+placeholder page). `gh release create --latest` with notes covering the
+line change and a `## Updating` section on the v2.22.3 template; the asset
+downloaded back hashes equal, and `releases/latest` answers v2.23.0.
+
+**Deployed to .109 only**, by instruction. Before: 2.22.3, up 5 h on
+`dxca:2.22.3`, one telnet client. `data/dxca.db` copied to
+`dxca.db.pre-v2.23.0` (md5 `d0de91e8…` equal, no WAL). `deploy/docker-deploy.sh`
+13:39:04–13:39:51 IST: smoke test reported 2.23.0, the running container
+came back on `dxca:2.23.0`. After: **2.23.0**, start line names all eight
+nodes, no error, warning or panic in the log, config md5 unchanged
+(`3a739c89232a`), telnet client back (1), cty 402, FCC 816,280, IOTA 1,178,
+`update: null`, nodes Live 8/8 a few minutes in. **On the air** (40 s on
+`:7575`): relayed spots verbatim — `DX de VU2CPL: 18100.9 A60WSW/21 -18 dB
+947 FT8`, `DX de VU24DX: 14075.8 DM2DXA -20 dB 1806 FT8 CQ JO64`, DB0SUE's
+award chatter untouched. No decoder was feeding .109 at the time (136
+lines, all relayed; the 2,000-spot sample earlier had none either), so the
+Aggregator shape for decodes rests on `spider_layout`'s exact line until
+MSHV is next on. **Rollback:** `sudo docker stop dxca && sudo docker rm
+dxca`, the `docker create` line from `docker-deploy.sh` with `dxca:2.22.3`,
+then `start`; no schema change, so the database needs nothing.
+**Then the rest of the fleet** (Manoj: *"install on all other machines"*,
+13:47 IST), the same drill, one host at a time:
+
+| Box | Before → after | Nodes Live | Backup / rollback | Up (IST) |
+|---|---|---|---|---|
+| Windows .170 | 2.22.3 → **2.23.0** | 2/2 → 2/2 | no DB copy (locked while running; nothing to migrate); `C:\DXCA\dxca.exe.bak` is the 2.22.3 exe | 13:48 |
+| vu2oy `192.168.220.51` (bookworm, glibc 2.36) | 2.22.3 → **2.23.0** | 4/4 → 4/4 | `dxca.db.pre-v2.23.0`, md5 `88ae4518…` equal, no WAL; `/opt/dxca/dxca.rollback-v2.22.3` (md5 `8c2d945c…`) | 13:48 |
+| adersh `192.168.1.151` (trixie) | 2.22.3 → **2.23.0** | 5/5 → 5/5 | `dxca.db.pre-v2.23.0`, md5 `239be11d…` equal, no WAL; `/opt/dxca/dxca.rollback-v2.22.3` (md5 `8c2d945c…`) | 13:51 |
+| vu2wj `192.168.1.201` | **not reached, still on 2.22.3** | — | — | — |
+
+Windows: `deploy/win-deploy.sh`, 13:47:52–13:48:04, binary swapped, task
+restarted, dashboard serving, `fcc_calls: 0` as always there. vu2oy:
+`pi-deploy.sh --no-seed`, 13:48:21–13:48:36; journal shows `shut down
+cleanly` then the 2.23.0 start line naming its four nodes, no error or
+warning, `NRestarts=0`; the new aarch64 binary is 8,487,328 bytes, md5
+`0b7548e8…`; config md5 unchanged (`65935bf2…`); `~/dxca-deploy/config`
+and `data` empty, as `--no-seed` leaves them. **adersh and vu2wj:** all
+three `/32` routes were up (`utun8/9/10`) but `.151` and `.201` answered
+neither ping, `:7580` nor ssh in 10 s — the "a route is not a tunnel" case
+from 2026-09-22. `wg-quick down`/`up` needs Manoj's sudo, so those two wait
+on him; the memory and this table say so.
+
+**Tunnels bounced (Manoj, 13:50 IST: *"tunnels are up, deploy on the other
+two"*).** adersh answered at once — ping, `:7580`, ssh — and went through
+the same drill: `pi-deploy.sh --no-seed`, 13:51:20–13:51:38, journal `shut
+down cleanly` then the 2.23.0 start line naming its five nodes, no error
+or warning, `NRestarts=0`, the same aarch64 binary as vu2oy's (md5
+`0b7548e8…`, 8,487,328 bytes), config md5 unchanged (`2f8c037c…`), nothing
+seeded. **vu2wj did not come back:** route on `utun9` as before, 6 pings
+over 20 s all lost, ssh timed out, `:7580` silent — after the bounce. So
+either that tunnel has no handshake (`sudo wg show Shaji_vu2wj`, Manoj's
+to run) or the Pi is off, which the deploy memory warns is the ordinary
+state of a third-party box. It stays on v2.22.3; deploy it with the same
+drill when it answers a ping.
+
+**Two more tries, 13:55–14:05 IST, after Manoj bounced `Shaji_vu2wj` a
+second time:** same result — `utun9` up on `10.95.51.2`, the `/32` route in
+place, 23 pings in all lost, ssh and `:7580` timing out. What the Mac *can*
+see without sudo: the config's endpoint `vu2wj.ddns.net:51820` resolves
+(`117.221.180.82`) and that address answers ping in 18 ms, so the site's
+WAN is up and the ISP is not the problem. The tunnel carries nothing
+through it, which leaves the Pi's own WireGuard not answering the
+handshake — the Pi off, or PiVPN down on it — or a stale DDNS record (the
+updater runs on that Pi, so a powered-off Pi gives both symptoms at once).
+`sudo wg show Shaji_vu2wj` on this Mac settles it: no recent handshake
+after a bounce means the far end, and the next step is Shaji, not this
+Mac. Nothing on the box was touched — the deploy stops at a ping gate
+before any backup or install.
 
 ## Session 2026-10-09 (evening) — alerts carry the DX's audio offset
 
