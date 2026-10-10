@@ -25,6 +25,18 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.23.1** (2026-10-10): **WAS takes the state from the spot's grid before
+the licence address.** A spot often says where the station is — an FT8 CQ
+carries its grid, and so do many cluster comments — while the FCC table only
+says where the call is licensed. A grid square inside one state now gives
+that state, so `W1AW/7` in DM42 is Arizona; a square over several states
+(EM78 is KY, IN and OH) accepts the licence state only if it is one of them,
+and otherwise gives no state rather than a guessed *New State*. Without a
+grid, or with a non-US one, the answer is the licence address as before. The
+US zone follows the same rule. The table of 750 grid squares comes from US
+Census state boundaries and ships inside the binary; nothing to download.
+Nothing to do on upgrade, no database change. See [IOTA, WAS and VUCC (optional, off by default)](#iota-was-and-vucc-optional-off-by-default).
+
 **v2.23.0** (2026-10-09): **the cluster line goes out the way RBN Aggregator
 spots FT8, and a relayed comment goes out as it came.** A decoder's spot used
 to leave the telnet server (and the `cluster` UDP destinations and MQTT's

@@ -760,8 +760,12 @@ licence address, although decoder and cluster spots often carry the DX's grid.
 - **Tests:** three in `awards.rs` (unambiguous grid beats the licence; a
   multi-state grid only narrows it; no or non-US grid changes nothing,
   incl. RR73, RO62, BL11). `just gate` green.
-- **Not deployed**: production on .109 runs the released container.
-  It ships with the next release.
+- **Shipped as v2.23.1** (2026-10-10, tag, Windows zip, release page). **Not
+  deployed from here, on purpose** — Manoj: *"will try a auto update
+  notification and install this time"*: the release is there for .109's
+  update check to find, and the install follows from the banner rather
+  than from `docker-deploy.sh`. The fleet is on v2.23.0 (vu2wj on 2.22.3)
+  until that happens.
 
 ## Session 2026-10-09 (night) — relayed comments verbatim, decodes in Aggregator's shape
 
