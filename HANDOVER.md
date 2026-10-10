@@ -785,15 +785,31 @@ licence address, although decoder and cluster spots often carry the DX's grid.
   | Windows .170 | 2.23.0 → **2.23.1** | 2/2 → 2/2 | `C:\\DXCA\\dxca.exe.bak` | 09:46 |
   | adersh `.151` | 2.23.0 → **2.23.1** | 5/5 → 5/5 | `dxca.db.pre-v2.23.1` md5 `d5d18d53…` equal, no WAL; `dxca.rollback-v2.23.0` | 09:46 |
   | vu2oy `192.168.220.51` | 2.23.0 → **2.23.1** | 4/4 → 4/4 | `dxca.db.pre-v2.23.1` md5 `57a398ab…` equal, no WAL; `dxca.rollback-v2.23.0` | 09:47 |
-  | vu2wj `.201` | **no ping — skipped, still 2.22.3** | — | — | — |
+  | vu2wj `.201` (trixie) | 2.22.3 → **2.23.1**, 10:06 after the tunnel was fixed (below) | 3/3 → 3/3 | `dxca.db.pre-v2.23.1` md5 `f3899f9d…` equal, no WAL; `dxca.rollback-v2.22.3` (md5 `8c2d945c…`) | 10:06 |
 
   Every start line names the host's nodes, no error, warning or panic,
   `NRestarts=0` on the Pis, every config md5 unchanged, nothing seeded. The
   2.23.1 aarch64 binary is 8,506,848 bytes, md5 `50896fb7…`. adersh's
   journal also shows `flex 192.168.1.123:4992: connect failed: No route to
   host` — his FlexRadio destination is off or moved; his LAN, not this
-  deploy, and it logged the same before. vu2wj is as yesterday: route up,
-  no answer; see the 2026-10-09 (night) section for the diagnosis.
+  deploy, and it logged the same before.
+- **vu2wj, solved: a stale tunnel endpoint, not a dead Pi.** At 09:50
+  `vu2wj.ddns.net` resolved to `59.94.192.100`, where the day before it
+  had been `117.221.180.82`. The Pi runs the DDNS updater, so a changed
+  record meant the Pi was alive — and `wg-quick` resolves the endpoint name
+  only when the tunnel comes up, so the Mac had been sending handshakes to
+  yesterday's address through every bounce *before* the IP changed. One more
+  `sudo wg-quick down Shaji_vu2wj && sudo wg-quick up Shaji_vu2wj` (Manoj)
+  re-resolved it and the Pi answered at once: 2.22.3, 3/3 Live, its own
+  banner already showing v2.23.0 from its daily check. Then the drill:
+  backup, `dxca.rollback-v2.22.3`, `pi-deploy.sh --no-seed`
+  10:05:51–10:06:08, `shut down cleanly`, the 2.23.1 start line naming
+  its three nodes, no error or warning, `NRestarts=0`, config md5
+  unchanged (`094c2a23…`), nothing seeded, banner cleared. **The whole
+  fleet is on v2.23.1 as of 10:06 IST.** Lesson for the next silent
+  tunnel: before anything else, `dig +short <endpoint>` and compare with
+  what the tunnel was brought up against; a changed answer means bounce,
+  not a dead box.
 
 ## Session 2026-10-09 (night) — relayed comments verbatim, decodes in Aggregator's shape
 
