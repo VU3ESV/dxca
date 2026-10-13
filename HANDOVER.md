@@ -810,6 +810,12 @@ licence address, although decoder and cluster spots often carry the DX's grid.
   tunnel: before anything else, `dig +short <endpoint>` and compare with
   what the tunnel was brought up against; a changed answer means bounce,
   not a dead box.
+- **`scripts/fleet-status.py HOST…`** (committed 2026-10-13, `23c12ac`) prints
+  the one-line-per-host status these tables were filled from — version,
+  nodes Live, users, telnet clients, update banner — from `/api/status`,
+  no login, no ssh. It is also the reachability test for the Windows box,
+  which drops ping. Hosts are arguments; the fleet list is in the deploy
+  memory and *The installs* below.
 
 ## Session 2026-10-09 (night) — relayed comments verbatim, decodes in Aggregator's shape
 
