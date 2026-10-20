@@ -801,8 +801,12 @@ unreachable at that point (see the table below).
 --no-seed`), 3/3 nodes, `NRestarts=0`, no warnings, config md5 unchanged
 (`094c2a23…`), backup `data/dxca.db.pre-v2.23.3`. His DDNS had moved to
 `117.232.173.206` while the tunnel still pointed at `59.176.42.68`, the same
-stale-endpoint trap as before. One bounce fixed it. vu2oy (`.51`) is the only
-host left on 2.23.1.
+stale-endpoint trap as before. One bounce fixed it.
+**vu2oy (`.51`) at 10:04 IST**: 2.23.1 → **2.23.3**, back from his site's
+outage (dark 18 Oct 21:07Z to about 02:00Z on the 20th). 4/4 nodes about a
+minute after the start (2/4 at first, still logging in), `NRestarts=0`, no
+warnings, config md5 unchanged (`65935bf2…`), backup
+`data/dxca.db.pre-v2.23.3`. **The whole fleet is on v2.23.3.**
 
 **The 1.x Swift app** got the same fix (both halves) in
 DXClusterAggregator-macOS #2, squash `106e797`. It is on `main` and not
