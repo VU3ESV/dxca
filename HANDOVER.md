@@ -2,9 +2,10 @@
 *For continuation in a new Claude session*
 
 <details>
-<summary><b>Contents</b> — 106 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
+<summary><b>Contents</b> — 108 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
 
 - [What this is](#what-this-is)
+- [Session 2026-10-20 — an unresolved-hash sender spots nobody](#session-2026-10-20--an-unresolved-hash-sender-spots-nobody)
 - [Session 2026-10-10 — WAS uses the spot's grid before the licence address](#session-2026-10-10--was-uses-the-spots-grid-before-the-licence-address)
 - [Session 2026-10-09 (night) — relayed comments verbatim, decodes in Aggregator's shape](#session-2026-10-09-night--relayed-comments-verbatim-decodes-in-aggregators-shape)
 - [Session 2026-10-09 (evening) — alerts carry the DX's audio offset](#session-2026-10-09-evening--alerts-carry-the-dxs-audio-offset)
@@ -44,6 +45,7 @@
 - [The installs (2026-08-28; VU2OY added 2026-08-30; production moved to .109 2026-09-22)](#the-installs-2026-08-28-vu2oy-added-2026-08-30-production-moved-to-109-2026-09-22)
 - [Release convention (2026-08-28, standing)](#release-convention-2026-08-28-standing)
 - [Open items → next session](#open-items--next-session)
+  - [DONE: the 1.x Swift app spots the called station too (2026-10-20)](#done-the-1x-swift-app-spots-the-called-station-too-2026-10-20)
   - [DONE: v2.22.2 on the three remote Pis (2026-10-09)](#done-v2222-on-the-three-remote-pis-2026-10-09)
   - [DONE in v2.22.2: the GitHub release check (2026-10-08)](#done-in-v2222-the-github-release-check-2026-10-08)
   - [DONE: v2.22.3 on the three remote Pis (2026-10-09)](#done-v2223-on-the-three-remote-pis-2026-10-09)
@@ -736,6 +738,80 @@ and the web GUI's design system from the same repo's
 cutover. noderedpi4's install is stopped and disabled, kept as the
 rollback. The 1.x macOS app is the retained fallback (maintenance mode).
 
+## Session 2026-10-20 — an unresolved-hash sender spots nobody
+
+**Reported by Manoj while chasing W9HT/VP9 and CP6CL:** DXCA alerted on
+stations that were not transmitting. His JTDX shows `CP6CL 7P8GE -08` at
+408 Hz at 01:17:00, then `CP6CL <...> RR73` at the same 408 Hz at 01:17:30.
+That second line is 7P8GE signing off, but its own call was a hash JTDX had
+not resolved, so it printed `<...>`. DXCA spotted **CP6CL**.
+
+**Cause.** `Spot::dx_callsign` (ported verbatim from Swift
+`SpotMessage.dxCallsign`) prefers slot 1, the sender. When slot 1 is
+"decoration", it falls back to slot 0. `<...>` counts as decoration, so the
+called station became the spot. The same wrong call fed the dedupe key, the
+grid (`CP6CL <...> FN42` gave CP6CL a locator), the band matrix, the alerts
+and the cluster line. Meridian had the same bug in its own extractor, fixed
+in the same session. Meridian-fed spots are clean on the
+Meridian side, but DXCA's local WSJT-X/JTDX/MSHV sources still hit this.
+
+**Fix.**
+- When slot 1 is exactly `<...>`, `dx_callsign` returns `None`.
+- A new `sender_is_unresolved_hash` lets `process_spot` refuse to rebroadcast
+  such a decode. Otherwise the 1.x "no callsign → broadcast as UNKNOWN" rule
+  would put a spot of nobody on every logger's feed.
+- The decode stays in the ring, so the Spots table still shows it, with no call.
+- The UDP passthrough is untouched: it forwards the datagram before parsing.
+
+The reverse form, `<...> W9HT/VP9 RRR` (hashed addressee, full sender), still
+spots the sender.
+
+**Tests:** `an_unresolved_hash_sender_spots_nobody` (core: call, dedupe key,
+grid, predicate) and `an_unresolved_hash_sender_never_reaches_the_cluster_feed`
+(server, over real UDP and telnet: the RR73 produces no line, and the
+following `CP6CL 7P8GE -08` does). Gate: fmt, clippy `-D warnings`, 347 tests
+and the web build all pass.
+
+Merged as #10 (squash `1175f44`) and released as **v2.23.2** (`c574966`,
+GitHub release with `dxca-2.23.2-windows-x64.zip`, sha256 `94bb62b5…dbeb`).
+
+| Host | Result (2026-10-20) |
+|---|---|
+| `.109` (Docker) | 2.23.1 → **2.23.2**: `docker-deploy.sh`, smoke test OK, container restarted. Nodes 7/8; the missing one is VU2OY's, because his whole site has been dark since 18 Oct 21:07Z. |
+| `.170` (Windows) | 2.23.1 → **2.23.2**: `win-deploy.sh`, nodes 2/2. The previous binary is at `C:\DXCA\dxca.exe.bak`. |
+| adersh `.151` | 2.23.1 → **2.23.2**: `pi-deploy.sh --no-seed`, up 07:59:40 IST, 5/5 nodes live, `NRestarts=0`, no warnings. |
+| vu2wj `.201` | Pending: the tunnel came up against the current DDNS answer `59.176.42.68`, but has never completed a handshake (2,812 B sent, 0 received). So the Pi, PiVPN or his router is down. This is not the stale-endpoint fault from v2.23.1. |
+| vu2oy `.51` | Pending: the site is offline. |
+
+**Follow-up, same day: v2.23.2 still leaked to unfiltered destinations.**
+`passes = false` keeps the decode off the telnet feed and the *filtered*
+UDP/MQTT destinations. Unfiltered ones take every spot regardless of that
+verdict, so they still received it as an `UNKNOWN` line. The gap turned up
+while porting the fix to the Swift app, whose `handleDecode` has the same
+shape. `process_spot` now returns right after `record` (ring + live event)
+for such a decode, so it reaches no destination at all. The server test now
+carries an unfiltered `cluster` destination: against the v2.23.2 pipeline it
+fails, and with the fix it passes. Merged as #11 and released as **v2.23.3**
+(`4848241`, Windows zip sha256 `e8e5f23f…b7b5a8`). The v2.23.2 release notes
+were edited to say what that release missed. Deployed the same morning:
+.109 (7/8 nodes; VU2OY's node is down with his site), Windows .170 (2/2) and
+adersh .151 (5/5, `NRestarts=0`, no warnings). vu2wj and vu2oy are still
+unreachable at that point (see the table below).
+**vu2wj then came back at 09:03 IST**: 2.23.1 → **2.23.3** (`pi-deploy.sh
+--no-seed`), 3/3 nodes, `NRestarts=0`, no warnings, config md5 unchanged
+(`094c2a23…`), backup `data/dxca.db.pre-v2.23.3`. His DDNS had moved to
+`117.232.173.206` while the tunnel still pointed at `59.176.42.68`, the same
+stale-endpoint trap as before. One bounce fixed it.
+**vu2oy (`.51`) at 10:04 IST**: 2.23.1 → **2.23.3**, back from his site's
+outage (dark 18 Oct 21:07Z to about 02:00Z on the 20th). 4/4 nodes about a
+minute after the start (2/4 at first, still logging in), `NRestarts=0`, no
+warnings, config md5 unchanged (`65935bf2…`), backup
+`data/dxca.db.pre-v2.23.3`. **The whole fleet is on v2.23.3.**
+
+**The 1.x Swift app** got the same fix (both halves) in
+DXClusterAggregator-macOS #2, squash `106e797`. It is on `main` and not
+released.
+
 ## Session 2026-10-10 — WAS uses the spot's grid before the licence address
 
 Manoj, after JTDX-VU got Show US State (jtdx-vu `1782dc05`): *"can we use
@@ -810,6 +886,12 @@ licence address, although decoder and cluster spots often carry the DX's grid.
   tunnel: before anything else, `dig +short <endpoint>` and compare with
   what the tunnel was brought up against; a changed answer means bounce,
   not a dead box.
+- **`scripts/fleet-status.py HOST…`** (committed 2026-10-13, `23c12ac`) prints
+  the one-line-per-host status these tables were filled from — version,
+  nodes Live, users, telnet clients, update banner — from `/api/status`,
+  no login, no ssh. It is also the reachability test for the Windows box,
+  which drops ping. Hosts are arguments; the fleet list is in the deploy
+  memory and *The installs* below.
 
 ## Session 2026-10-09 (night) — relayed comments verbatim, decodes in Aggregator's shape
 
@@ -2835,6 +2917,13 @@ on Windows with the SmartScreen caveat; a link to README › Updating; the
 edited in place to carry it.
 
 ## Open items → next session
+
+### DONE: the 1.x Swift app spots the called station too (2026-10-20)
+
+Fixed the same day on Manoj's word (*"fix the swift app too"*):
+DXClusterAggregator-macOS #2, squash `106e797`, on `main` and unreleased.
+`dxCallsign` returns `nil` for a `<...>` sender, and `handleDecode` returns
+before any rebroadcast.
 
 ### DONE: v2.22.2 on the three remote Pis (2026-10-09)
 

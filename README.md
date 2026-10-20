@@ -25,6 +25,26 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.23.3** (2026-10-20): **completes v2.23.2: an unresolved-hash decode
+now goes to no destination at all.** v2.23.2 kept `CP6CL <...> RR73` off the
+cluster feed and the filtered UDP/MQTT destinations. *Unfiltered*
+destinations take every spot, so they still received it as an `UNKNOWN`
+line. It now goes to the Spots table and nowhere else. The verbatim
+passthrough is unchanged. Nothing to do on upgrade, no database change, and
+rolling back is safe.
+
+**v2.23.2** (2026-10-20): **a decode whose sender is a hash nobody resolved
+no longer spots the station being called.** `CP6CL <...> RR73` is a station
+signing off with CP6CL. Its own call went out hashed, and the decoder printed
+`<...>` because it had not seen that call before. DXCA used to fall back to
+the one full call and spot **CP6CL**, at the caller's audio offset, with
+alerts and *New Band* hits for a station that was not transmitting. Seen with
+W9HT/VP9 and CP6CL. Such a decode now has no callsign: it still shows in the
+Spots table, but raises nothing and is never sent on the cluster feed, not
+even as `UNKNOWN`. `<...> CP6CL RRR`, where CP6CL is the sender, is spotted
+as before. Nothing to do on upgrade, no database change, and rolling back to
+v2.23.1 is safe. See [A hashed call names the station being called](#a-hashed-call-names-the-station-being-called).
+
 **v2.23.1** (2026-10-10): **WAS takes the state from the spot's grid before
 the licence address.** A spot often says where the station is — an FT8 CQ
 carries its grid, and so do many cluster comments — while the FCC table only
@@ -1335,6 +1355,24 @@ the USA's own CQ zone. Portable forms follow the usual rules: `KG4OJT/P` is
 the USA, and `KG4/KG4OJT` (a US operator actually at Guantanamo) is
 Guantanamo. ClubLog's own exceptions still win, so a 2×3 call that cty.xml
 places somewhere else stays there (`KG4TJS` is in Alaska).
+
+### A hashed call names the station being called
+
+*Since v2.23.2.* An FT8/FT4 decode such as `CP6CL <...> RR73`
+is a station signing off with CP6CL. That station's own call went out as a
+hash your decoder could not resolve, so it printed `<...>`. The only full
+call in the line is the station being **called**, which may not be on the
+air at all. DXCA used to spot that call, at the caller's audio offset, and
+alert on it. Now a decode like this has no callsign:
+
+- It still appears in the Spots table.
+- It raises no alert and touches no band matrix.
+- It is sent nowhere: not on the cluster feed, and not to any UDP or MQTT
+  destination, unfiltered ones included. In v2.23.2 an unfiltered
+  destination still received it as `UNKNOWN`; fixed in v2.23.3.
+
+The reverse form, `<...> CP6CL RRR`, is CP6CL transmitting, and is spotted as
+before.
 
 ### Health alerts
 

@@ -370,6 +370,17 @@ fn process_spot(
         return;
     }
 
+    // A decode whose sender is an unresolved hash (`CP6CL <...> RR73`) names
+    // only the station being called, so it has no callsign. It is recorded
+    // and goes nowhere else. A `passes = false` verdict is not enough:
+    // unfiltered UDP and MQTT destinations take every spot regardless, and
+    // v2.23.2 sent them this one as `UNKNOWN`. The verbatim passthrough
+    // already relayed the datagram before it was parsed.
+    if dxca_core::sender_is_unresolved_hash(&spot.message) {
+        record(state, spot, ring_capacity);
+        return;
+    }
+
     // Rebroadcast dedupe: first spot per CALL-BAND-MODE per window reaches
     // the telnet feed + filtered destinations.
     let passes = match spot.duplicate_key() {
@@ -427,6 +438,11 @@ fn process_spot(
         passes,
     );
 
+    record(state, spot, ring_capacity);
+}
+
+/// The Spots table's half of the tail: the live event and the ring.
+fn record(state: &PipelineState, spot: Spot, ring_capacity: usize) {
     let _ = state.spot_events.send(spot.clone()); // no subscribers is fine
     let mut ring = state.spots.lock().unwrap();
     ring.push_back(spot);
