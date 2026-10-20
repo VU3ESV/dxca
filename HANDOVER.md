@@ -791,7 +791,7 @@ while porting the fix to the Swift app, whose `handleDecode` has the same
 shape. `process_spot` now returns right after `record` (ring + live event)
 for such a decode, so it reaches no destination at all. The server test now
 carries an unfiltered `cluster` destination: against the v2.23.2 pipeline it
-fails, and with the fix it passes. Released as v2.23.3.
+fails, and with the fix it passes. Merged as #11 and released as **v2.23.3**.
 
 **The 1.x Swift app** got the same fix (both halves) in
 DXClusterAggregator-macOS #2, squash `106e797`. It is on `main` and not

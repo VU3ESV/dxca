@@ -25,6 +25,14 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.23.3** (2026-10-20): **completes v2.23.2: an unresolved-hash decode
+now goes to no destination at all.** v2.23.2 kept `CP6CL <...> RR73` off the
+cluster feed and the filtered UDP/MQTT destinations. *Unfiltered*
+destinations take every spot, so they still received it as an `UNKNOWN`
+line. It now goes to the Spots table and nowhere else. The verbatim
+passthrough is unchanged. Nothing to do on upgrade, no database change, and
+rolling back is safe.
+
 **v2.23.2** (2026-10-20): **a decode whose sender is a hash nobody resolved
 no longer spots the station being called.** `CP6CL <...> RR73` is a station
 signing off with CP6CL. Its own call went out hashed, and the decoder printed
