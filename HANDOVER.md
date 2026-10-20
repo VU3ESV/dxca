@@ -796,8 +796,13 @@ fails, and with the fix it passes. Merged as #11 and released as **v2.23.3**
 were edited to say what that release missed. Deployed the same morning:
 .109 (7/8 nodes; VU2OY's node is down with his site), Windows .170 (2/2) and
 adersh .151 (5/5, `NRestarts=0`, no warnings). vu2wj and vu2oy are still
-unreachable, as in the table below, so they go straight from 2.23.1 to
-2.23.3 when they return.
+unreachable at that point (see the table below).
+**vu2wj then came back at 09:03 IST**: 2.23.1 → **2.23.3** (`pi-deploy.sh
+--no-seed`), 3/3 nodes, `NRestarts=0`, no warnings, config md5 unchanged
+(`094c2a23…`), backup `data/dxca.db.pre-v2.23.3`. His DDNS had moved to
+`117.232.173.206` while the tunnel still pointed at `59.176.42.68`, the same
+stale-endpoint trap as before. One bounce fixed it. vu2oy (`.51`) is the only
+host left on 2.23.1.
 
 **The 1.x Swift app** got the same fix (both halves) in
 DXClusterAggregator-macOS #2, squash `106e797`. It is on `main` and not
