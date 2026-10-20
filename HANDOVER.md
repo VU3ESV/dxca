@@ -779,7 +779,8 @@ GitHub release with `dxca-2.23.2-windows-x64.zip`, sha256 `94bb62b5…dbeb`).
 |---|---|
 | `.109` (Docker) | 2.23.1 → **2.23.2**: `docker-deploy.sh`, smoke test OK, container restarted. Nodes 7/8; the missing one is VU2OY's, because his whole site has been dark since 18 Oct 21:07Z. |
 | `.170` (Windows) | 2.23.1 → **2.23.2**: `win-deploy.sh`, nodes 2/2. The previous binary is at `C:\DXCA\dxca.exe.bak`. |
-| adersh `.151`, vu2wj `.201` | Pending: both tunnels were down at deploy time. |
+| adersh `.151` | 2.23.1 → **2.23.2**: `pi-deploy.sh --no-seed`, up 07:59:40 IST, 5/5 nodes live, `NRestarts=0`, no warnings. |
+| vu2wj `.201` | Pending: the tunnel came up against the current DDNS answer `59.176.42.68`, but has never completed a handshake (2,812 B sent, 0 received). So the Pi, PiVPN or his router is down. This is not the stale-endpoint fault from v2.23.1. |
 | vu2oy `.51` | Pending: the site is offline. |
 
 **Not fixed:** the 1.x Swift app. See the open item below.
