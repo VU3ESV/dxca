@@ -772,6 +772,8 @@ grid, predicate) and `an_unresolved_hash_sender_never_reaches_the_cluster_feed`
 following `CP6CL 7P8GE -08` does). Gate: fmt, clippy `-D warnings`, 347 tests
 and the web build all pass.
 
+Merged as #10 (squash `1175f44`) and released as **v2.23.2**.
+
 **Not fixed:** the 1.x Swift app. See the open item below.
 
 ## Session 2026-10-10 — WAS uses the spot's grid before the licence address

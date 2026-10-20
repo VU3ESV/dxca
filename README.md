@@ -25,6 +25,18 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.23.2** (2026-10-20): **a decode whose sender is a hash nobody resolved
+no longer spots the station being called.** `CP6CL <...> RR73` is a station
+signing off with CP6CL. Its own call went out hashed, and the decoder printed
+`<...>` because it had not seen that call before. DXCA used to fall back to
+the one full call and spot **CP6CL**, at the caller's audio offset, with
+alerts and *New Band* hits for a station that was not transmitting. Seen with
+W9HT/VP9 and CP6CL. Such a decode now has no callsign: it still shows in the
+Spots table, but raises nothing and is never sent on the cluster feed, not
+even as `UNKNOWN`. `<...> CP6CL RRR`, where CP6CL is the sender, is spotted
+as before. Nothing to do on upgrade, no database change, and rolling back to
+v2.23.1 is safe. See [A hashed call names the station being called](#a-hashed-call-names-the-station-being-called).
+
 **v2.23.1** (2026-10-10): **WAS takes the state from the spot's grid before
 the licence address.** A spot often says where the station is — an FT8 CQ
 carries its grid, and so do many cluster comments — while the FCC table only
@@ -1338,7 +1350,7 @@ places somewhere else stays there (`KG4TJS` is in Alaska).
 
 ### A hashed call names the station being called
 
-*Unreleased (after v2.23.1).* An FT8/FT4 decode such as `CP6CL <...> RR73`
+*Since v2.23.2.* An FT8/FT4 decode such as `CP6CL <...> RR73`
 is a station signing off with CP6CL. That station's own call went out as a
 hash your decoder could not resolve, so it printed `<...>`. The only full
 call in the line is the station being **called**, which may not be on the
