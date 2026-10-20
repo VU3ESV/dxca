@@ -772,7 +772,15 @@ grid, predicate) and `an_unresolved_hash_sender_never_reaches_the_cluster_feed`
 following `CP6CL 7P8GE -08` does). Gate: fmt, clippy `-D warnings`, 347 tests
 and the web build all pass.
 
-Merged as #10 (squash `1175f44`) and released as **v2.23.2**.
+Merged as #10 (squash `1175f44`) and released as **v2.23.2** (`c574966`,
+GitHub release with `dxca-2.23.2-windows-x64.zip`, sha256 `94bb62b5…dbeb`).
+
+| Host | Result (2026-10-20) |
+|---|---|
+| `.109` (Docker) | 2.23.1 → **2.23.2**: `docker-deploy.sh`, smoke test OK, container restarted. Nodes 7/8; the missing one is VU2OY's, because his whole site has been dark since 18 Oct 21:07Z. |
+| `.170` (Windows) | 2.23.1 → **2.23.2**: `win-deploy.sh`, nodes 2/2. The previous binary is at `C:\DXCA\dxca.exe.bak`. |
+| adersh `.151`, vu2wj `.201` | Pending: both tunnels were down at deploy time. |
+| vu2oy `.51` | Pending: the site is offline. |
 
 **Not fixed:** the 1.x Swift app. See the open item below.
 
