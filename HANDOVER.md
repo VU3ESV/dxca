@@ -791,7 +791,13 @@ while porting the fix to the Swift app, whose `handleDecode` has the same
 shape. `process_spot` now returns right after `record` (ring + live event)
 for such a decode, so it reaches no destination at all. The server test now
 carries an unfiltered `cluster` destination: against the v2.23.2 pipeline it
-fails, and with the fix it passes. Merged as #11 and released as **v2.23.3**.
+fails, and with the fix it passes. Merged as #11 and released as **v2.23.3**
+(`4848241`, Windows zip sha256 `e8e5f23f…b7b5a8`). The v2.23.2 release notes
+were edited to say what that release missed. Deployed the same morning:
+.109 (7/8 nodes; VU2OY's node is down with his site), Windows .170 (2/2) and
+adersh .151 (5/5, `NRestarts=0`, no warnings). vu2wj and vu2oy are still
+unreachable, as in the table below, so they go straight from 2.23.1 to
+2.23.3 when they return.
 
 **The 1.x Swift app** got the same fix (both halves) in
 DXClusterAggregator-macOS #2, squash `106e797`. It is on `main` and not
