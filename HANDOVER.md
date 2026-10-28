@@ -782,9 +782,13 @@ feed, run from a detached worktree of `main` with the new test files) and
 pass with the fix. `dx_callsign`'s table gains `CQ EU` and `TNX 73 GL`.
 `just gate`: fmt, clippy `-D warnings`, 347 tests and the web build pass.
 
-Merged as #13 (squash `97b8f66`) and released as **v2.23.4**, together
-with the 2026-10-23 webpki-roots change below. Not deployed yet: the fleet is
-on v2.23.3 until the next round.
+Merged as #13 (squash `97b8f66`) and released as **v2.23.4** (`55a981f`,
+annotated tag, `gh release create --latest`), together with the 2026-10-23
+webpki-roots change below. Windows zip `dxca-2.23.4-windows-x64.zip`,
+5,251,668 bytes, sha256 `19ee08c9…cfd6b1`; the asset downloaded back hashes
+equal, `releases/latest` answers v2.23.4, and the exe carries no plaintext
+ClubLog key and no placeholder page. Not deployed yet: the fleet is on
+v2.23.3 until the next round.
 
 **The 1.x Swift app** has the same 1.x behaviour for these spots and is not
 changed: it is the shelved fallback (see the open item).
