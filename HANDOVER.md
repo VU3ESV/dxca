@@ -47,7 +47,7 @@
 - [The installs (2026-08-28; VU2OY added 2026-08-30; production moved to .109 2026-09-22)](#the-installs-2026-08-28-vu2oy-added-2026-08-30-production-moved-to-109-2026-09-22)
 - [Release convention (2026-08-28, standing)](#release-convention-2026-08-28-standing)
 - [Open items → next session](#open-items--next-session)
-  - [PR OPEN: the 1.x Swift app still sends `UNKNOWN` for other no-call spots (2026-10-28)](#pr-open-the-1x-swift-app-still-sends-unknown-for-other-no-call-spots-2026-10-28)
+  - [DONE in v1.8.9: the 1.x Swift app still sent `UNKNOWN` for other no-call spots (2026-10-28)](#done-in-v189-the-1x-swift-app-still-sent-unknown-for-other-no-call-spots-2026-10-28)
   - [DONE: the 1.x Swift app spots the called station too (2026-10-20)](#done-the-1x-swift-app-spots-the-called-station-too-2026-10-20)
   - [DONE: v2.22.2 on the three remote Pis (2026-10-09)](#done-v2222-on-the-three-remote-pis-2026-10-09)
   - [DONE in v2.22.2: the GitHub release check (2026-10-08)](#done-in-v2222-the-github-release-check-2026-10-08)
@@ -801,8 +801,8 @@ Deployed the same day on Manoj's *"yes, deploy .109 and windows"*:
 | vu2wj `.201` | 2.23.3 → **2.23.4**, same drill, once Manoj had bounced the tunnel (*"tunnel bounced, deploy vu2wj"*). Before that the `/32` route was up but nothing answered, the stale-endpoint fault again (`vu2wj.ddns.net` was `59.176.39.228` at 12:25 IST); one bounce fixed it. Up 13:26:16 IST, 3/3 nodes, `NRestarts=0`, no warnings. Config md5 unchanged (`094c2a23…`, as on 2026-10-20). Backups `dxca.rollback-v2.23.3` and `data/dxca.db.pre-v2.23.4` (md5 `099c6ad6…` equal, no WAL). Same binary md5 as adersh. **The whole fleet is on v2.23.4.** |
 
 **The 1.x Swift app** had the same 1.x behaviour for these spots, and in
-`handleClusterSpot` no guard at all. Fixed in DXClusterAggregator-macOS #3,
-open for review (see the open item).
+`handleClusterSpot` no guard at all. Fixed in DXClusterAggregator-macOS #3
+and released as v1.8.9 (see the item under *Open items*).
 
 ## Session 2026-10-23 — webpki-roots 1.0.10 drops the eMudhra root
 
@@ -3004,7 +3004,7 @@ edited in place to carry it.
 
 ## Open items → next session
 
-### PR OPEN: the 1.x Swift app still sends `UNKNOWN` for other no-call spots (2026-10-28)
+### DONE in v1.8.9: the 1.x Swift app still sent `UNKNOWN` for other no-call spots (2026-10-28)
 
 dxca v2.23.4 sends a spot with no callsign nowhere. The Swift app's
 `handleDecode` only returned early for a `<...>` sender (#2), and
@@ -3012,9 +3012,9 @@ dxca v2.23.4 sends a spot with no callsign nowhere. The Swift app's
 free-text decode still went out as `UNKNOWN`. First left alone (shelved
 fallback), then fixed the same day on Manoj's *"fix the swift app too"*:
 both paths now `guard let call = spot.dxCallsign else { return }`.
-**DXClusterAggregator-macOS #3, open:** the squash-merge was refused by the
-session's permission check (merge without review), so it waits for
-Manoj's review and merge. Unreleased either way.
+Merged as DXClusterAggregator-macOS #3 (squash `a93646b`) on Manoj's
+*"merge #3 and release v1.8.9"*, and **released as v1.8.9** the same day,
+notarized and verified. Not installed over the 1.8.8 copy in /Applications.
 
 ### DONE: the 1.x Swift app spots the called station too (2026-10-20)
 
