@@ -122,9 +122,9 @@
 **v2.23.4 — a spot with no callsign goes to no destination (v2.23.3 stopped
 only the unresolved-hash decode; `CQ EU` from VU2OY's Aggregator and free
 text still went out as `UNKNOWN`), plus webpki-roots 1.0.10. Tagged and
-released with the Windows zip 2026-10-28, and on .109, Windows `.170`,
-adersh and vu2oy the same day. Only vu2wj is still on v2.23.3, its tunnel
-carrying nothing** (*Session 2026-10-28*). Before that:
+released with the Windows zip 2026-10-28, and on all five hosts the same
+day: .109, Windows `.170`, adersh, vu2oy, and vu2wj after a tunnel
+bounce** (*Session 2026-10-28*). Before that:
 **v2.22.3 — alerts carry the DX's audio offset: `DF 1487 Hz` in Telegram
 and a `DF` column in the Alerts history, from the decoder or a cluster spot's
 comment. Adds `alerts_sent.offset_hz`, which migrates itself on first open.
@@ -798,7 +798,7 @@ Deployed the same day on Manoj's *"yes, deploy .109 and windows"*:
 | `.170` (Windows) | 2.23.3 → **2.23.4**: `win-deploy.sh`, dashboard serving, nodes 2/2. The previous binary is at `C:\DXCA\dxca.exe.bak`. |
 | adersh `.151` | 2.23.3 → **2.23.4** on Manoj's *"yes, deploy adersh and vu2oy"*: `pi-deploy.sh --no-seed`, up 12:27:30 IST, 5/5 nodes, `NRestarts=0`, no warnings. Config md5 unchanged (`2f8c037c…`). Backups `dxca.rollback-v2.23.3` and `data/dxca.db.pre-v2.23.4` (md5 `2f941518…` equal, no WAL). Binary md5 `8e50d0f4…`. |
 | vu2oy `.51` | 2.23.3 → **2.23.4**, same drill: up 12:28:24 IST, 3/3 nodes, `NRestarts=0`, no warnings, glibc 2.36. Config md5 unchanged across the deploy (`dca5fb3e…`), but it is no longer the `65935bf2…` of 2026-10-20: the config was edited since, and the box now has 3 nodes, not 4. Backups `dxca.rollback-v2.23.3` and `data/dxca.db.pre-v2.23.4` (md5 `d21cca80…` equal, no WAL). Same binary md5 as adersh. |
-| vu2wj `.201` | Still on v2.23.3, unreachable: the tunnel's `/32` route is up but nothing answers (ping, `/api/status`). The endpoint is `vu2wj.ddns.net`, which resolved to `59.176.39.228` at 12:25 IST; most likely the stale-endpoint fault again, needing a `wg-quick` bounce (Manoj's step). |
+| vu2wj `.201` | 2.23.3 → **2.23.4**, same drill, once Manoj had bounced the tunnel (*"tunnel bounced, deploy vu2wj"*). Before that the `/32` route was up but nothing answered, the stale-endpoint fault again (`vu2wj.ddns.net` was `59.176.39.228` at 12:25 IST); one bounce fixed it. Up 13:26:16 IST, 3/3 nodes, `NRestarts=0`, no warnings. Config md5 unchanged (`094c2a23…`, as on 2026-10-20). Backups `dxca.rollback-v2.23.3` and `data/dxca.db.pre-v2.23.4` (md5 `099c6ad6…` equal, no WAL). Same binary md5 as adersh. **The whole fleet is on v2.23.4.** |
 
 **The 1.x Swift app** has the same 1.x behaviour for these spots and is not
 changed: it is the shelved fallback (see the open item).
