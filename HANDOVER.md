@@ -122,8 +122,8 @@
 **v2.23.4 — a spot with no callsign goes to no destination (v2.23.3 stopped
 only the unresolved-hash decode; `CQ EU` from VU2OY's Aggregator and free
 text still went out as `UNKNOWN`), plus webpki-roots 1.0.10. Tagged and
-released with the Windows zip 2026-10-28; not yet deployed. The fleet is on
-v2.23.3** (*Session 2026-10-28*). Before that:
+released with the Windows zip 2026-10-28, and on .109 and Windows `.170` the
+same day. The three remote Pis are still on v2.23.3** (*Session 2026-10-28*). Before that:
 **v2.22.3 — alerts carry the DX's audio offset: `DF 1487 Hz` in Telegram
 and a `DF` column in the Alerts history, from the decoder or a cluster spot's
 comment. Adds `alerts_sent.offset_hz`, which migrates itself on first open.
@@ -787,8 +787,15 @@ annotated tag, `gh release create --latest`), together with the 2026-10-23
 webpki-roots change below. Windows zip `dxca-2.23.4-windows-x64.zip`,
 5,251,668 bytes, sha256 `19ee08c9…cfd6b1`; the asset downloaded back hashes
 equal, `releases/latest` answers v2.23.4, and the exe carries no plaintext
-ClubLog key and no placeholder page. Not deployed yet: the fleet is on
-v2.23.3 until the next round.
+ClubLog key and no placeholder page.
+
+Deployed the same day on Manoj's *"yes, deploy .109 and windows"*:
+
+| Host | Result (2026-10-28) |
+|---|---|
+| `.109` (Docker) | 2.23.3 → **2.23.4**: `docker-deploy.sh`, smoke test OK, container restarted on the new image (up 06:52:20Z, `RestartCount=0`, no warnings in the log). Nodes 7/8, as before the deploy: the one down is **KST2Mac** (connection refused, the bridge isn't running). Image `dxca:2.23.3` kept for rollback. |
+| `.170` (Windows) | 2.23.3 → **2.23.4**: `win-deploy.sh`, dashboard serving, nodes 2/2. The previous binary is at `C:\DXCA\dxca.exe.bak`. |
+| adersh, vu2wj, vu2oy | Still on v2.23.3: not asked for this round, and the tunnels are Manoj's step. vu2wj timed out on the morning's sweep. |
 
 **The 1.x Swift app** has the same 1.x behaviour for these spots and is not
 changed: it is the shelved fallback (see the open item).
