@@ -118,7 +118,12 @@
 
 </details>
 
-**Created:** 2026-08-26 · **Last updated:** 2026-10-23 · **Status:**
+**Created:** 2026-08-26 · **Last updated:** 2026-10-28 · **Status:**
+**v2.23.4 — a spot with no callsign goes to no destination (v2.23.3 stopped
+only the unresolved-hash decode; `CQ EU` from VU2OY's Aggregator and free
+text still went out as `UNKNOWN`), plus webpki-roots 1.0.10. Tagged and
+released with the Windows zip 2026-10-28; not yet deployed. The fleet is on
+v2.23.3** (*Session 2026-10-28*). Before that:
 **v2.22.3 — alerts carry the DX's audio offset: `DF 1487 Hz` in Telegram
 and a `DF` column in the Alerts history, from the decoder or a cluster spot's
 comment. Adds `alerts_sent.offset_hz`, which migrates itself on first open.
@@ -777,6 +782,10 @@ feed, run from a detached worktree of `main` with the new test files) and
 pass with the fix. `dx_callsign`'s table gains `CQ EU` and `TNX 73 GL`.
 `just gate`: fmt, clippy `-D warnings`, 347 tests and the web build pass.
 
+Merged as #13 (squash `97b8f66`) and released as **v2.23.4**, together
+with the 2026-10-23 webpki-roots change below. Not deployed yet: the fleet is
+on v2.23.3 until the next round.
+
 **The 1.x Swift app** has the same 1.x behaviour for these spots and is not
 changed: it is the shelved fallback (see the open item).
 
@@ -797,9 +806,8 @@ roots stay, as they do in Mozilla's store. The `webpki-roots 0.26.11` entry is t
 compatibility shim that re-exports 1.x, so it picks up the change too.
 `cargo test --workspace` passes.
 
-**Not yet:** a release. The fix reaches the fleet only with the next tagged
-build (.109, Windows `.170`, the three remote Pis). Until then the running
-binaries still trust the root.
+**Released in v2.23.4** (2026-10-28), with the no-callsign fix above. The
+running binaries still trust the root until each host takes v2.23.4.
 
 ## Session 2026-10-20 — an unresolved-hash sender spots nobody
 
