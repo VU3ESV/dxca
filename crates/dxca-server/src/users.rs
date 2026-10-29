@@ -598,9 +598,20 @@ impl UserService {
         // gathered only when this user's config could rank it — the FCC
         // lookup and the directory check are cheap, but a fleet of users
         // with the awards off should pay literally nothing.
-        let state = (config.alert_new_state || config.alert_unconf_state)
-            .then(|| self.state_of(&call))
+        // The grid the station sent decides first, the licence address
+        // second: see `awards::resolve_state` for why a square over several
+        // states only narrows the licence and never guesses. Looked up only
+        // when the state or the zone is wanted.
+        let want_state = config.alert_new_state || config.alert_unconf_state;
+        let want_zone = config.alert_new_zone || config.alert_unconf_zone || config.alert_marathon;
+        let spot_state = (want_state || want_zone)
+            .then(|| {
+                let licence = self.state_of(&call);
+                dxca_core::awards::resolve_state(spot.grid.as_deref(), licence.as_deref())
+                    .map(str::to_string)
+            })
             .flatten();
+        let state = want_state.then(|| spot_state.clone()).flatten();
         let iota = spot.iota.as_deref().filter(|r| {
             // Validated when a directory is loaded; passed through when
             // not — a missing download must not switch the award off.
@@ -614,10 +625,9 @@ impl UserService {
         // cty.xml has no US call-area records and would answer 5 for the
         // whole country. Everywhere else the resolver's prefix rules are
         // the better source.
-        let want_zone = config.alert_new_zone || config.alert_unconf_zone || config.alert_marathon;
         let zone = want_zone
             .then(|| {
-                self.state_of(&call)
+                spot_state
                     .as_deref()
                     .and_then(dxca_core::awards::us_zone)
                     .or_else(|| resolver.zone(&call))
@@ -771,6 +781,7 @@ impl UserService {
                 source: spot.source_name.clone(),
                 spotter: spot.spotter.clone().unwrap_or_default(),
                 snr_db: Some(spot.snr_db as i64),
+                offset_hz: spot.dx_offset_hz().map(i64::from),
                 award_ref: c.award_ref.clone().unwrap_or_default(),
                 // Both are derived from `channels` by `summarise`, once every
                 // channel has reported. Seeding them here would be a claim
@@ -1170,8 +1181,19 @@ fn alert_html(c: &Classification, call: &str, spot: &Spot, is_lotw: bool) -> Str
         "{label}{key}: {call}{}",
         if is_lotw { LOTW_MARK } else { "" }
     );
+    // The DX station's audio offset — the number you click in the waterfall
+    // to answer it. The MHz figure cannot say it: that is dial + offset
+    // rounded to the kHz, so 14.074 + 1487 Hz reads as 14.075 and the 487
+    // is gone. Shown as MSHV's `DF`, the column it sits under there. From
+    // the decoder, or from a cluster spot's comment when it carries one;
+    // nothing at all when neither does, rather than a `DF 0 Hz` pointing at
+    // the bottom of the passband.
+    let df = spot
+        .dx_offset_hz()
+        .map(|hz| format!("  DF {hz} Hz"))
+        .unwrap_or_default();
     let body = format!(
-        "{}{freq}  {band}  {}  {} dB",
+        "{}{freq}  {band}  {}  {} dB{df}",
         if dxcc.is_empty() {
             String::new()
         } else {
@@ -1265,6 +1287,47 @@ mod alert_message_tests {
         let html = alert_html(&classification(), "3Y0J", &spot("MSHV", None), false);
         assert!(html.contains("Node: MSHV"), "got {html}");
         assert!(!html.contains("Spotter:"), "no empty label: {html}");
+    }
+
+    /// A decoded spot says where in the passband the DX is transmitting.
+    /// The MHz figure rounds that away (14.074 + 1487 Hz shows as 14.075),
+    /// and it is the number the operator clicks to answer.
+    #[test]
+    fn a_decoded_alert_carries_the_dx_audio_offset() {
+        let s = Spot {
+            delta_frequency_hz: 1487,
+            ..spot("MSHV", None)
+        };
+        let html = alert_html(&classification(), "3Y0J", &s, false);
+        assert!(html.contains("-10 dB  DF 1487 Hz\n"), "got {html}");
+    }
+
+    /// A skimmer's comment carries the offset the synthetic decode lost —
+    /// `-15 dB 1032 FT8` on the shack's own feed.
+    #[test]
+    fn a_cluster_alert_takes_the_offset_from_the_comment() {
+        let s = Spot {
+            comment: "-15 dB 1032 FT8".into(),
+            ..spot("VU2CPL", Some("VU2CPL"))
+        };
+        let html = alert_html(&classification(), "3Y0J", &s, false);
+        assert!(html.contains("-10 dB  DF 1032 Hz\n"), "got {html}");
+    }
+
+    /// A cluster spot whose comment says nothing has no offset: it arrives as
+    /// a synthetic decode with the field at 0. Printing `DF 0 Hz` would point
+    /// at the bottom edge of the passband for a station that could be
+    /// anywhere in it.
+    #[test]
+    fn a_cluster_alert_shows_no_offset() {
+        let html = alert_html(
+            &classification(),
+            "3Y0J",
+            &spot("N2WQ-2", Some("VU2XYZ")),
+            false,
+        );
+        assert!(!html.contains("DF "), "no offset known: {html}");
+        assert!(html.contains("-10 dB\n"), "body ends at the SNR: {html}");
     }
 
     /// The spot's own time, in UTC, not the delivery time — a queued or

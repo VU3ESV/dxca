@@ -236,6 +236,11 @@ async fn main() {
     // Feed-health alerts. Silent unless an account sets a threshold, and
     // powerless if this host is what failed — see the module docs.
     dxca_server::health::spawn(users.clone(), pipeline_state.clone(), manager.clone());
+    // Once a day, a look at GitHub's latest release; a banner in the web UI
+    // and one log line when there is a newer one. Never downloads anything,
+    // and never asks by itself from a development build.
+    let update = Arc::new(dxca_server::update::Checker::new(users.db.clone()));
+    dxca_server::update::spawn(update.clone(), cfg.check_for_updates);
 
     let app_state = AppState {
         pipeline: pipeline_state,
@@ -244,6 +249,7 @@ async fn main() {
         config: Arc::new(std::sync::Mutex::new(cfg.clone())),
         config_path: Path::new(config::DEFAULT_PATH).to_path_buf(),
         input_tx: input_tx.clone(),
+        update,
     };
     // MQTT destinations live in the database (they carry a broker password),
     // so they connect here rather than from the TOML config.

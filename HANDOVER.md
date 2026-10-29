@@ -2,9 +2,17 @@
 *For continuation in a new Claude session*
 
 <details>
-<summary><b>Contents</b> — 96 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
+<summary><b>Contents</b> — 108 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
 
 - [What this is](#what-this-is)
+- [Session 2026-10-23 — webpki-roots 1.0.10 drops the eMudhra root](#session-2026-10-23--webpki-roots-1010-drops-the-emudhra-root)
+- [Session 2026-10-20 — an unresolved-hash sender spots nobody](#session-2026-10-20--an-unresolved-hash-sender-spots-nobody)
+- [Session 2026-10-10 — WAS uses the spot's grid before the licence address](#session-2026-10-10--was-uses-the-spots-grid-before-the-licence-address)
+- [Session 2026-10-09 (night) — relayed comments verbatim, decodes in Aggregator's shape](#session-2026-10-09-night--relayed-comments-verbatim-decodes-in-aggregators-shape)
+- [Session 2026-10-09 (evening) — alerts carry the DX's audio offset](#session-2026-10-09-evening--alerts-carry-the-dxs-audio-offset)
+- [Session 2026-10-09 (later) — v2.22.2 released, on .109 and Windows](#session-2026-10-09-later--v2222-released-on-109-and-windows)
+- [Session 2026-10-09 — the release check stores only a success](#session-2026-10-09--the-release-check-stores-only-a-success)
+- [Session 2026-10-08 — DXCA says when a newer release is out](#session-2026-10-08--dxca-says-when-a-newer-release-is-out)
 - [Session 2026-10-03 — a locked-out admin can reset their own password](#session-2026-10-03--a-locked-out-admin-can-reset-their-own-password)
 - [Session 2026-09-25 — alerts are recorded for every channel (PR #8)](#session-2026-09-25--alerts-are-recorded-for-every-channel-pr-8)
 - [Session 2026-09-23 — a CLAUDE.md, and a contents index for this file](#session-2026-09-23--a-claudemd-and-a-contents-index-for-this-file)
@@ -38,10 +46,15 @@
 - [The installs (2026-08-28; VU2OY added 2026-08-30; production moved to .109 2026-09-22)](#the-installs-2026-08-28-vu2oy-added-2026-08-30-production-moved-to-109-2026-09-22)
 - [Release convention (2026-08-28, standing)](#release-convention-2026-08-28-standing)
 - [Open items → next session](#open-items--next-session)
+  - [DONE: the 1.x Swift app spots the called station too (2026-10-20)](#done-the-1x-swift-app-spots-the-called-station-too-2026-10-20)
+  - [DONE: v2.22.2 on the three remote Pis (2026-10-09)](#done-v2222-on-the-three-remote-pis-2026-10-09)
+  - [DONE in v2.22.2: the GitHub release check (2026-10-08)](#done-in-v2222-the-github-release-check-2026-10-08)
+  - [DONE: v2.22.3 on the three remote Pis (2026-10-09)](#done-v2223-on-the-three-remote-pis-2026-10-09)
+  - [TODO: a cloud QSO inbox — QLog on the Pi into RUMlog (2026-10-07)](#todo-a-cloud-qso-inbox--qlog-on-the-pi-into-rumlog-2026-10-07)
   - [OPEN: a green radio chip is the queue, not the radio (2026-09-25)](#open-a-green-radio-chip-is-the-queue-not-the-radio-2026-09-25)
-  - [DONE (merged, unreleased): every alert recorded for every channel — PR #8 (2026-09-25)](#done-merged-unreleased-every-alert-recorded-for-every-channel--pr-8-2026-09-25)
+  - [DONE in v2.22.2: every alert recorded for every channel — PR #8 (2026-09-25)](#done-in-v2222-every-alert-recorded-for-every-channel--pr-8-2026-09-25)
   - [OPEN: point the feeds at .109 (2026-09-22)](#open-point-the-feeds-at-109-2026-09-22)
-  - [OPEN: v2.22.1 on the Windows box (2026-09-22)](#open-v2221-on-the-windows-box-2026-09-22)
+  - [DONE in v2.22.2: the Windows box caught up (2026-09-22)](#done-in-v2222-the-windows-box-caught-up-2026-09-22)
   - [OPEN: the 1.x Swift app has the same KG4 fault (2026-09-22)](#open-the-1x-swift-app-has-the-same-kg4-fault-2026-09-22)
   - [DONE in v2.22.0: the destination source picker, all four tabs, on all five hosts (2026-09-21)](#done-in-v2220-the-destination-source-picker-all-four-tabs-on-all-five-hosts-2026-09-21)
   - [DONE in v2.22.0: source filter for FlexRadio and TCI (2026-09-21)](#done-in-v2220-source-filter-for-flexradio-and-tci-2026-09-21)
@@ -103,10 +116,31 @@
 
 </details>
 
-**Created:** 2026-08-26 · **Last updated:** 2026-09-25 · **Status:**
-**`main` is ahead of v2.22.1: VU3ESV's PR #8 — every alert is recorded for
-every channel it went to, and the Alerts table filters by column —
-squash-merged 2026-09-25, unreleased** (*Session 2026-09-25*). Previously:
+**Created:** 2026-08-26 · **Last updated:** 2026-10-23 · **Status:**
+**v2.22.3 — alerts carry the DX's audio offset: `DF 1487 Hz` in Telegram
+and a `DF` column in the Alerts history, from the decoder or a cluster spot's
+comment. Adds `alerts_sent.offset_hz`, which migrates itself on first open.
+Tagged and released with the Windows zip, 2026-10-09 07:44 IST; held back
+until the release check on .109 had shown its first real banner, then
+deployed: .109 (the production container) 08:57 IST, Windows `.170`
+08:59 IST, and the three remote Pis 09:12–09:16 IST once Manoj had brought
+the tunnels up. The whole fleet is on 2.22.3, every host verified**
+(*Session 2026-10-09 (evening)*). Before that:
+**v2.22.2 — DXCA says when a newer release is out. Tagged and released with
+the Windows zip, 2026-10-09 05:15 IST; running on .109 (the production
+container), the Windows box `.170` and the three remote Pis** — adersh,
+vu2wj and vu2oy followed at 05:32–05:35 IST once Manoj had brought their
+WireGuard tunnels up (*DONE: v2.22.2 on the three remote Pis*). The whole
+fleet is on 2.22.2. The release ships the GitHub release
+check — admins see a banner when a newer DXCA is out, one log line, never an
+install; only a successful check is stored, failures retry hourly, dev
+builds never check by themselves (*Sessions 2026-10-08 and 2026-10-09*);
+`dxca reset-password` for a locked-out admin (VU3ESV's PR #9, *Session
+2026-10-03*); and VU3ESV's PR #8 — every alert is recorded for every channel
+it went to, and the Alerts table filters by column (*Session 2026-09-25*).
+Deploy record in *Session 2026-10-09 (later)*. The cloud QSO inbox parked
+under *Open items* on 2026-10-07 became its own private repo,
+`vu2cpl/qso-inbox`, on 2026-10-09. Previously:
 **Production moved off noderedpi4 into a Docker container on `ubersdr`
 (192.168.1.109), 2026-09-22, 11:09 IST.** noderedpi4's dxca is stopped and
 disabled, kept as the rollback. The decoders and the Mac's telnet client
@@ -705,10 +739,761 @@ and the web GUI's design system from the same repo's
 cutover. noderedpi4's install is stopped and disabled, kept as the
 rollback. The 1.x macOS app is the retained fallback (maintenance mode).
 
+## Session 2026-10-23 — webpki-roots 1.0.10 drops the eMudhra root
+
+**Why.** The private keys of eight eMudhra intermediate CAs could be
+recovered: they were generated with too little randomness in an April 2025
+ceremony and disclosed on 17 Oct 2026. Anyone holding them can issue a
+valid-looking certificate for any host. Browsers blocked the intermediates
+with revocation lists (OneCRL and similar). rustls with `webpki-roots` uses
+only the roots compiled into the binary and never checks revocation, so
+DXCA trusted those certificates for every HTTPS call `ureq` makes: Club Log,
+LoTW, the GitHub release check and Telegram.
+
+**What.** `cargo update -p webpki-roots --precise 1.0.10` (`Cargo.lock` only).
+1.0.10 removes `emSign ECC Root CA - G3`, the affected root. The other emSign
+roots stay, as they do in Mozilla's store. The `webpki-roots 0.26.11` entry is the
+compatibility shim that re-exports 1.x, so it picks up the change too.
+`cargo test --workspace` passes.
+
+**Not yet:** a release. The fix reaches the fleet only with the next tagged
+build (.109, Windows `.170`, the three remote Pis). Until then the running
+binaries still trust the root.
+
+## Session 2026-10-20 — an unresolved-hash sender spots nobody
+
+**Reported by Manoj while chasing W9HT/VP9 and CP6CL:** DXCA alerted on
+stations that were not transmitting. His JTDX shows `CP6CL 7P8GE -08` at
+408 Hz at 01:17:00, then `CP6CL <...> RR73` at the same 408 Hz at 01:17:30.
+That second line is 7P8GE signing off, but its own call was a hash JTDX had
+not resolved, so it printed `<...>`. DXCA spotted **CP6CL**.
+
+**Cause.** `Spot::dx_callsign` (ported verbatim from Swift
+`SpotMessage.dxCallsign`) prefers slot 1, the sender. When slot 1 is
+"decoration", it falls back to slot 0. `<...>` counts as decoration, so the
+called station became the spot. The same wrong call fed the dedupe key, the
+grid (`CP6CL <...> FN42` gave CP6CL a locator), the band matrix, the alerts
+and the cluster line. Meridian had the same bug in its own extractor, fixed
+in the same session. Meridian-fed spots are clean on the
+Meridian side, but DXCA's local WSJT-X/JTDX/MSHV sources still hit this.
+
+**Fix.**
+- When slot 1 is exactly `<...>`, `dx_callsign` returns `None`.
+- A new `sender_is_unresolved_hash` lets `process_spot` refuse to rebroadcast
+  such a decode. Otherwise the 1.x "no callsign → broadcast as UNKNOWN" rule
+  would put a spot of nobody on every logger's feed.
+- The decode stays in the ring, so the Spots table still shows it, with no call.
+- The UDP passthrough is untouched: it forwards the datagram before parsing.
+
+The reverse form, `<...> W9HT/VP9 RRR` (hashed addressee, full sender), still
+spots the sender.
+
+**Tests:** `an_unresolved_hash_sender_spots_nobody` (core: call, dedupe key,
+grid, predicate) and `an_unresolved_hash_sender_never_reaches_the_cluster_feed`
+(server, over real UDP and telnet: the RR73 produces no line, and the
+following `CP6CL 7P8GE -08` does). Gate: fmt, clippy `-D warnings`, 347 tests
+and the web build all pass.
+
+Merged as #10 (squash `1175f44`) and released as **v2.23.2** (`c574966`,
+GitHub release with `dxca-2.23.2-windows-x64.zip`, sha256 `94bb62b5…dbeb`).
+
+| Host | Result (2026-10-20) |
+|---|---|
+| `.109` (Docker) | 2.23.1 → **2.23.2**: `docker-deploy.sh`, smoke test OK, container restarted. Nodes 7/8; the missing one is VU2OY's, because his whole site has been dark since 18 Oct 21:07Z. |
+| `.170` (Windows) | 2.23.1 → **2.23.2**: `win-deploy.sh`, nodes 2/2. The previous binary is at `C:\DXCA\dxca.exe.bak`. |
+| adersh `.151` | 2.23.1 → **2.23.2**: `pi-deploy.sh --no-seed`, up 07:59:40 IST, 5/5 nodes live, `NRestarts=0`, no warnings. |
+| vu2wj `.201` | Pending: the tunnel came up against the current DDNS answer `59.176.42.68`, but has never completed a handshake (2,812 B sent, 0 received). So the Pi, PiVPN or his router is down. This is not the stale-endpoint fault from v2.23.1. |
+| vu2oy `.51` | Pending: the site is offline. |
+
+**Follow-up, same day: v2.23.2 still leaked to unfiltered destinations.**
+`passes = false` keeps the decode off the telnet feed and the *filtered*
+UDP/MQTT destinations. Unfiltered ones take every spot regardless of that
+verdict, so they still received it as an `UNKNOWN` line. The gap turned up
+while porting the fix to the Swift app, whose `handleDecode` has the same
+shape. `process_spot` now returns right after `record` (ring + live event)
+for such a decode, so it reaches no destination at all. The server test now
+carries an unfiltered `cluster` destination: against the v2.23.2 pipeline it
+fails, and with the fix it passes. Merged as #11 and released as **v2.23.3**
+(`4848241`, Windows zip sha256 `e8e5f23f…b7b5a8`). The v2.23.2 release notes
+were edited to say what that release missed. Deployed the same morning:
+.109 (7/8 nodes; VU2OY's node is down with his site), Windows .170 (2/2) and
+adersh .151 (5/5, `NRestarts=0`, no warnings). vu2wj and vu2oy are still
+unreachable at that point (see the table below).
+**vu2wj then came back at 09:03 IST**: 2.23.1 → **2.23.3** (`pi-deploy.sh
+--no-seed`), 3/3 nodes, `NRestarts=0`, no warnings, config md5 unchanged
+(`094c2a23…`), backup `data/dxca.db.pre-v2.23.3`. His DDNS had moved to
+`117.232.173.206` while the tunnel still pointed at `59.176.42.68`, the same
+stale-endpoint trap as before. One bounce fixed it.
+**vu2oy (`.51`) at 10:04 IST**: 2.23.1 → **2.23.3**, back from his site's
+outage (dark 18 Oct 21:07Z to about 02:00Z on the 20th). 4/4 nodes about a
+minute after the start (2/4 at first, still logging in), `NRestarts=0`, no
+warnings, config md5 unchanged (`65935bf2…`), backup
+`data/dxca.db.pre-v2.23.3`. **The whole fleet is on v2.23.3.**
+
+**The 1.x Swift app** got the same fix (both halves) in
+DXClusterAggregator-macOS #2, squash `106e797`. It is on `main` and not
+released.
+
+## Session 2026-10-10 — WAS uses the spot's grid before the licence address
+
+Manoj, after JTDX-VU got Show US State (jtdx-vu `1782dc05`): *"can we use
+the grid in dxca"*. Until now a spot's state came only from the FCC
+licence address, although decoder and cluster spots often carry the DX's grid.
+
+- **`awards::resolve_state (grid, licence)`**: a square inside one state
+  gives that state, so `W1AW/7` in DM42 is AZ, a call `StateTable::lookup`
+  rightly refuses. A square over several states accepts the licence state only if it
+  is one of them, else none: a New State there would be a guess. No grid,
+  or a non-US grid, leaves the licence answer exactly as before.
+  `classify ()` uses it for the WAS axis **and** the US zone (zone came from
+  the FCC state). The lookup still runs only when state or zone alerts are on.
+- **The table**: `crates/dxca-core/data/us_grid_states.txt`, `include_str!`
+  (no I/O in core), parsed once into a `OnceLock` map. 750 squares from US
+  Census `cb_2023_us_state_500k`, states with at least 2 % of the square's US land,
+  largest first; AK incl. west of 180 (RO6x), HI; DC counted as MD. The
+  generator is `scripts/build_us_grid_states.py` (copied from jtdx-vu
+  `tools/`). It is a 4-char table: a 6-char grid is cut to its square, so
+  border squares stay ambiguous. A sub-square table for the 191 multi-state
+  squares is a possible refinement.
+- **Tests:** three in `awards.rs` (unambiguous grid beats the licence; a
+  multi-state grid only narrows it; no or non-US grid changes nothing,
+  incl. RR73, RO62, BL11). `just gate` green.
+- **Shipped as v2.23.1** (2026-10-10 09:30 IST): `Cargo.toml` 2.23.0 → 2.23.1,
+  README `## Status` entry in the same commit this time (`0a86b7f`), annotated
+  tag `v2.23.1`, `just gate` green before it. `deploy/win-bundle.sh` →
+  `dxca-2.23.1-windows-x64.zip` (5,245,507 bytes, sha256 `9ea4a3d9…`, no
+  placeholder page); `gh release create --latest`, notes on the v2.22.3
+  template with `## Updating`; the asset downloaded back hashes equal and
+  `releases/latest` answers v2.23.1. **Not
+  deployed from here, on purpose** — Manoj: *"will try a auto update
+  notification and install this time"*: the release is there for .109's
+  update check to find, and the install follows from the banner rather
+  than from `docker-deploy.sh`.
+- **The banner worked, then the fleet was updated anyway** (Manoj, 09:44 IST:
+  *"update dxca to all"*). Before the deploy `/api/status` on .109 carried
+  `update: {current: 2.23.0, tag: v2.23.1, skipped: false, url: …}` — the
+  check had found the release on its own within fourteen minutes of
+  publication — and after it `update: null`. Same drill as v2.23.0, one host
+  at a time, `git describe` = `v2.23.1-1-g67bb229` (the docs commit on top
+  of the tag; code identical):
+
+  | Box | Before → after | Nodes Live | Backup / rollback | Up (IST) |
+  |---|---|---|---|---|
+  | .109 container | 2.23.0 → **2.23.1** | 8/8 → 8/8 | `dxca.db.pre-v2.23.1` md5 `b400a45a…` equal, no WAL; image `dxca:2.23.0` kept | 09:45 |
+  | Windows .170 | 2.23.0 → **2.23.1** | 2/2 → 2/2 | `C:\\DXCA\\dxca.exe.bak` | 09:46 |
+  | adersh `.151` | 2.23.0 → **2.23.1** | 5/5 → 5/5 | `dxca.db.pre-v2.23.1` md5 `d5d18d53…` equal, no WAL; `dxca.rollback-v2.23.0` | 09:46 |
+  | vu2oy `192.168.220.51` | 2.23.0 → **2.23.1** | 4/4 → 4/4 | `dxca.db.pre-v2.23.1` md5 `57a398ab…` equal, no WAL; `dxca.rollback-v2.23.0` | 09:47 |
+  | vu2wj `.201` (trixie) | 2.22.3 → **2.23.1**, 10:06 after the tunnel was fixed (below) | 3/3 → 3/3 | `dxca.db.pre-v2.23.1` md5 `f3899f9d…` equal, no WAL; `dxca.rollback-v2.22.3` (md5 `8c2d945c…`) | 10:06 |
+
+  Every start line names the host's nodes, no error, warning or panic,
+  `NRestarts=0` on the Pis, every config md5 unchanged, nothing seeded. The
+  2.23.1 aarch64 binary is 8,506,848 bytes, md5 `50896fb7…`. adersh's
+  journal also shows `flex 192.168.1.123:4992: connect failed: No route to
+  host` — his FlexRadio destination is off or moved; his LAN, not this
+  deploy, and it logged the same before.
+- **vu2wj, solved: a stale tunnel endpoint, not a dead Pi.** At 09:50
+  `vu2wj.ddns.net` resolved to `59.94.192.100`, where the day before it
+  had been `117.221.180.82`. The Pi runs the DDNS updater, so a changed
+  record meant the Pi was alive — and `wg-quick` resolves the endpoint name
+  only when the tunnel comes up, so the Mac had been sending handshakes to
+  yesterday's address through every bounce *before* the IP changed. One more
+  `sudo wg-quick down Shaji_vu2wj && sudo wg-quick up Shaji_vu2wj` (Manoj)
+  re-resolved it and the Pi answered at once: 2.22.3, 3/3 Live, its own
+  banner already showing v2.23.0 from its daily check. Then the drill:
+  backup, `dxca.rollback-v2.22.3`, `pi-deploy.sh --no-seed`
+  10:05:51–10:06:08, `shut down cleanly`, the 2.23.1 start line naming
+  its three nodes, no error or warning, `NRestarts=0`, config md5
+  unchanged (`094c2a23…`), nothing seeded, banner cleared. **The whole
+  fleet is on v2.23.1 as of 10:06 IST.** Lesson for the next silent
+  tunnel: before anything else, `dig +short <endpoint>` and compare with
+  what the tunnel was brought up against; a changed answer means bounce,
+  not a dead box.
+- **`scripts/fleet-status.py HOST…`** (committed 2026-10-13, `23c12ac`) prints
+  the one-line-per-host status these tables were filled from — version,
+  nodes Live, users, telnet clients, update banner — from `/api/status`,
+  no login, no ssh. It is also the reachability test for the Windows box,
+  which drops ping. Hosts are arguments; the fleet list is in the deploy
+  memory and *The installs* below.
+
+## Session 2026-10-09 (night) — relayed comments verbatim, decodes in Aggregator's shape
+
+Manoj: *"does the spots going to destinations also have DF field in
+comments?"* They did not: the line's comment was always the synthesised
+`FT8 -10 dB`, for a decoder's spot and a relayed cluster spot alike, so a
+skimmer's `-15 dB 1032 FT8` left here as `FT8 -15 dB` and the offset (and
+any grid) went with it. Three passes in one evening, none released:
+
+1. *"Add the DF to the comment in both formatters"* → `FT8 -10 dB DF 1487
+   Hz` (commit `f11cf79`), the label the alerts use.
+2. Shown what the inbound comments look like: *"keep the original comment
+   and no need for any DF or Hz in comments. the logging softwares are made
+   to take it that way."* → relayed comments verbatim, decodes as
+   `-10 dB 1487 FT8`.
+3. *"sequence it exactly like vu2oy format"* and *"what is 6 in vu2oy
+   spot?"* → this.
+
+**VU2OY's node is RBN Aggregator.** `nc vu2oy.ddns.net 7550` answers
+`Welcome to Aggregator. You are client #900.` / `de SKIMMER via Aggregator
+>` and streams lines like
+
+```
+DX de VU2OY-#:   14074.0  YC2VTS         -7 dB   6 FT8          1758  0607Z
+DX de VU2OY-#:   28074.0  UN7LZ          -6 dB   6 FT8  CQ MO13 2332  0607Z
+DX de VU2OY-#:   18100.0  UW5KW         -19 dB   6 FT8  CQ      1364  0607Z
+```
+
+**The `6` is the symbol rate in baud**, in the column where Aggregator puts
+a CW spot's WPM and a RTTY spot's BPS: FT8 is 6.25 baud. The evening
+session's "wasn't established" is now established — every one of VU2OY's
+635 spots in a 2,000-spot sample carried `6`, all were FT8, and the shape
+is Aggregator's own. Aggregator spots at the **dial** (14074.0) with the
+offset **last** in the comment, after `CQ` and the CQ's grid when there was
+one (325 of 635 said `CQ`, 310 did not; no grid ever appeared without `CQ`).
+
+**What `format()` does now** (`dxca-core/src/format.rs`):
+
+- **A relayed spot's comment goes out verbatim**, keyed on `spotter.is_some()`
+  (every cluster spot has one; no decode does), even when it is empty —
+  never a made-up `CQ` or rate for a hand-typed spot with no comment.
+- **A decode's comment is Aggregator's, column for column:** SNR `%3d`,
+  ` dB`, the rate `%4d` (FT8 `6`; FT4 `21` = 20.833 rounded, **not yet
+  read off a live line** — no FT4 in the sample; check when one comes
+  through), the mode, two spaces, `CQ`/`CQ <grid>` left-aligned in 8 (blank
+  for a reply), the offset `%4d`. 28 columns for a 3-letter mode, the cell
+  exactly. Modes Aggregator never spots get no rate token (Q65, MSK144 …),
+  which keeps `framed_offset`'s `<snr> dB <n> FT8|FT4` frame honest and the
+  width inside the cell (`MSK144` comes to 27). `dx_offset_hz` `None` →
+  no offset column, never `0`.
+- **The frequency cell is the dial** (`dial_frequency_hz`), for every spot.
+  A relayed spot's dial *is* its spotted frequency (delta 0), so nothing
+  changes there. A decode used to go out at dial + offset (14075.8); with
+  the offset in the comment relative to the dial that would be counted
+  twice by a logger reading the comment — the hazard `dx_offset_hz`'s doc
+  describes from the inbound side — and 14074.0 is where the rig belongs
+  for FT8 anyway. **This is the one behaviour change a logger will notice:
+  decoder spots now arrive at the FT8 dial, not 1–3 kHz above it.** Alerts,
+  the Spots table, dedupe, band and the MQTT JSON's `frequency_hz` still
+  use dial + offset.
+- Reaches the telnet server, cluster-format UDP destinations and MQTT's
+  `<base>/cluster`. Not the MQTT JSON `comment` (the inbound comment, as
+  always), the WSJT-X-format UDP destinations or passthrough.
+- Round trip: `offset_from_comment` reads the written line back exactly as
+  it reads VU2OY's (`the_written_offset_reads_back`, three shapes).
+
+**The 1.x Mac app got the same change** (`ClusterFormatter.swift`, with a
+`SpotMessage.comment` the cluster ingest fills and a `cqGrid` for the CQ's
+grid). Unreleased there too.
+
+Tests: `spider_layout` (whole line), `a_decoded_spot_takes_aggregators_shape`
+(four shapes, each 28 columns), `the_rate_column_follows_the_mode`,
+`the_frequency_cell_is_the_dial`, `a_relayed_spots_comment_goes_out_as_it_came`
+(five live shapes plus empty), `no_offset_means_no_offset_column`,
+`the_written_offset_reads_back`. `just gate` passed. README: *Who spotted
+it* (the `6`, the shape, the dial) and the MQTT table; `spot.rs` doc on the
+unlabelled-offset floor.
+
+**Shipped as v2.23.0 the same afternoon** (Manoj: *"release it and install
+on 109"*). A minor bump, not a patch: what every connected logger receives
+changed. `Cargo.toml` 2.22.3 → 2.23.0, release commit `7ad3a5e`, annotated
+tag `v2.23.0` (`4418377`), both pushed. The README `## Status` entry
+missed that commit — the script that writes it stopped on a wrong
+assertion of mine and the commit went ahead on the version bump alone —
+and landed in the docs commit after the deploy, so the tag's tree lacks it
+and `main`'s has it. `deploy/win-bundle.sh` → `dxca-2.23.0-windows-x64.zip`
+(5,244,657 bytes, sha256
+`e2440ce3e8dc77cde55c95a75671228f8265a39d079068cb686352ae1b837ef5`, no
+placeholder page). `gh release create --latest` with notes covering the
+line change and a `## Updating` section on the v2.22.3 template; the asset
+downloaded back hashes equal, and `releases/latest` answers v2.23.0.
+
+**Deployed to .109 only**, by instruction. Before: 2.22.3, up 5 h on
+`dxca:2.22.3`, one telnet client. `data/dxca.db` copied to
+`dxca.db.pre-v2.23.0` (md5 `d0de91e8…` equal, no WAL). `deploy/docker-deploy.sh`
+13:39:04–13:39:51 IST: smoke test reported 2.23.0, the running container
+came back on `dxca:2.23.0`. After: **2.23.0**, start line names all eight
+nodes, no error, warning or panic in the log, config md5 unchanged
+(`3a739c89232a`), telnet client back (1), cty 402, FCC 816,280, IOTA 1,178,
+`update: null`, nodes Live 8/8 a few minutes in. **On the air** (40 s on
+`:7575`): relayed spots verbatim — `DX de VU2CPL: 18100.9 A60WSW/21 -18 dB
+947 FT8`, `DX de VU24DX: 14075.8 DM2DXA -20 dB 1806 FT8 CQ JO64`, DB0SUE's
+award chatter untouched. No decoder was feeding .109 at the time (136
+lines, all relayed; the 2,000-spot sample earlier had none either), so the
+Aggregator shape for decodes rests on `spider_layout`'s exact line until
+MSHV is next on. **Rollback:** `sudo docker stop dxca && sudo docker rm
+dxca`, the `docker create` line from `docker-deploy.sh` with `dxca:2.22.3`,
+then `start`; no schema change, so the database needs nothing.
+**Then the rest of the fleet** (Manoj: *"install on all other machines"*,
+13:47 IST), the same drill, one host at a time:
+
+| Box | Before → after | Nodes Live | Backup / rollback | Up (IST) |
+|---|---|---|---|---|
+| Windows .170 | 2.22.3 → **2.23.0** | 2/2 → 2/2 | no DB copy (locked while running; nothing to migrate); `C:\DXCA\dxca.exe.bak` is the 2.22.3 exe | 13:48 |
+| vu2oy `192.168.220.51` (bookworm, glibc 2.36) | 2.22.3 → **2.23.0** | 4/4 → 4/4 | `dxca.db.pre-v2.23.0`, md5 `88ae4518…` equal, no WAL; `/opt/dxca/dxca.rollback-v2.22.3` (md5 `8c2d945c…`) | 13:48 |
+| adersh `192.168.1.151` (trixie) | 2.22.3 → **2.23.0** | 5/5 → 5/5 | `dxca.db.pre-v2.23.0`, md5 `239be11d…` equal, no WAL; `/opt/dxca/dxca.rollback-v2.22.3` (md5 `8c2d945c…`) | 13:51 |
+| vu2wj `192.168.1.201` | **not reached, still on 2.22.3** | — | — | — |
+
+Windows: `deploy/win-deploy.sh`, 13:47:52–13:48:04, binary swapped, task
+restarted, dashboard serving, `fcc_calls: 0` as always there. vu2oy:
+`pi-deploy.sh --no-seed`, 13:48:21–13:48:36; journal shows `shut down
+cleanly` then the 2.23.0 start line naming its four nodes, no error or
+warning, `NRestarts=0`; the new aarch64 binary is 8,487,328 bytes, md5
+`0b7548e8…`; config md5 unchanged (`65935bf2…`); `~/dxca-deploy/config`
+and `data` empty, as `--no-seed` leaves them. **adersh and vu2wj:** all
+three `/32` routes were up (`utun8/9/10`) but `.151` and `.201` answered
+neither ping, `:7580` nor ssh in 10 s — the "a route is not a tunnel" case
+from 2026-09-22. `wg-quick down`/`up` needs Manoj's sudo, so those two wait
+on him; the memory and this table say so.
+
+**Tunnels bounced (Manoj, 13:50 IST: *"tunnels are up, deploy on the other
+two"*).** adersh answered at once — ping, `:7580`, ssh — and went through
+the same drill: `pi-deploy.sh --no-seed`, 13:51:20–13:51:38, journal `shut
+down cleanly` then the 2.23.0 start line naming its five nodes, no error
+or warning, `NRestarts=0`, the same aarch64 binary as vu2oy's (md5
+`0b7548e8…`, 8,487,328 bytes), config md5 unchanged (`2f8c037c…`), nothing
+seeded. **vu2wj did not come back:** route on `utun9` as before, 6 pings
+over 20 s all lost, ssh timed out, `:7580` silent — after the bounce. So
+either that tunnel has no handshake (`sudo wg show Shaji_vu2wj`, Manoj's
+to run) or the Pi is off, which the deploy memory warns is the ordinary
+state of a third-party box. It stays on v2.22.3; deploy it with the same
+drill when it answers a ping.
+
+**Two more tries, 13:55–14:05 IST, after Manoj bounced `Shaji_vu2wj` a
+second time:** same result — `utun9` up on `10.95.51.2`, the `/32` route in
+place, 23 pings in all lost, ssh and `:7580` timing out. What the Mac *can*
+see without sudo: the config's endpoint `vu2wj.ddns.net:51820` resolves
+(`117.221.180.82`) and that address answers ping in 18 ms, so the site's
+WAN is up and the ISP is not the problem. The tunnel carries nothing
+through it, which leaves the Pi's own WireGuard not answering the
+handshake — the Pi off, or PiVPN down on it — or a stale DDNS record (the
+updater runs on that Pi, so a powered-off Pi gives both symptoms at once).
+`sudo wg show Shaji_vu2wj` on this Mac settles it: no recent handshake
+after a bounce means the far end, and the next step is Shaji, not this
+Mac. Nothing on the box was touched — the deploy stops at a ping gate
+before any backup or install.
+
+## Session 2026-10-09 (evening) — alerts carry the DX's audio offset
+
+**Shipped as v2.22.3** the same evening, tagged and released with the Windows
+zip. **Deployed nowhere**, by instruction: Manoj wants to see the release
+check on .109 (still 2.22.2) notice it first — *"let me see if it registers
+as an update"*, then *"dont install"*. The automatic check runs daily, so
+**Check now** on Settings › Server › Reference data is the way to see it
+today. Deploying afterwards is the usual drill, .109 first.
+
+**It registered (2026-10-09, ~08:55 IST).** Manoj: *"its on 2.22.2, no
+banners shown"* — correct at that moment: .109's last successful check was
+05:17 IST (36 s after the v2.22.2 restart, answer v2.22.2, nothing newer),
+the next automatic one was ~20 h away, the container had logged no update
+line, and GitHub's counter from the shack's address stood at 60/60 — it
+had not asked. He pressed **Check now**: *"i got it now"*. From outside,
+`/api/status` on .109 then carried
+`update: {tag: v2.22.3, current: 2.22.2, skipped: false, …}` and GitHub's
+counter read 59/60 — one request, his. The first real banner the feature
+has shown, as the v2.22.2 notes predicted.
+
+**Deployed, after the banner had been seen** (Manoj: *"install on 109"*,
+then *"and then on all other machines"*):
+
+| Box | Before → after | Nodes Live | DB backup | Up (IST) |
+|---|---|---|---|---|
+| .109 container (x86_64) | 2.22.2 → **2.22.3** | 8/8 → 8/8 | `dxca.db.pre-v2.22.3`, md5 `d51e2967…` equal, no WAL | 08:57 |
+| Windows .170 | 2.22.2 → **2.22.3** | 2/2 → 2/2 | `dxca.db.pre-v2.22.3`, md5 `485da4b3…` equal | 08:59 |
+| adersh `192.168.1.151` (trixie) | 2.22.2 → **2.22.3** | 5/5 → 5/5 | `dxca.db.pre-v2.22.3`, md5 `af4c3fa2…` equal, no WAL | 09:12 |
+| vu2wj `192.168.1.201` (trixie) | 2.22.2 → **2.22.3** | 3/3 → 3/3 | `dxca.db.pre-v2.22.3`, md5 `68460b49…` equal, no WAL | 09:14 |
+| vu2oy `192.168.220.51` (bookworm) | 2.22.2 → **2.22.3** | 4/4 → 4/4 | `dxca.db.pre-v2.22.3`, md5 `225c7fe9…` equal, no WAL | 09:16 |
+
+The Pis, after Manoj's *"tunnels are up, deploy dxca"*: all three routed
+(`utun8/9/10`), answered ping and reported 2.22.2 before anything was
+touched. Per box, first the backup above and the outgoing binary kept as
+`/opt/dxca/dxca.rollback-v2.22.2` (md5 `69fb32f8…`, the same 2.22.2 build
+on all three), then `pi-deploy.sh --no-seed` one at a time with a version
+check between. The aarch64 binary is 8,486,368 bytes, md5 `8c2d945c…`,
+needs GLIBC_2.34 at most (bookworm's 2.36 is fine), and is what
+`/opt/dxca/dxca` hashes to on each. Each journal shows `shut down cleanly`,
+then the 2.22.3 start line naming every node, no panic, error or warning,
+`NRestarts=0`; `offset_hz` present on each (500 rows kept). Node counts
+read 4/5 and 2/4 in the seconds after restart and were full a minute
+later — the logins, not a fault. `~/dxca-deploy` on each Pi holds the
+three shipped files plus **empty** `config/` and `data/` directories, made
+by the staging step (same mtime as the binary); nothing was seeded.
+**Rollback, per Pi:** `sudo systemctl
+stop dxca && sudo install -m 755 /opt/dxca/dxca.rollback-v2.22.2
+/opt/dxca/dxca && sudo systemctl start dxca`; 2.22.2 ignores the new column.
+
+.109: `deploy/docker-deploy.sh` from the main clone (the key file is there,
+and `DXCA_CLUBLOG_API_KEY` exported as well), code identical to the tag
+(`git diff v2.22.3..HEAD -- crates web-ui Cargo.*` empty). Smoke test OK,
+container restarted on `dxca:2.22.3`; `dxca:2.22.2` kept as the rollback
+image. The start line names all eight nodes; no error or warning. The
+`alerts_sent.offset_hz` column was added on first open — 500 rows, none
+with an offset yet, as expected. `/api/status` now carries `update: null`:
+the stored latest equals the running version, so the banner went away by
+itself, as designed. Windows: `deploy/win-deploy.sh`, binary swapped,
+previous kept at `C:\DXCA\dxca.exe.bak`, task restarted, dashboard
+serving; the script's own check passed. `cty 402` on both.
+
+**Rollback, .109:** `sudo docker stop dxca && sudo docker rm dxca`, then
+the `docker create` line from `docker-deploy.sh` with `dxca:2.22.2`, then
+`start`; 2.22.2 ignores the new column, so the live database is fine, and
+`dxca.db.pre-v2.22.3` is there anyway. **Windows:** stop the task, `move /y
+dxca.exe.bak dxca.exe`, start it.
+
+**Found while confirming: the log line trails Check now by up to an hour.**
+`spawn`'s loop prints `dxca: DXCA x is available …` after each hourly pass
+from the *stored* record (`available(&checker.db)`), and `Check now` only
+stores. So the banner is immediate and the log line arrives at the loop's
+next tick. Not changed — one line per run is the right rule and the loop is
+the right owner — but the README's *Update check* now says so, because
+"banner but no log line" reads like a fault from `docker logs`.
+
+Manoj: *"add tx freq offset of dx station in alerts"*. A Telegram alert from a
+decoder now ends its body line with the DX station's audio offset:
+
+```
+🔴 NEW DXCC: 3Y0J
+Bouvet  14.075 MHz  20M  FT8  -10 dB  DF 1487 Hz
+```
+
+- **Why it was missing.** The MHz figure is dial + offset rounded to the kHz,
+  so the offset was in the message and rounded away. `Spot::delta_frequency_hz`
+  has carried it from the WSJT-X Decode message all along; only `alert_html`
+  (`users.rs`) changed.
+- **Labelled `DF`**, MSHV's column name for it, which Manoj reads every day.
+  WSJT-X calls the same column `Freq`, which would be confused with the MHz
+  figure beside it.
+- **`0` means unknown and is never printed.** A cluster spot becomes a
+  synthetic decode with the field at 0, and no FT8/FT4 signal sits at 0 Hz
+  audio.
+- **FlexRadio and TCI unchanged.** They already mark the panadapter at the
+  spot's frequency.
+
+**Same evening, second pass** (Manoj: *"add history column and use comments
+if available"*):
+
+- **Cluster comments.** `Spot::dx_offset_hz()` (`dxca-core/src/spot.rs`)
+  returns the decoder's `delta_frequency_hz` when non-zero, else
+  `offset_from_comment`. The shapes came from 2,000 live spots on .109
+  (`/api/spots?limit=2000` needs no login), not from guessing:
+  - `FT8 1500Hz BL11`: labelled, typed by a human (JG1TSG).
+  - `-15 dB 1032 FT8`: VU2CPL and VU24DX skimmers. They spot at dial +
+    offset, and all 1,106 in the sample agreed with their spot frequency.
+  - `-18 dB 6 FT8 2167`: VU2OY's skimmer. It spots at the dial itself (all
+    824 on a round dial), so the comment is the only place the offset
+    survives. What the `6` means wasn't established; it's always a single
+    digit, and the 100 Hz floor on unlabelled offsets is what stops it being
+    read as one.
+
+  1,932 of the 1,936 FT8 cluster spots yield an offset. The unlabelled forms
+  are read only inside `<snr> dB <n> FT8|FT4`, so RBN's `FT8 -5 dB CQ`, CW
+  skimmers' `25 WPM` and human comments are never read. No regex: the
+  workspace has no regex dependency and this didn't justify one.
+- **Display only, deliberately.** The parsed offset is never written into
+  `delta_frequency_hz`. `Spot::frequency_hz()` adds that field to the dial,
+  so the VU2CPL-style spots, already at dial + offset, would be counted
+  twice, moving their band, dedupe key and radio marks. The doc comment on
+  `dx_offset_hz` says so.
+- **History column.** `SentAlert.offset_hz: Option<i64>`, column
+  `alerts_sent.offset_hz INTEGER` (nullable, no default, for `snr_db`'s
+  reason) in `SCHEMA` and `ADDED_COLUMNS`. The old-database migration test
+  now checks the column too. Alerts.svelte has a `DF` column after dB,
+  right-aligned with Freq and dB, `—` when unknown, no filter control. The
+  mock server's two alerts carry `offset_hz`. Checked in the browser pane
+  against `scripts/dxca-mock-server.py`.
+
+Tests: `offset_from_comment_table` (every live shape plus near misses:
+`kHz`, `FT8 USA250 NM`, RBN, CW WPM, out of range),
+`dx_offset_prefers_the_decoder_and_falls_back_to_the_comment`,
+`a_decoded_alert_carries_the_dx_audio_offset`,
+`a_cluster_alert_takes_the_offset_from_the_comment`,
+`a_cluster_alert_shows_no_offset`, and the extended migration test. `just
+gate` passed. README: *Who spotted it* (the comment forms) and *Alert
+history* (the column).
+
+**Note for whoever runs the next UI check:** the browser pane's
+`preview_start` reads `.claude/launch.json` from the session's own
+directory. A session that started in another repo can't use dxca's
+`web-ui-dev` entry. Run `scripts/dxca-mock-server.py` and `pnpm -C web-ui
+dev` in the background instead, and open `http://localhost:5173`. Vite
+binds `localhost`, not `127.0.0.1`.
+
+## Session 2026-10-09 (later) — v2.22.2 released, on .109 and Windows
+
+Manoj, 2026-10-09: the next patch version, a GitHub release, installed
+everywhere — *"Everything, servers too"*.
+
+**The release.** `Cargo.toml` 2.22.1 → 2.22.2 (`Cargo.lock` follows;
+`web-ui/package.json` stays 2.1.1, as it has through every release — it has
+never tracked the app version). The two `db.rs` doc comments that named
+"2.23" for PR #8 now name 2.22.2. README: a `## Status` entry, and *Update
+check* and *Updating* say "v2.22.2" where they said "the release after
+v2.22.1". `just gate` green: fmt, clippy `-D warnings`, 331 tests (5
+ignored), web build. Release commit `d2498a5` and annotated tag `v2.22.2`,
+both pushed. `deploy/win-bundle.sh` → `dxca-2.22.2-windows-x64.zip`
+(5,237,494 bytes, sha256 `fa5d6b263b0b0784fdd2df95836bf734029c470c505e7d98c16c7bef408e8d34`),
+with the obfuscated ClubLog key confirmed present in the exe and no
+placeholder page. `gh release create --latest` with notes covering
+everything since v2.22.1: the update check (what it asks, when, how to
+switch it off), #8, #9, the Docker route and pi-deploy's asked-for host,
+with VU3ESV credited for #8 and #9. The asset was downloaded back: its
+sha256 equals the local zip's and GitHub's digest. v2.22.1 shipped only the
+Windows zip and no checksum file, so this release does the same.
+
+**The deploy, one host at a time:**
+
+- **.109 (`ubersdr`, the production container).** Before: 2.22.1, up 6 h on
+  `dxca:2.22.1`, 7/10 nodes Live — KST2Mac refusing (attempt 72), and
+  `Meridian` and `Uber Merdn` reading "Reconnecting: stopped".
+  `data/dxca.db` copied to `dxca.db.pre-v2.22.2` (md5 equal; no WAL file).
+  `deploy/docker-deploy.sh`, 05:15:48–05:17:21 IST: smoke test reported
+  2.22.2, and the running container came back on `dxca:2.22.2`. After:
+  **2.22.2**, web UI 200, **7/8 Live**, telnet client back (1), cty 402, FCC
+  816,280, IOTA 1,178, LoTW 236,286, one user, no setup card. The node count
+  dropped from 10 to 8 because `Meridian` and `Uber Merdn` had been removed
+  from `config/dxca.toml` at 05:06:59, before the deploy (a UI save — the
+  old process still listed them as stopped). KST2Mac, the Mac at
+  `192.168.10.226:7373`, refused before and after. Config md5 unchanged
+  (`3a739c89232a`). Log: the start line and `flex 192.168.1.148:4992:
+  connected`, no panic, no error. `alerts_sent.channels` was added on first
+  open. **The update check ran 36 s after start and succeeded:**
+  `update_last_success_unix`, the v2.22.2 record and its notes stored;
+  `/api/status` carries `update: null`, since 2.22.2 is current.
+  **Rollback:** `dxca:2.22.1` is still tagged on the host — `sudo docker
+  stop dxca && sudo docker rm dxca`, the `docker create` line from
+  `docker-deploy.sh` with `dxca:2.22.1`, then `sudo docker start dxca`.
+  v2.22.1 runs on the migrated database (its `alerts_sent` INSERT names its
+  columns and `channels` has a default); `dxca.db.pre-v2.22.2` is there if
+  the database has to go back too.
+- **Windows `.170`.** Before: 2.22.0 (the open item since 09-22), 2/2 Live.
+  No database backup: a `copy` of `data\dxca.db` gets a sharing violation
+  while `dxca.exe` runs, and that box holds only test accounts with Telegram
+  unset, behind an additive migration. `deploy/win-deploy.sh`,
+  05:18:18–05:18:32 IST — not blocked this time. After: **2.22.2**, 2/2
+  Live, a clean start line in `run.log`, cty 402, `fcc_calls: 0` (the
+  expected not-shipped state). Rollback: `C:\DXCA\dxca.exe.bak` is the
+  2.22.0 exe.
+- **adersh `.151`, vu2wj `.201`, vu2oy `192.168.220.51`: skipped at 05:18,
+  deployed at 05:32–05:35.** At 05:18 no tunnel was up: all three addresses
+  routed via `en0` to the default gateway, with no ping and no
+  `/api/status`, and `sudo wg-quick up` needs Manoj's password. He brought
+  the tunnels up, and all three went to **2.22.2** with every node Live
+  (5/5, 3/3, 4/4) and their config md5s unchanged. Record in *DONE: v2.22.2
+  on the three remote Pis*.
+- **noderedpi4: not deployed, on purpose.** Its dxca is the stopped,
+  disabled rollback for .109, and `pi-deploy.sh` would re-enable it as a
+  second sender.
+- **This Mac's launchd agent: not deployed, on purpose.** `com.vu2cpl.dxca`
+  is still disabled (since 2026-09-13) and was left so. No
+  `target/release/dxca` was built in this clone — every build went to a
+  cross-target directory — so the agent is not armed either.
+
+Worth keeping:
+
+- **A running Windows dxca locks its database.** `copy` and `certutil`
+  both get a sharing violation, so a backup there needs the task stopped,
+  and `win-deploy.sh` stops it only after its own build. Skipped here
+  because the migration is additive; a release with a destructive one
+  should stop the task, copy, then deploy.
+
+## Session 2026-10-09 — the release check stores only a success
+
+**Shipped in v2.22.2 (2026-10-09)**, together with the check it revises
+(*Session 2026-10-08*) — see *Session 2026-10-09 (later)*. Written while it
+was unreleased.
+
+Manoj's decisions (2026-10-09), implemented as given:
+
+1. **Only a successful check is saved.** Success = HTTP 200 and a JSON record
+   with a `tag_name`, newer or not. A failure — offline, timeout, any HTTP
+   error including the rate-limit 403, a 2xx that is not 200, bad JSON, no
+   tag — writes **nothing** to the database, so the next start or the next
+   hourly look tries again. After a failed *automatic* attempt the loop waits
+   at least an hour, in memory only (monotonic clock: a Pi's wall clock jumps
+   at the first NTP sync). *Check now* still reports failures and, failing,
+   moves nothing either — so it does not put the automatic check off, and it
+   does not start the loop's hour (the decision names automatic attempts).
+2. **The schedule is one pure function**, `auto_check_due(enabled, version,
+   now, last_success, since_failure)`: setting on, not a dev build, 24 h since
+   the last *successful* check (wall clock, with the 10-08 rule that a stamp a
+   day or more in the future counts as due), an hour since the last failed
+   automatic attempt. The loop evaluates it hourly, first 30 s after start.
+3. **Development builds never check by themselves**: a version containing
+   "dev" in any case → `spawn` returns, no loop. *Check now* works.
+   `DXCA_UPDATE_TEST_VERSION` replaces the version this is decided on, as it
+   does the comparison — `=0.0.1` on a `-dev` build does check.
+
+**What changed:**
+
+- `dxca-connect/src/update.rs` — `fetch_latest(url, version, timeout)` with a
+  `TIMEOUT` const (10 s), so the tests exercise a real timeout in 400 ms; a
+  non-200 status is an `Err` (ureq passes every 2xx through).
+- `dxca-server/src/update.rs` — a `Checker` (the `Db` plus the last failure,
+  in memory) held in `AppState::update` and shared with the loop. `meta` keys
+  are now four: **`update_last_success_unix`** (replaces
+  `update_last_check_unix`, renamed because its meaning changed — the old one
+  never ran on an install), `update_latest_release`, `update_latest_notes`,
+  `update_skipped_tag`. `update_last_error` is gone: the reason is memory.
+  The record is written before the time, so a crash between the two costs one
+  more check, never a day. `auto_look` is one step of the loop, synchronous,
+  so the back-off is tested without a runtime.
+- `GET /api/update` — `last_check_unix` → `last_success_unix`; new
+  `automatic` (false when off or a dev build) and `last_error_unix`;
+  `last_error` comes from memory.
+- Server card — *Checked daily* / *Automatic check off* / *Development build —
+  no automatic check*, then *last answer Nh ago*; a failure reads *The last
+  attempt, Nm ago, failed: …*. `scripts/dxca-mock-server.py` follows (its
+  `2.12.0-dev` now reports `automatic: false`).
+- The five integration tests that build an `AppState` pass `update`.
+
+**Why the reversal.** The 10-08 version stamped each *attempt* before the
+request (the `refresh.rs` arrangement), so one bad minute — the rate limit
+spent by something else on the LAN, which is exactly what happened on 10-08 —
+meant a day with no answer. `refresh.rs` keeps its attempt stamp: it moves
+megabytes per attempt, this moves one small record. Accepted with it: a
+service that crash-loops but lives past 30 s asks once per start.
+
+**Verified.** `just gate` green: fmt, clippy `-D warnings`, 331 tests (326
+before; the server module's 6 became 11), web build. Each failure class has a
+test that leaves every `update_*` row byte-identical: refused (port 1),
+timeout (a server that never answers), 403, rate-limit 403, 404, 500, 203,
+not JSON, no `tag_name`. Release build in a scratch `CARGO_TARGET_DIR`, 0
+warnings — this clone has no `target/release/dxca` (the launchd trap). A
+scratch instance (own config and data dir, ports 17580/17575, every refresh
+0, no sources or nodes; stopped after):
+
+- `DXCA_UPDATE_TEST_VERSION=2.23.0-dev`, 40 s: no `update_*` rows, no request.
+- `DXCA_UPDATE_TEST_VERSION=0.0.1`, 45 s: one live request;
+  `update_last_success_unix`, the record and the notes stored; the log line
+  `dxca: DXCA 2.22.1 is available (you have 0.0.1) — …`; neither old key.
+- The Server card against the mock server: the dev-build hint, and (scratch
+  copy of the mock) the failure line.
+
+One live GitHub request all session; the ignored `live_` test was not run.
+
+**Rejected:**
+
+- *Keeping `update_last_error` in the database.* "A failed check writes
+  nothing persistent." The reason is memory and goes with a restart — whose
+  first look, 30 s in, asks again anyway.
+- *A failed Check now starting the hour.* Not in the decision; the button's
+  failure moves nothing.
+- *Any 2xx as a success.* The definition is HTTP 200.
+- *A log line at start on a dev build.* The card says it; not asked for.
+
+## Session 2026-10-08 — DXCA says when a newer release is out
+
+*Revised 2026-10-09 (the session above): only a successful check is stored,
+a failure stores nothing and is retried an hour later, dev builds never check
+by themselves. The `meta` key list and the "Retrying a failed check within
+the day" rejection below are superseded.*
+
+**Shipped in v2.22.2 (2026-10-09)** — see *Session 2026-10-09 (later)*.
+Written while it was unreleased, on 2.22.1.
+
+Manoj's spec, approved for all his apps: an in-app check against GitHub
+releases — no Sparkle, no extra servers — in every app's next release.
+DXCA is a server with a web UI, not a desktop app, so the spec's dialog
+(Download / Skip / Remind me later) became **a banner for admins, one log
+line, and a Skip this version button**.
+
+**What it does.** About 30 s after start, then at most once every 24 h,
+`GET https://api.github.com/repos/vu2cpl/dxca/releases/latest` with
+`Accept: application/vnd.github+json` and `User-Agent: DXCA/<version>`,
+10 s timeout, no token. It reads `tag_name`, `name`, `html_url`, `body` and
+compares the tag with `CARGO_PKG_VERSION`: leading `v` stripped, split into
+integers on every non-digit, compared as tuples with missing parts as 0.
+When the release is newer, admins get a band under the header on every screen
+— *DXCA v2.23.0 is available (you have v2.22.1) — release notes & download ↗
+[Skip this version]* — and the log gets `dxca: DXCA 2.23.0 is available (you
+have 2.22.1) — <url>` once per run per release. Nothing is downloaded.
+
+**Where it lives** (crate boundaries per `CLAUDE.md`):
+
+- `dxca-connect/src/update.rs` — `fetch_latest`, `parse_release`,
+  `version_key`, `is_newer`. The link is accepted only as an
+  `https://github.com/` page, because it becomes an `href` in an admin's
+  browser; anything else falls back to the releases page. Notes capped at
+  32 KB. A 403/429 with `x-ratelimit-remaining: 0` gets its own message
+  ("the hourly limit for this address is used up"), because a bare
+  "HTTP 403" reads like a block.
+- `dxca-server/src/update.rs` — the loop, the storage, the JSON the UI gets.
+  State is five `meta` keys: `update_last_check_unix` (the *attempt*, written
+  before the request — the `refresh.rs` arrangement, so a failing or
+  crash-looping service is still once a day), `update_latest_release` (the
+  last good answer, without notes — read on every status frame),
+  `update_latest_notes`, `update_last_error`, `update_skipped_tag`.
+  "Newer" is decided at read time against the running binary, so the notice
+  ends by itself after the upgrade. A stamp a day or more in the future
+  counts as due (a Pi has no RTC).
+- API: `/api/status` gains `update` — `null`, or `{tag, version, name, url,
+  current, skipped}`. Admin-only `GET /api/update` (everything, with notes),
+  `POST /api/update/check` (*Check now* — works with the switch off, and
+  reports failures), `POST /api/update/skip {tag}` (`""` un-skips).
+  `/api/config/global`'s `read_only` gains `check_for_updates`.
+- Config: **`check_for_updates`** in `config/dxca.toml`, default `true`,
+  read at start. **Not written to the file while it is true** —
+  `skip_serializing_if`: `Config` is `deny_unknown_fields` and the web UI
+  rewrites the whole file on every save, so a written key would stop v2.22.1
+  starting on rollback. The example config shows it commented out for the
+  same reason.
+- UI: `lib/UpdateBanner.svelte` in `App.svelte`, admins only. Settings ›
+  Server › Reference data: an *Updates* row on the Server card (state, last
+  check, last error, *Check now*, *Show again* for a skipped release, *What's
+  new* as plain text); the file-only line lists the switch; the rail search
+  finds the page by "update", "release", "github".
+- `scripts/dxca-mock-server.py` carries a v2.99.0 offer so the banner shows.
+- Test hook: `DXCA_UPDATE_TEST_VERSION=0.0.1` compares against that version
+  instead of the real one (User-Agent unchanged). Inert unset.
+
+**No dependency added.** `ureq` 2 (rustls) and `serde_json` were already in
+`dxca-connect` for ClubLog, LoTW and Telegram.
+
+**Verified.** `just gate` green: fmt, clippy `-D warnings`, 326 tests (309
+before; +17), web build. Release build in a scratch `CARGO_TARGET_DIR`, 0
+warnings — this clone's `target/release/dxca` untouched (the launchd trap).
+Live: `cargo test -p dxca-connect -- --ignored --nocapture live_` read
+**v2.22.1** from the real endpoint. A scratch instance (own config, data dir
+and ports 17580/17575, in the session scratchpad, stopped afterwards):
+
+- Its first automatic check got **HTTP 403** — the shack's public address had
+  spent its 60 unauthenticated requests for the hour (`/rate_limit`: used 60,
+  remaining 0), by something other than DXCA. It behaved as designed: no
+  banner, no log line, the reason kept for the card, and *Check now* returned
+  502 with it. That real-world 403 is why the rate-limit message exists.
+- With the v2.22.1 record seeded and `DXCA_UPDATE_TEST_VERSION=0.0.1`: the log
+  line appeared, `/api/status` carried the offer, skip and un-skip
+  round-tripped. Without the hook, no notice (2.22.1 is current).
+- The banner and the Server card were looked at against the mock server, at
+  desktop and phone width.
+
+**Rejected:**
+
+- *Download or install it.* A service on Pis, in Docker, on Windows and
+  macOS, several of them other people's: an unattended binary swap is not
+  this program's decision. The link goes to the release page.
+- *The notes in `/api/status`.* That object goes out every 5 s per open Spots
+  page. Notes come from `GET /api/update`, read by the Server card only.
+- *Rendering the notes as Markdown.* Remote HTML in an admin's session.
+  Shown as plain text.
+- *The banner for every account.* Only an admin can act on it.
+- *Retrying a failed check within the day.* The spec is at most once a day,
+  and the hourly budget is shared by the whole LAN.
+- *A switch in the web UI.* The server-wide scalars (refresh cadences, the
+  telnet login) are file-only here; this one joins them and is listed on the
+  file-only line.
+
+Worth keeping:
+
+- **GitHub's unauthenticated limit is per public address, not per program.**
+  Every machine behind the router and every tool asking without a token
+  share 60 an hour. It was found spent on 2026-10-08 — who spent it is not
+  known.
+- **A new `Config` key breaks rollback unless it stays out of the file at its
+  default** (`deny_unknown_fields` + whole-file rewrite). Now in `CLAUDE.md`.
+
 ## Session 2026-10-03 — a locked-out admin can reset their own password
 
-**No version bump** — `Cargo.toml` stays 2.22.1, so there is no tag and this
-runs on none of the five hosts yet.
+**Shipped in v2.22.2 (2026-10-09)** — see *Session 2026-10-09 (later)*.
+Merged as VU3ESV's PR #9 on 2026-10-05, without a version bump.
 
 **The hole.** Found by walking into it: the admin on noderedpi4 could not log
 in, and there was no way back. Passwords change only through
@@ -767,9 +1552,10 @@ why it is the binary and not a protected endpoint.
 ## Session 2026-09-25 — alerts are recorded for every channel (PR #8)
 
 VU3ESV's PR #8, reviewed against main at v2.22.1 and squash-merged together
-with this entry and the README's *Alert history* rewrite. **No version bump**
-— `Cargo.toml` is still 2.22.1, so there is no tag and it runs on none of the
-five hosts. The code comments already name 2.23 as where it lands.
+with this entry and the README's *Alert history* rewrite. No version bump
+at the time; **shipped in v2.22.2 (2026-10-09)** — see *Session 2026-10-09
+(later)*. The code comments that named 2.23 as where it would land were
+corrected to 2.22.2 in the release commit.
 
 **The bug.** The My Alerts row was built inside `fan_out`'s Telegram branch,
 after `if !wants_telegram { continue; }`, so an account alerting to a radio
@@ -2139,7 +2925,163 @@ last *published* release, because tags can outrun releases.
 date, what changed and why, at the top. v2.21.0 shipped without one and the
 Status section led with v2.20.4 for eighteen days (backfilled 2026-09-21).
 
+**The release page ends with an `## Updating` section that says HOW** —
+the per-platform commands, not only "nothing to do on upgrade" (added
+2026-10-09, after v2.22.3's page went up without it and Manoj, reading it
+from the new update banner: *"how to install — it doesnt say"*). Every
+earlier page had an *Upgrading* heading that meant "no config or migration
+step", which reads as "no instructions" to someone the banner just sent
+there. The section: `cd dxca && git pull && ./install.sh` for a source
+install; `deploy/pi-deploy.sh --no-seed user@pi` and
+`deploy/docker-deploy.sh user@host` from a Mac clone; unzip + `install-dxca.cmd`
+on Windows with the SmartScreen caveat; a link to README › Updating; the
+`/api/status` version check; whether rollback is safe. v2.22.3's page was
+edited in place to carry it.
+
 ## Open items → next session
+
+### DONE: the 1.x Swift app spots the called station too (2026-10-20)
+
+Fixed the same day on Manoj's word (*"fix the swift app too"*):
+DXClusterAggregator-macOS #2, squash `106e797`, on `main` and unreleased.
+`dxCallsign` returns `nil` for a `<...>` sender, and `handleDecode` returns
+before any rebroadcast.
+
+### DONE: v2.22.2 on the three remote Pis (2026-10-09)
+
+**Resolved 2026-10-09, 05:32–05:35 IST.** At the 05:18 deploy none of the
+three tunnels was up; Manoj then brought all three up (*"tunnels are up,
+deploy dxca"*). Each address now routed via its own `utun` (8, 9, 10),
+answered ping and reported 2.22.1 on `/api/status`. **The whole fleet is on
+2.22.2.**
+
+The binary was built once, from a detached `git worktree` of the `v2.22.2`
+tag in the session scratchpad, and the worktree was removed afterwards. The
+build ran with the key exported as `DXCA_CLUBLOG_API_KEY` (see the gotcha
+below). The aarch64 binary is 8,481,128 bytes, md5 `69fb32f8…`, and needs
+GLIBC_2.34 at most, so it fits bookworm's 2.36. It carries the 40 obfuscated
+key bytes, no plaintext key and no placeholder UI. `pi-deploy.sh` rebuilt it
+three times, each time to the same md5. Each box got the 09-22 drill, one at
+a time:
+
+| Box | Before → after | Nodes Live | Config md5 (unchanged) | Up (IST) | Update check |
+|---|---|---|---|---|---|
+| adersh `192.168.1.151` (trixie) | 2.22.1 → **2.22.2** | 5/5 → 5/5 | `2f8c037c…` | 05:32:40 | 05:33:11 OK |
+| vu2wj `192.168.1.201` (trixie) | 2.22.1 → **2.22.2** | 3/3 → 3/3 | `094c2a23…` | 05:33:39 | 05:34:11 OK |
+| vu2oy `192.168.220.51` (bookworm) | 2.22.1 → **2.22.2** | 4/4 → 4/4 | `65935bf2…` | 05:34:38 | 05:35:10 OK |
+
+On each box, before the deploy, `data/dxca.db` was copied to
+`dxca.db.pre-v2.22.2` (md5 equal, no WAL or journal file) and the outgoing
+binary was kept as `/opt/dxca/dxca.rollback-v2.22.1` (md5 `572f1e11…`, the
+same 2.22.1 build on all three). The manifest was the binary, the unit and
+`install.sh` only. `~/dxca-deploy` holds just those three files afterwards.
+The journal on each shows the old process's `shut down cleanly`, then the
+2.22.2 start line naming every node, with no panic, error or warning and
+`NRestarts=0`. `alerts_sent.channels` was added on first open, and `cty`,
+FCC, IOTA, LoTW and the one account were unchanged. vu2oy gained a fourth
+node, `VU2OY-9`, since the 09-22 deploy (3/3 then); its admin added it, and
+it was Live before and after.
+
+**Checking the update check on a Pi.** It logs nothing when the running
+release is current, and nothing on a failure. So the evidence is the `meta`
+table: `update_last_success_unix`, `update_latest_release` (`v2.22.2`) and
+`update_latest_notes`, written about 31 s after each start. The Pis have no
+`sqlite3` CLI. Read the table with `python3` and
+`sqlite3.connect("file:/opt/dxca/data/dxca.db?mode=ro", uri=True)` instead.
+`/api/status` then carries `update: null`, where 2.22.1 had no key.
+
+**Gotcha — a worktree build needs the key in the environment.**
+`.clublog-api-key` is gitignored, so a fresh `git worktree` or clone lacks
+it. Without the key, `build.rs` silently embeds an empty one, and the remote
+admins, who have no key of their own, would lose the cty refresh. Export
+`DXCA_CLUBLOG_API_KEY="$(cat <main clone>/.clublog-api-key)"` in the shell
+that runs `pi-deploy.sh`. Check the build with the length of
+`OBFUSCATED_CLUBLOG_KEY` in `target/…/build/dxca-server-*/out/clublog_key.rs`
+(40), never by printing the key.
+
+**Rollback, per box:** `sudo systemctl stop dxca && sudo install -m 755
+/opt/dxca/dxca.rollback-v2.22.1 /opt/dxca/dxca && sudo systemctl start
+dxca`. v2.22.1 runs on the migrated database (see .109's note in *Session
+2026-10-09 (later)*). `dxca.db.pre-v2.22.2` is there if the database has to
+go back too. Not needed: every check passed.
+
+The tunnel check was route + ping + `/api/status`, not `sudo wg show`,
+which needs Manoj's password. That is enough when all three answer: the
+09-22 trap was a route that existed while the tunnel did not pass traffic,
+and these did.
+
+### DONE in v2.22.2: the GitHub release check (2026-10-08)
+
+**Shipped in v2.22.2 (2026-10-09)**, with a README `## Status` entry (the
+README section is *Update check*). On .109 its first check ran 36 s after
+the restart and succeeded. Nothing to do on any host: the switch is on when the key is absent,
+and the four `meta` keys appear on the first successful check (failures store
+nothing — revised 2026-10-09). An install shows a banner
+only once a release newer than the one it runs is published, so the first
+notice anyone sees will be for the release *after* the one that ships this.
+See *Session 2026-10-08* and *Session 2026-10-09*.
+
+### DONE: v2.22.3 on the three remote Pis (2026-10-09)
+
+**Resolved 2026-10-09, 09:12–09:16 IST.** At 09:00 none of the three
+tunnels was up; Manoj brought them up (*"tunnels are up, deploy dxca"*) and
+each box got the drill — backup with md5, rollback binary kept,
+`pi-deploy.sh --no-seed`, verified. The whole fleet is on 2.22.3. Record in
+*Session 2026-10-09 (evening)*.
+
+### TODO: a cloud QSO inbox — QLog on the Pi into RUMlog (2026-10-07)
+
+**Taken up 2026-10-09 as its own private repo, `vu2cpl/qso-inbox`
+(`~/projects/qso-inbox`).** Its `PLAN.md` and `HANDOVER.md` carry it from here;
+nothing below is maintained. The original entry:
+
+**Parked on Manoj's word** (*"keep it as a todo"*). Not a dxca feature: build
+it as its own private repo, borrowing `dxca-core`'s `adif.rs` and `wsjtx.rs`
+if they help.
+
+**The idea (Manoj):** loggers at any site — QLog on a Pi, other programs, other
+PCs — send each QSO to a cloud server; RUMlog, the central log, downloads the
+new ones and the server clears them. One log however many places you operate
+from.
+
+**The shape it came out as:**
+
+1. **Site side.** QLog sends a UDP JSON message for every QSO insert, update
+   and delete, each with the full ADIF record (Settings › Network › QSO
+   Changes; QLog wiki, *Notifications*). One catch: an edit to several fields
+   arrives as one message per field. A small agent beside QLog catches them,
+   keeps them on disk until the server confirms receipt, and posts over HTTPS
+   with a per-station token. **Not raw UDP to the cloud** — no delivery
+   guarantee and no login, and a lost datagram is a lost QSO.
+2. **Cloud.** A queue. Each QSO carries an id made at the site, so a resend
+   is not stored twice.
+3. **RUMlog side — already built.** `~/projects/MSHV-Mac/tools/mshv_rumlog_bridge.py`
+   (LaunchAgent `com.vu2cpl.mshv-rumlog-bridge`) delivers to RUMlog's ADIF
+   UDP input on 2238, which keeps every field; the WSJT-X input on 2237 drops
+   them (measured 2026-09-20/22, see the script's header). It skips anything
+   RUMlog already holds (same call/band/mode within ±2 min, via AppleScript
+   `ReadAdif`), reads back after each save, and retries while RUMlog is
+   closed or not answering — it did exactly that on 2026-10-07, 06:43–07:00.
+   It needs a second input that collects from the cloud, and **the server
+   clears a QSO only when the bridge has confirmed it in RUMlog**, never on
+   download. Keep cleared QSOs a month or so as a backup.
+
+**First step, not done:** only FT8 has ever gone through port 2238. Check a CW
+or SSB QSO by sending one real QLog QSO that RUMlog lacks through
+`mshv_rumlog_bridge.py --file`. **Not a dummy:** every save on 2238 is
+uploaded to Club Log at once (*"Club Log Y"* in
+`~/Library/Logs/mshv-rumlog-bridge.log`), so a test QSO lands in the public
+Club Log log unless RUMlog's live upload is switched off first.
+
+**Where it started: hosting dxca itself in the cloud, set aside.** Only the
+half that connects outward moves cleanly — cluster nodes, ClubLog/LoTW/
+reference downloads, Telegram, the guest web UI. Decoder UDP in, the RUMlog
+passthrough, FlexRadio/TCI and MQTT all need the shack LAN, so they'd need a
+tunnel home and would stop working whenever the shack's internet drops. If the
+web UI is ever reachable from the internet, a Cloudflare Tunnel included,
+fix two things first: there is **no limit on failed logins**, and the session
+cookie has **no `Secure` flag** (`auth.rs:45`). Tailscale in front of .109
+gives outside access with neither.
 
 ### OPEN: a green radio chip is the queue, not the radio (2026-09-25)
 
@@ -2150,12 +3092,12 @@ its backlog fills. Making it honest needs the Flex and TCI clients to report
 link state back into the alert path, which is a larger change. The README's
 *Alert history* tells the operator this in the meantime.
 
-### DONE (merged, unreleased): every alert recorded for every channel — PR #8 (2026-09-25)
+### DONE in v2.22.2: every alert recorded for every channel — PR #8 (2026-09-25)
 
-Squash-merged to `main` on 2026-09-25 with no version bump, so no tag and
-no release. **Put the version on this heading when it ships.** The new
-`alerts_sent.channels` column migrates itself on first open; nothing to do
-by hand on any host. See *Session 2026-09-25*.
+Squash-merged to `main` on 2026-09-25 with no version bump; **shipped in
+v2.22.2 (2026-10-09).** The new `alerts_sent.channels` column migrates
+itself on first open (confirmed on .109); nothing to do by hand on any
+host. See *Session 2026-09-25*.
 
 ### OPEN: point the feeds at .109 (2026-09-22)
 
@@ -2174,12 +3116,13 @@ sample. Wherever they run, the same change applies before their next
 session. `udp_sent` and the per-source counts on `/api/status` show each
 feed as it arrives.
 
-### OPEN: v2.22.1 on the Windows box (2026-09-22)
+### DONE in v2.22.2: the Windows box caught up (2026-09-22)
 
-On all four Pis. **Windows `.170` is still on 2.22.0**, and so still sends
-false Guantanamo alerts for `KG4` 2×3 spots. Claude Code's auto-mode
-permission check blocked `deploy/win-deploy.sh`, so it was not run. Either
-Manoj runs it himself, or he allows it and a session runs it.
+**Resolved 2026-10-09:** `deploy/win-deploy.sh` ran this time and `.170`
+went from 2.22.0 straight to **2.22.2**, so it no longer sends false
+Guantanamo alerts. See *Session 2026-10-09 (later)*. The original entry:
+Windows `.170` was left on 2.22.0 when v2.22.1 went to the four Pis, because
+Claude Code's auto-mode permission check blocked `deploy/win-deploy.sh`.
 
 ### OPEN: the 1.x Swift app has the same KG4 fault (2026-09-22)
 

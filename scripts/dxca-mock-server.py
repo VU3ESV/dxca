@@ -77,6 +77,10 @@ STATUS = {
     "udp_sent": 749, "udp_failed": 0, "setup_required": False,
     "cluster_nodes": NODES,
     "spots_per_source": {s: 100 + i * 31 for i, s in enumerate(SOURCES)},
+    # A newer release on offer, so the admin banner shows.
+    "update": {"tag": "v2.99.0", "version": "2.99.0", "name": "v2.99.0 — mock release",
+               "url": "https://github.com/vu2cpl/dxca/releases", "current": "2.12.0-dev",
+               "skipped": False},
 }
 
 STATS = {
@@ -125,10 +129,10 @@ ROUTES = {
     "/api/me/alerts": lambda: {"alerts": [
         {"time_unix": NOW - 900, "callsign": "RI1FJL", "frequency_hz": 14074000, "mode": "FT8",
          "band": "20M", "dxcc_name": "FRANZ JOSEF LAND", "level": "newDXCC", "source": "W3LPL",
-         "spotter": "RA3MU", "snr_db": -11, "delivered": True, "error": None},
+         "spotter": "RA3MU", "snr_db": -11, "offset_hz": 1032, "delivered": True, "error": None},
         {"time_unix": NOW - 4000, "callsign": "ZS6TIG", "frequency_hz": 21074000, "mode": "FT8",
          "band": "15M", "dxcc_name": "REPUBLIC OF SOUTH AFRICA", "level": "newBand", "source": "VU2OY",
-         "spotter": "VU2OY", "snr_db": None, "delivered": False, "error": "Telegram 429: too many requests"}]},
+         "spotter": "VU2OY", "snr_db": None, "offset_hz": None, "delivered": False, "error": "Telegram 429: too many requests"}]},
     "/api/spot-stats": lambda: {
         "total": 708, "span_secs": 1920,
         "bands": [{"key": b, "count": 200 - i * 12} for i, b in enumerate(BANDS[:12])],
@@ -156,7 +160,7 @@ ROUTES = {
              "sources": ["MSHV", "N2WQ-2", "Meridian", "OldNode"], "unfiltered": False, "enabled": True}],
         "read_only": {"web_bind": "0.0.0.0:80", "telnet_port": 7300, "dedupe_window_secs": 60,
                       "spot_ring_capacity": 5000, "cty_refresh_days": 7, "lotw_refresh_days": 7,
-                      "data_dir": "/var/lib/dxca"}},
+                      "check_for_updates": True, "data_dir": "/var/lib/dxca"}},
     "/api/mqtt": lambda: {"destinations": [{"name": "shack", "host": "192.168.1.169", "port": 1883,
                                             "username": "svc", "password": "", "topic": "shack/dxca/spots",
                                             "client_id": "dxca", "sources": [], "unfiltered": False,
@@ -165,6 +169,14 @@ ROUTES = {
         {"id": 1, "callsign": "VU2CPL", "display_name": "Manoj", "role": "admin"},
         {"id": 2, "callsign": "VU3ESV", "display_name": "Vinod", "role": "user"}]},
     "/api/blacklist": lambda: {"calls": ["R1ABC", "N0CALL"]},
+    "/api/update": lambda: {
+        # A "-dev" version, as in STATUS: no automatic check (Check now only).
+        "enabled": True, "automatic": False, "current": "2.12.0-dev", "newer": True,
+        "skipped": "", "last_success_unix": NOW - 5400, "last_error": "",
+        "last_error_unix": 0,
+        "latest": {"tag": "v2.99.0", "version": "2.99.0", "name": "v2.99.0 — mock release",
+                   "url": "https://github.com/vu2cpl/dxca/releases",
+                   "notes": "A mock release.\n\n## What changed\n\n- one thing\n- another"}},
 }
 
 

@@ -53,7 +53,8 @@
       admin: true,
       items: [
         { key: 'reference', label: 'Reference data',
-          find: 'cty cty.xml dxcc prefix entity lotw api key blacklist blocked block ban version milestone' },
+          find: 'cty cty.xml dxcc prefix entity lotw api key blacklist blocked block ban version milestone '
+              + 'update updates upgrade release new github check skip' },
         // Everywhere a spot arrives from, in one place: the decoders this
         // machine listens for, and the cluster nodes it dials. Mirrors
         // Destinations on the other side of the pipeline.

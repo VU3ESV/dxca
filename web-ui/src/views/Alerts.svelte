@@ -474,7 +474,7 @@
           <colgroup>
             <col class="c-time" /><col class="c-call" /><col class="c-spot" />
             <col class="c-src" /><col class="c-freq" /><col class="c-mode" />
-            <col class="c-db" /><col class="c-band" /><col class="c-dxcc" />
+            <col class="c-db" /><col class="c-df" /><col class="c-band" /><col class="c-dxcc" />
             <col class="c-al" /><col class="c-chan" /><col class="c-status" />
           </colgroup>
           <thead>
@@ -486,6 +486,10 @@
               <th title="Frequency in kHz">Freq</th>
               <th>Mode</th>
               <th title="Signal-to-noise, dB">dB</th>
+              <th
+                title="The DX station's audio offset in Hz — where to click in the waterfall. From the decoder, or from a cluster spot's comment when it gives one"
+                >DF</th
+              >
               <th>Band</th><th>DXCC</th><th>Alert</th>
               <th
                 title={fChannel
@@ -501,7 +505,7 @@
                  its control cannot be mismatched. Free text where the values
                  are open (callsigns, entity names), a list where they are not
                  — a dropdown you can mistype is a filter that silently
-                 matches nothing. Time, Freq and dB have no control: a
+                 matches nothing. Time, Freq, dB and DF have no control: a
                  substring of a frequency is not a question anyone asks. -->
             <tr class="filters">
               <td></td>
@@ -520,6 +524,7 @@
                   {#each modeOpts as o}<option value={o}>{o}</option>{/each}
                 </select>
               </td>
+              <td></td>
               <td></td>
               <td>
                 <select bind:value={fBand} aria-label="Filter by band">
@@ -562,6 +567,10 @@
                      say so: 0 dB is a real report, so a blank-looking zero
                      would be a plausible lie about a historical row. -->
                 <td class="mono">{a.snr_db ?? '—'}</td>
+                <!-- A dash, never 0, when the spot gave no offset: a cluster
+                     spot whose comment said nothing, or any row from before
+                     the column. No FT8 signal sits at 0 Hz. -->
+                <td class="mono">{a.offset_hz ?? '—'}</td>
                 <td>{a.band}</td>
                 <td title={a.dxcc_name}>{a.dxcc_name}</td>
                 <td class="alert"
@@ -754,6 +763,7 @@
   col.c-freq { width: 5.5rem; }
   col.c-mode { width: 4.25rem; }
   col.c-db   { width: 3rem; }
+  col.c-df   { width: 3.25rem; }
   col.c-band { width: 3.5rem; }
   col.c-dxcc { width: 11.5rem; }
   col.c-al   { width: 5.75rem; }
@@ -776,8 +786,8 @@
      column with an inch of nothing before the next field, so the row read as
      scattered rather than as a row. Centred, each value sits in its own cell.
 
-     The two NUMERIC columns are the exception and stay right-aligned: kHz and
-     dB are read by comparing them down the column, and centring
+     The NUMERIC columns are the exception and stay right-aligned: kHz, dB
+     and DF are read by comparing them down the column, and centring
      "7040.0" over "14090.7" puts the decimal points in different places,
      which is the one thing tabular figures exist to prevent.
 
@@ -787,9 +797,11 @@
     text-align: center;
   }
 
-  /* Freq and dB — columns 5 and 7, the same positions they hold on Spots. */
+  /* Freq and dB — columns 5 and 7, the same positions they hold on Spots —
+     and DF beside dB. Spots has no DF column. */
   th:nth-child(5), td:nth-child(5),
-  th:nth-child(7), td:nth-child(7) {
+  th:nth-child(7), td:nth-child(7),
+  th:nth-child(8), td:nth-child(8) {
     text-align: right;
   }
 

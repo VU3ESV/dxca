@@ -228,6 +228,8 @@ async fn two_users_same_stream_different_highlights_and_pings() {
     let app = api::build_router(AppState {
         pipeline: pipeline_state,
         nodes: Arc::new(NodeManager::new()),
+        // Before `users` is moved into the struct.
+        update: Arc::new(dxca_server::update::Checker::new(users.db.clone())),
         users,
         config: Arc::new(Mutex::new(cfg.clone())),
         config_path: data_dir.join("dxca.toml"),

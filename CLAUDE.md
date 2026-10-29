@@ -43,6 +43,13 @@ find published, so it stays out of the source tree — never fold it back into a
 constant. A build with neither source present gets an empty key and fails
 quietly: no country file, nothing classifies, and nothing says why.
 
+**A new `Config` key (`config/dxca.toml`) breaks rollback if it is written at
+its default.** `Config` is `deny_unknown_fields` and the web UI rewrites the
+whole file on every save, so the previous release refuses to start on a file
+carrying a key it never knew. Keep new keys out of the file at their default —
+`#[serde(skip_serializing_if = ...)]`, as `check_for_updates` does — and show
+them commented out in `dxca.example.toml`.
+
 ## Adding a spot destination
 
 Touches seven places; miss one and it looks wired and does nothing:

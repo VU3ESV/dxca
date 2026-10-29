@@ -18,6 +18,10 @@ fn default_true() -> bool {
     true
 }
 
+fn is_true(b: &bool) -> bool {
+    *b
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct UdpSource {
@@ -108,6 +112,18 @@ pub struct Config {
     /// hand** — the dump is ~200 MB, and that first pull must be a person's
     /// deliberate act, not a config default's.
     pub fcc_refresh_days: u64,
+    /// Look for a newer DXCA release on GitHub once a day and say so in the
+    /// web UI (`update.rs`). Default on. Read once at start.
+    ///
+    /// **Not written to the file while it is on.** `Config` is
+    /// `deny_unknown_fields`, and the web UI rewrites the whole file on every
+    /// save — so a key written by this version would make the previous
+    /// binary refuse to start, and rolling back after an upgrade is exactly
+    /// when that must not happen. Left out at its default, the file stays
+    /// readable by every release before this one; only an operator who turns
+    /// the check off writes the key, and has said so on purpose.
+    #[serde(skip_serializing_if = "is_true")]
+    pub check_for_updates: bool,
     /// Test/debug override: point ClubLog downloads at this base URL.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub clublog_base_override: Option<String>,
@@ -163,6 +179,7 @@ impl Default for Config {
             lotw_refresh_days: 7,
             iota_refresh_days: 30,
             fcc_refresh_days: 30,
+            check_for_updates: true,
             clublog_base_override: None,
             telegram_base_override: None,
         }
@@ -252,6 +269,35 @@ mod tests {
         assert_eq!(loaded.cluster_nodes[0].host, "ve7cc.net");
         assert_eq!(loaded.udp_sources.len(), 3);
         assert_eq!(loaded.telnet_port, 7575);
+        let _ = std::fs::remove_file(path);
+    }
+
+    /// Every config file in the field predates the key, and each must read
+    /// as on — the default — rather than as off.
+    #[test]
+    fn a_config_that_predates_check_for_updates_reads_as_on() {
+        let cfg: Config = toml::from_str("telnet_port = 7575").unwrap();
+        assert!(cfg.check_for_updates);
+        let off: Config = toml::from_str("check_for_updates = false").unwrap();
+        assert!(!off.check_for_updates);
+    }
+
+    /// A web-UI save must not write the new key at its default, or rolling
+    /// back to the previous release (`deny_unknown_fields`) fails at start on
+    /// a file that release never knew. Turned off, it is written — and kept.
+    #[test]
+    fn check_for_updates_is_written_only_when_turned_off() {
+        let path = std::env::temp_dir().join(format!("dxca-cfg-upd-{}.toml", std::process::id()));
+        Config::default().save(&path).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(!text.contains("check_for_updates"), "{text}");
+
+        let cfg = Config {
+            check_for_updates: false,
+            ..Config::default()
+        };
+        cfg.save(&path).unwrap();
+        assert!(!Config::load(&path).unwrap().check_for_updates);
         let _ = std::fs::remove_file(path);
     }
 
