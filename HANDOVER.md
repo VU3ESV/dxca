@@ -5,6 +5,7 @@
 <summary><b>Contents</b> — 108 sections. Jump; do not read straight through. Looking for one fact? grep the heading text rather than opening the file.</summary>
 
 - [What this is](#what-this-is)
+- [Session 2026-10-28 — a spot with no callsign goes nowhere](#session-2026-10-28--a-spot-with-no-callsign-goes-nowhere)
 - [Session 2026-10-23 — webpki-roots 1.0.10 drops the eMudhra root](#session-2026-10-23--webpki-roots-1010-drops-the-emudhra-root)
 - [Session 2026-10-20 — an unresolved-hash sender spots nobody](#session-2026-10-20--an-unresolved-hash-sender-spots-nobody)
 - [Session 2026-10-10 — WAS uses the spot's grid before the licence address](#session-2026-10-10--was-uses-the-spots-grid-before-the-licence-address)
@@ -46,6 +47,7 @@
 - [The installs (2026-08-28; VU2OY added 2026-08-30; production moved to .109 2026-09-22)](#the-installs-2026-08-28-vu2oy-added-2026-08-30-production-moved-to-109-2026-09-22)
 - [Release convention (2026-08-28, standing)](#release-convention-2026-08-28-standing)
 - [Open items → next session](#open-items--next-session)
+  - [DONE in v1.8.9: the 1.x Swift app still sent `UNKNOWN` for other no-call spots (2026-10-28)](#done-in-v189-the-1x-swift-app-still-sent-unknown-for-other-no-call-spots-2026-10-28)
   - [DONE: the 1.x Swift app spots the called station too (2026-10-20)](#done-the-1x-swift-app-spots-the-called-station-too-2026-10-20)
   - [DONE: v2.22.2 on the three remote Pis (2026-10-09)](#done-v2222-on-the-three-remote-pis-2026-10-09)
   - [DONE in v2.22.2: the GitHub release check (2026-10-08)](#done-in-v2222-the-github-release-check-2026-10-08)
@@ -116,7 +118,13 @@
 
 </details>
 
-**Created:** 2026-08-26 · **Last updated:** 2026-10-23 · **Status:**
+**Created:** 2026-08-26 · **Last updated:** 2026-10-28 · **Status:**
+**v2.23.4 — a spot with no callsign goes to no destination (v2.23.3 stopped
+only the unresolved-hash decode; `CQ EU` from VU2OY's Aggregator and free
+text still went out as `UNKNOWN`), plus webpki-roots 1.0.10. Tagged and
+released with the Windows zip 2026-10-28, and on all five hosts the same
+day: .109, Windows `.170`, adersh, vu2oy, and vu2wj after a tunnel
+bounce** (*Session 2026-10-28*). Before that:
 **v2.22.3 — alerts carry the DX's audio offset: `DF 1487 Hz` in Telegram
 and a `DF` column in the Alerts history, from the decoder or a cluster spot's
 comment. Adds `alerts_sent.offset_hz`, which migrates itself on first open.
@@ -739,6 +747,63 @@ and the web GUI's design system from the same repo's
 cutover. noderedpi4's install is stopped and disabled, kept as the
 rollback. The 1.x macOS app is the retained fallback (maintenance mode).
 
+## Session 2026-10-28 — a spot with no callsign goes nowhere
+
+**Manoj:** *"users are still getting unknown spots?"* — with the whole
+fleet on v2.23.3. Yes. v2.23.3 stopped one shape only, the decode whose
+sender is `<...>`. Any other spot with no callsign still took the 1.x path:
+no dedupe key, so never a duplicate, so out on the telnet feed and every
+UDP/MQTT destination with `UNKNOWN` in the call cell (`format.rs` falls
+back to it).
+
+**Seen live.** A sweep of `/api/spots?limit=2000` on four hosts (vu2wj
+timed out) found one on vu2oy: a spot relayed by VU2OY's RBN Aggregator
+node, 18100.0 FT8 −12 dB, comment `-12 dB 6 FT8 1185`, with **`EU`** in the
+call cell. The Aggregator took a directed `CQ EU …` for a call. A cluster
+spot becomes the synthetic message `CQ <call>`, so this was `CQ EU`, and
+`EU` fails `looks_like_callsign` (no digit). The other hosts had none in
+their windows, which on the busy ones is only about 7 minutes. Free text
+(`TNX 73 GL`) and both-calls-hashed decodes take the same path.
+
+**Fix.** `process_spot` now asks `dx_callsign()` once, first: no call means
+`record` (ring + live event) and return, before the blacklist, the dedupe
+and any fan-out. This replaces v2.23.3's narrower `sender_is_unresolved_hash`
+check, which is removed from `dxca-core` (a hash sender already has no
+call). The blacklist check and the MQTT/UDP payloads reuse that same call.
+Alerts were already safe: `users.rs` skips a spot with no call. The
+`UNKNOWN` fallback stays in `format.rs`, which is a pure function, but
+nothing in the pipeline reaches it any more.
+
+**Tests.** `spot_path`'s test is now
+`a_spot_with_no_callsign_never_reaches_the_cluster_feed`, sending
+`CP6CL <...> RR73`, `CQ EU` and `TNX 73 GL` ahead of the real exchange.
+`cluster_ingest`'s happy path has the fake node send VU2OY's `EU` line
+first. Both fail against the v2.23.3 code (`UNKNOWN` lines on the telnet
+feed, run from a detached worktree of `main` with the new test files) and
+pass with the fix. `dx_callsign`'s table gains `CQ EU` and `TNX 73 GL`.
+`just gate`: fmt, clippy `-D warnings`, 347 tests and the web build pass.
+
+Merged as #13 (squash `97b8f66`) and released as **v2.23.4** (`55a981f`,
+annotated tag, `gh release create --latest`), together with the 2026-10-23
+webpki-roots change below. Windows zip `dxca-2.23.4-windows-x64.zip`,
+5,251,668 bytes, sha256 `19ee08c9…cfd6b1`; the asset downloaded back hashes
+equal, `releases/latest` answers v2.23.4, and the exe carries no plaintext
+ClubLog key and no placeholder page.
+
+Deployed the same day on Manoj's *"yes, deploy .109 and windows"*:
+
+| Host | Result (2026-10-28) |
+|---|---|
+| `.109` (Docker) | 2.23.3 → **2.23.4**: `docker-deploy.sh`, smoke test OK, container restarted on the new image (up 06:52:20Z, `RestartCount=0`, no warnings in the log). Nodes 7/8, as before the deploy: the one down is **KST2Mac** (connection refused, the bridge isn't running). Image `dxca:2.23.3` kept for rollback. |
+| `.170` (Windows) | 2.23.3 → **2.23.4**: `win-deploy.sh`, dashboard serving, nodes 2/2. The previous binary is at `C:\DXCA\dxca.exe.bak`. |
+| adersh `.151` | 2.23.3 → **2.23.4** on Manoj's *"yes, deploy adersh and vu2oy"*: `pi-deploy.sh --no-seed`, up 12:27:30 IST, 5/5 nodes, `NRestarts=0`, no warnings. Config md5 unchanged (`2f8c037c…`). Backups `dxca.rollback-v2.23.3` and `data/dxca.db.pre-v2.23.4` (md5 `2f941518…` equal, no WAL). Binary md5 `8e50d0f4…`. |
+| vu2oy `.51` | 2.23.3 → **2.23.4**, same drill: up 12:28:24 IST, 3/3 nodes, `NRestarts=0`, no warnings, glibc 2.36. Config md5 unchanged across the deploy (`dca5fb3e…`), but it is no longer the `65935bf2…` of 2026-10-20: the config was edited since, and the box now has 3 nodes, not 4. Backups `dxca.rollback-v2.23.3` and `data/dxca.db.pre-v2.23.4` (md5 `d21cca80…` equal, no WAL). Same binary md5 as adersh. |
+| vu2wj `.201` | 2.23.3 → **2.23.4**, same drill, once Manoj had bounced the tunnel (*"tunnel bounced, deploy vu2wj"*). Before that the `/32` route was up but nothing answered, the stale-endpoint fault again (`vu2wj.ddns.net` was `59.176.39.228` at 12:25 IST); one bounce fixed it. Up 13:26:16 IST, 3/3 nodes, `NRestarts=0`, no warnings. Config md5 unchanged (`094c2a23…`, as on 2026-10-20). Backups `dxca.rollback-v2.23.3` and `data/dxca.db.pre-v2.23.4` (md5 `099c6ad6…` equal, no WAL). Same binary md5 as adersh. **The whole fleet is on v2.23.4.** |
+
+**The 1.x Swift app** had the same 1.x behaviour for these spots, and in
+`handleClusterSpot` no guard at all. Fixed in DXClusterAggregator-macOS #3
+and released as v1.8.9 (see the item under *Open items*).
+
 ## Session 2026-10-23 — webpki-roots 1.0.10 drops the eMudhra root
 
 **Why.** The private keys of eight eMudhra intermediate CAs could be
@@ -756,9 +821,8 @@ roots stay, as they do in Mozilla's store. The `webpki-roots 0.26.11` entry is t
 compatibility shim that re-exports 1.x, so it picks up the change too.
 `cargo test --workspace` passes.
 
-**Not yet:** a release. The fix reaches the fleet only with the next tagged
-build (.109, Windows `.170`, the three remote Pis). Until then the running
-binaries still trust the root.
+**Released in v2.23.4** (2026-10-28), with the no-callsign fix above. The
+running binaries still trust the root until each host takes v2.23.4.
 
 ## Session 2026-10-20 — an unresolved-hash sender spots nobody
 
@@ -2939,6 +3003,18 @@ on Windows with the SmartScreen caveat; a link to README › Updating; the
 edited in place to carry it.
 
 ## Open items → next session
+
+### DONE in v1.8.9: the 1.x Swift app still sent `UNKNOWN` for other no-call spots (2026-10-28)
+
+dxca v2.23.4 sends a spot with no callsign nowhere. The Swift app's
+`handleDecode` only returned early for a `<...>` sender (#2), and
+`handleClusterSpot` had no guard at all, so `CQ EU` from a cluster node or a
+free-text decode still went out as `UNKNOWN`. First left alone (shelved
+fallback), then fixed the same day on Manoj's *"fix the swift app too"*:
+both paths now `guard let call = spot.dxCallsign else { return }`.
+Merged as DXClusterAggregator-macOS #3 (squash `a93646b`) on Manoj's
+*"merge #3 and release v1.8.9"*, and **released as v1.8.9** the same day,
+notarized and verified. Not installed over the 1.8.8 copy in /Applications.
 
 ### DONE: the 1.x Swift app spots the called station too (2026-10-20)
 

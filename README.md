@@ -25,6 +25,17 @@ project — joint work by Basil Thomas W6BT, Vinod VU3ESV, and Ram VU3RDD
 
 ## Status
 
+**v2.23.4** (2026-10-28): **a spot with no callsign goes to no destination,
+whatever the reason it has none.** v2.23.3 stopped only the unresolved-hash
+decode. Other spots with no callsign still went out as `UNKNOWN`: free text
+such as `TNX 73 GL`, and a relayed cluster spot whose call cell is not a
+call (VU2OY's RBN Aggregator spotted `EU`). They now go to the Spots table
+and nowhere else. Also ships the trust-store update: the `emSign ECC Root CA
+- G3` root, whose intermediates' private keys were exposed, is no longer
+trusted for DXCA's HTTPS calls (Club Log, LoTW, the release check,
+Telegram). Nothing to do on upgrade, no database change, and rolling back
+is safe. See [A spot with no callsign goes nowhere](#a-spot-with-no-callsign-goes-nowhere).
+
 **v2.23.3** (2026-10-20): **completes v2.23.2: an unresolved-hash decode
 now goes to no destination at all.** v2.23.2 kept `CP6CL <...> RR73` off the
 cluster feed and the filtered UDP/MQTT destinations. *Unfiltered*
@@ -1373,6 +1384,17 @@ alert on it. Now a decode like this has no callsign:
 
 The reverse form, `<...> CP6CL RRR`, is CP6CL transmitting, and is spotted as
 before.
+
+### A spot with no callsign goes nowhere
+
+*Since v2.23.4.* The hashed decode above is one kind of spot with no
+callsign. There are others: free text such as `TNX 73 GL`, and a relayed
+cluster spot whose call cell is not a call (VU2OY's RBN Aggregator spotted
+`EU`). DXCA 1.x sent every one of these on as `UNKNOWN`, and so did 2.x
+until v2.23.4. Now the rule above covers them all: the spot appears in the
+Spots table, raises no alert, and is sent to no destination. The verbatim
+UDP passthrough is unchanged, so a logger fed by it still sees the raw
+decode.
 
 ### Health alerts
 
